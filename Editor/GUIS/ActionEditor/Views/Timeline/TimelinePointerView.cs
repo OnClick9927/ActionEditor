@@ -219,7 +219,7 @@ namespace ActionEditor
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (_pointerTextRect.Contains(eventData.MousePosition))
+            if (eventData.IsLeft() && _pointerTextRect.Contains(eventData.MousePosition))
             {
                 ChangeCurrentTime(eventData.MousePosition);
             }
@@ -227,7 +227,7 @@ namespace ActionEditor
 
         public void OnDragBegin(PointerEventData eventData)
         {
-            if (_playPointerHandler.Contains(eventData.MousePosition))
+            if (eventData.IsLeft() && _playPointerHandler.Contains(eventData.MousePosition))
             {
                 Debug.Log("拖动当前播放指针");
                 _dragType = PointerDragType.Play;
@@ -249,7 +249,7 @@ namespace ActionEditor
             var rect = _playPointerHandler;
             rect.width *= 20;
             rect.x -= rect.width / 2;
-            if (rect.Contains(eventData.MousePosition) && _dragType == PointerDragType.Play)
+            if (rect.Contains(eventData.MousePosition) && eventData.IsLeft() && _dragType == PointerDragType.Play)
             {
                 ChangeCurrentTime(eventData.MousePosition);
             }
