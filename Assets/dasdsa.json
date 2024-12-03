@@ -1,0 +1,122 @@
+ActionEditor.BuffAsset
+{
+    "groups": [
+        {
+            "rid": 1000
+        }
+    ],
+    "length": 0.10000000149011612,
+    "viewTimeMin": 0.0,
+    "viewTimeMax": 0.25,
+    "rangeMin": 0.0,
+    "rangeMax": 5.0,
+    "references": {
+        "version": 2,
+        "RefIds": [
+            {
+                "rid": 1000,
+                "type": {
+                    "class": "Group",
+                    "ns": "ActionEditor",
+                    "asm": "ActionEditor"
+                },
+                "data": {
+                    "name": "New Group",
+                    "tracks": [
+                        {
+                            "rid": 1001
+                        },
+                        {
+                            "rid": 1002
+                        },
+                        {
+                            "rid": 1003
+                        }
+                    ],
+                    "isCollapsed": false,
+                    "active": true,
+                    "isLocked": false
+                }
+            },
+            {
+                "rid": 1001,
+                "type": {
+                    "class": "SignalTrack",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "actionClips": [
+                        {
+                            "rid": 1004
+                        }
+                    ],
+                    "name": "SignalTrack",
+                    "active": true,
+                    "isLocked": true,
+                    "color": {
+                        "r": 1.0,
+                        "g": 1.0,
+                        "b": 1.0,
+                        "a": 1.0
+                    }
+                }
+            },
+            {
+                "rid": 1002,
+                "type": {
+                    "class": "EffectTrack",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "actionClips": [],
+                    "name": "EffectTrack",
+                    "active": true,
+                    "isLocked": false,
+                    "color": {
+                        "r": 1.0,
+                        "g": 1.0,
+                        "b": 1.0,
+                        "a": 1.0
+                    },
+                    "Layer": 0
+                }
+            },
+            {
+                "rid": 1003,
+                "type": {
+                    "class": "AudioTrack",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "actionClips": [],
+                    "name": "AudioTrack",
+                    "active": true,
+                    "isLocked": false,
+                    "color": {
+                        "r": 1.0,
+                        "g": 1.0,
+                        "b": 1.0,
+                        "a": 1.0
+                    }
+                }
+            },
+            {
+                "rid": 1004,
+                "type": {
+                    "class": "TriggerLog",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 0.09999999403953552,
+                    "length": 1.0,
+                    "name": "TriggerLog",
+                    "log": "dsa"
+                }
+            }
+        ]
+    }
+}
