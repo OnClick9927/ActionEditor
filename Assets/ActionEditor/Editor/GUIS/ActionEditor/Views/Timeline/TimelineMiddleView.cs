@@ -227,7 +227,7 @@ namespace ActionEditor
 
         private bool _preMultipleResult;
         private Rect _multipleRect;
-
+        public static bool MutiSelecting { get; private set; }
         private void DrawMultiple()
         {
             if (asset == null) return;
@@ -285,7 +285,7 @@ namespace ActionEditor
             }
 
 
-            _preMultipleResult = bigEnough;
+            MutiSelecting = _preMultipleResult = bigEnough;
         }
 
         #endregion

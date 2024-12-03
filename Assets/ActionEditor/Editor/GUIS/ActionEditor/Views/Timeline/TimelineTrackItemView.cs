@@ -517,6 +517,7 @@ namespace ActionEditor
 
                 if (Position.Contains(ev.MousePosition) && Data is Track track)
                 {
+                    if (TimelineMiddleView.MutiSelecting) return;
                     if (Data.IsLocked) return;
                     OnTrackRightContextMenu(track, ev);
                     ev.StopPropagation();
@@ -619,6 +620,7 @@ namespace ActionEditor
 
         private void OnClipContextMenu(Clip clip)
         {
+            if (TimelineMiddleView.MutiSelecting) return;
             if (clip.IsLocked) return;
 
             var menu = new GenericMenu();
