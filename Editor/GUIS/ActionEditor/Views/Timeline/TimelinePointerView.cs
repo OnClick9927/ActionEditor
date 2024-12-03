@@ -245,7 +245,11 @@ namespace ActionEditor
 
         public void OnPointerDrag(PointerEventData eventData)
         {
-            if (_dragType == PointerDragType.Play)
+
+            var rect = _playPointerHandler;
+            rect.width *= 20;
+            rect.x -= rect.width / 2;
+            if (rect.Contains(eventData.MousePosition) && _dragType == PointerDragType.Play)
             {
                 ChangeCurrentTime(eventData.MousePosition);
             }
