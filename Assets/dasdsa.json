@@ -3,11 +3,14 @@ ActionEditor.BuffAsset
     "groups": [
         {
             "rid": 1000
+        },
+        {
+            "rid": 1001
         }
     ],
-    "length": 2.7699999809265138,
+    "length": 3.0412697792053224,
     "viewTimeMin": 0.0,
-    "viewTimeMax": 4.428102493286133,
+    "viewTimeMax": 4.007766246795654,
     "rangeMin": 0.0,
     "rangeMax": 5.0,
     "references": {
@@ -24,9 +27,6 @@ ActionEditor.BuffAsset
                     "name": "New Group",
                     "tracks": [
                         {
-                            "rid": 1001
-                        },
-                        {
                             "rid": 1002
                         },
                         {
@@ -34,6 +34,9 @@ ActionEditor.BuffAsset
                         },
                         {
                             "rid": 1004
+                        },
+                        {
+                            "rid": 1005
                         }
                     ],
                     "isCollapsed": false,
@@ -44,25 +47,26 @@ ActionEditor.BuffAsset
             {
                 "rid": 1001,
                 "type": {
-                    "class": "SignalTrack",
+                    "class": "Group",
                     "ns": "ActionEditor",
-                    "asm": "Assembly-CSharp"
+                    "asm": "ActionEditor"
                 },
                 "data": {
-                    "actionClips": [
+                    "name": "Group",
+                    "tracks": [
                         {
-                            "rid": 1005
+                            "rid": 1006
+                        },
+                        {
+                            "rid": 1007
+                        },
+                        {
+                            "rid": 1008
                         }
                     ],
-                    "name": "SignalTrack",
+                    "isCollapsed": false,
                     "active": true,
-                    "isLocked": true,
-                    "color": {
-                        "r": 1.0,
-                        "g": 1.0,
-                        "b": 1.0,
-                        "a": 1.0
-                    }
+                    "isLocked": false
                 }
             },
             {
@@ -75,7 +79,7 @@ ActionEditor.BuffAsset
                 "data": {
                     "actionClips": [
                         {
-                            "rid": 1006
+                            "rid": 1009
                         }
                     ],
                     "name": "EffectTrack",
@@ -93,20 +97,23 @@ ActionEditor.BuffAsset
             {
                 "rid": 1003,
                 "type": {
-                    "class": "AudioTrack",
+                    "class": "SignalTrack",
                     "ns": "ActionEditor",
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
                     "actionClips": [
                         {
-                            "rid": 1007
+                            "rid": 1010
                         },
                         {
-                            "rid": 1008
+                            "rid": 1011
+                        },
+                        {
+                            "rid": 1012
                         }
                     ],
-                    "name": "AudioTrack",
+                    "name": "SignalTrack",
                     "active": true,
                     "isLocked": false,
                     "color": {
@@ -127,10 +134,10 @@ ActionEditor.BuffAsset
                 "data": {
                     "actionClips": [
                         {
-                            "rid": 1009
+                            "rid": 1013
                         },
                         {
-                            "rid": 1010
+                            "rid": 1014
                         }
                     ],
                     "name": "ActionTrack",
@@ -150,6 +157,129 @@ ActionEditor.BuffAsset
             {
                 "rid": 1005,
                 "type": {
+                    "class": "AudioTrack",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "actionClips": [
+                        {
+                            "rid": 1015
+                        },
+                        {
+                            "rid": 1016
+                        }
+                    ],
+                    "name": "AudioTrack",
+                    "active": true,
+                    "isLocked": false,
+                    "color": {
+                        "r": 1.0,
+                        "g": 1.0,
+                        "b": 1.0,
+                        "a": 1.0
+                    }
+                }
+            },
+            {
+                "rid": 1006,
+                "type": {
+                    "class": "ActionTrack",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "actionClips": [
+                        {
+                            "rid": 1017
+                        }
+                    ],
+                    "name": "ActionTrack",
+                    "active": true,
+                    "isLocked": false,
+                    "color": {
+                        "r": 1.0,
+                        "g": 1.0,
+                        "b": 1.0,
+                        "a": 1.0
+                    },
+                    "Test1": 0,
+                    "Test2": 0.0,
+                    "Test3": ""
+                }
+            },
+            {
+                "rid": 1007,
+                "type": {
+                    "class": "ActionTrack",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "actionClips": [
+                        {
+                            "rid": 1018
+                        }
+                    ],
+                    "name": "ActionTrack",
+                    "active": true,
+                    "isLocked": false,
+                    "color": {
+                        "r": 1.0,
+                        "g": 1.0,
+                        "b": 1.0,
+                        "a": 1.0
+                    },
+                    "Test1": 0,
+                    "Test2": 0.0,
+                    "Test3": ""
+                }
+            },
+            {
+                "rid": 1008,
+                "type": {
+                    "class": "ActionTrack",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "actionClips": [
+                        {
+                            "rid": 1019
+                        }
+                    ],
+                    "name": "ActionTrack",
+                    "active": true,
+                    "isLocked": false,
+                    "color": {
+                        "r": 1.0,
+                        "g": 1.0,
+                        "b": 1.0,
+                        "a": 1.0
+                    },
+                    "Test1": 0,
+                    "Test2": 0.0,
+                    "Test3": ""
+                }
+            },
+            {
+                "rid": 1009,
+                "type": {
+                    "class": "PlayParticle",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 0.4699999988079071,
+                    "length": 1.0,
+                    "name": "PlayParticle",
+                    "resPath": "Assets/ResRaw/Effects/Prefabs/VFX_Fire Magic Array 004.prefab",
+                    "scale": false
+                }
+            },
+            {
+                "rid": 1010,
+                "type": {
                     "class": "TriggerLog",
                     "ns": "ActionEditor",
                     "asm": "Assembly-CSharp"
@@ -162,87 +292,157 @@ ActionEditor.BuffAsset
                 }
             },
             {
-                "rid": 1006,
+                "rid": 1011,
                 "type": {
-                    "class": "PlayParticle",
+                    "class": "TriggerLog",
                     "ns": "ActionEditor",
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 0.07000000029802323,
+                    "startTime": 1.8199999332427979,
                     "length": 1.0,
-                    "name": "PlayParticle",
-                    "resPath": "Assets/ResRaw/Effects/Prefabs/VFX_Fire Magic Array 004.prefab",
-                    "scale": false
+                    "name": "TriggerLog",
+                    "log": ""
                 }
             },
             {
-                "rid": 1007,
+                "rid": 1012,
                 "type": {
-                    "class": "PlayAudio",
+                    "class": "TriggerLog",
                     "ns": "ActionEditor",
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 0.0,
-                    "length": 1.2212698459625245,
-                    "name": "PlayAudio",
-                    "blendIn": 0.0,
-                    "blendOut": 0.0012698173522949219,
-                    "resPath": "Assets/ResRaw/Sound/open_door.wav",
-                    "volume": 1.0,
-                    "clipOffset": 0.0
+                    "startTime": 2.0299999713897707,
+                    "length": 1.0,
+                    "name": "TriggerLog",
+                    "log": ""
                 }
             },
             {
-                "rid": 1008,
-                "type": {
-                    "class": "PlayAudio",
-                    "ns": "ActionEditor",
-                    "asm": "Assembly-CSharp"
-                },
-                "data": {
-                    "startTime": 1.2999999523162842,
-                    "length": 1.2212698459625245,
-                    "name": "PlayAudio",
-                    "blendIn": 0.0012698173522949219,
-                    "blendOut": 0.25,
-                    "resPath": "Assets/ResRaw/Sound/open_door.wav",
-                    "volume": 1.0,
-                    "clipOffset": 10.0
-                }
-            },
-            {
-                "rid": 1009,
+                "rid": 1013,
                 "type": {
                     "class": "RotateTo",
                     "ns": "ActionEditor",
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 0.4399999976158142,
+                    "startTime": 0.5899999737739563,
                     "length": 1.0,
                     "name": "RotateTo",
                     "interpolation": 6,
                     "targetRotation": {
-                        "x": 0.0,
+                        "x": 2.0,
                         "y": 0.0,
                         "z": 0.0
                     }
                 }
             },
             {
-                "rid": 1010,
+                "rid": 1014,
                 "type": {
                     "class": "VisibleTo",
                     "ns": "ActionEditor",
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 1.7699999809265137,
+                    "startTime": 1.6200000047683716,
                     "length": 1.0,
                     "name": "VisibleTo",
                     "visible": true
+                }
+            },
+            {
+                "rid": 1015,
+                "type": {
+                    "class": "PlayAudio",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 0.25,
+                    "length": 1.2212698459625245,
+                    "name": "PlayAudio",
+                    "blendIn": 1.0699999332427979,
+                    "blendOut": 0.0012699365615844727,
+                    "resPath": "Assets/ResRaw/Sound/open_door.wav",
+                    "volume": 1.0,
+                    "clipOffset": 0.0
+                }
+            },
+            {
+                "rid": 1016,
+                "type": {
+                    "class": "PlayAudio",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 1.8199999332427979,
+                    "length": 1.2212698459625245,
+                    "name": "PlayAudio",
+                    "blendIn": 0.0012699365615844727,
+                    "blendOut": 0.09873008728027344,
+                    "resPath": "Assets/ResRaw/Sound/open_door.wav",
+                    "volume": 1.0,
+                    "clipOffset": 10.0
+                }
+            },
+            {
+                "rid": 1017,
+                "type": {
+                    "class": "RotateTo",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 0.5600000023841858,
+                    "length": 1.0,
+                    "name": "RotateTo",
+                    "interpolation": 6,
+                    "targetRotation": {
+                        "x": 2.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            },
+            {
+                "rid": 1018,
+                "type": {
+                    "class": "RotateTo",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 0.5600000023841858,
+                    "length": 1.0,
+                    "name": "RotateTo",
+                    "interpolation": 6,
+                    "targetRotation": {
+                        "x": 2.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            },
+            {
+                "rid": 1019,
+                "type": {
+                    "class": "RotateTo",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 0.5600000023841858,
+                    "length": 1.0,
+                    "name": "RotateTo",
+                    "interpolation": 6,
+                    "targetRotation": {
+                        "x": 2.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
                 }
             }
         ]

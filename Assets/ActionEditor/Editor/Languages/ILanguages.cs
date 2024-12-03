@@ -80,10 +80,12 @@
         public string TrackDisable { get; }
         public string TrackLocked { get; }
         public string TrackCopy { get; }
-        public string TrackReplica { get; }
+        public string TrackCut { get; }
         public string TrackDelete { get; }
         public string TrackDeleteTips { get; }
         //**********  Clip Menu *********
+        public string ClearCopy { get; }
+
         public string ClipCopy { get; }
         public string ClipCut { get; }
         public string ClipDelete { get; }
@@ -97,5 +99,8 @@
         public string OverflowInvalid { get; }
         public string EndTimeOverflowInvalid { get; }
         public string StartTimeOverflowInvalid { get; }
+
+        public string ClipInvalid { get; }
+        string EmptyRect { get;}
     }
 }

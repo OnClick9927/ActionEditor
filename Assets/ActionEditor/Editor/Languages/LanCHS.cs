@@ -82,7 +82,7 @@
         public string TrackDisable => "禁用轨道";
         public string TrackLocked => "锁定轨道";
         public string TrackCopy => "拷贝轨道";
-        public string TrackReplica => "复制轨道";
+        public string TrackCut => "剪切轨道";
         public string TrackDelete => "删除轨道";
         public string TrackDeleteTips => "确定删除改轨道吗?";
 
@@ -102,5 +102,10 @@
         public string EndTimeOverflowInvalid => "剪辑结束时间超出有效范围";
         public string StartTimeOverflowInvalid => "剪辑开始时间超出可播放范围";
 
+        public string ClipInvalid => "该片段无效，检查参数";
+
+        public string ClearCopy => "取消拷贝或者复制";
+
+        public string EmptyRect => "空白区域\n点击清空选择";
     }
 }

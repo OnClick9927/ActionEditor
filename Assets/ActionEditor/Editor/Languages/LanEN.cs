@@ -81,7 +81,7 @@
         public string TrackDisable => "Disable Track";
         public string TrackLocked => "Locked Track";
         public string TrackCopy => "Copy Track";
-        public string TrackReplica => "Replica Track";
+        public string TrackCut => "Cut Track";
         public string TrackDelete => "Delete Track";
         public string TrackDeleteTips => "confirm delete track?";
         public string FirstFrame => "jump to FirstFrame";
@@ -103,5 +103,10 @@
         public string EndTimeOverflowInvalid => "Clip end time is outside of playable range";
         public string StartTimeOverflowInvalid => "Clip start time is outside of playable range";
 
+        public string ClipInvalid => "Clip  Invalid,check params";
+
+        public string ClearCopy => "Clear Cut or Copy";
+
+        public string EmptyRect => "Empty Rect\nclick to select none";
     }
 }

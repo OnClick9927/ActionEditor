@@ -291,7 +291,14 @@ namespace ActionEditor
             {
                 if (group.CanAddTrack(copyTrack))
                 {
-                    genericMenu.AddItem(new GUIContent(Lan.ins.MenuPasteTrack), false, PasteTrackContextMenu);
+                    genericMenu.AddItem(new GUIContent(Lan.ins.MenuPasteTrack), false, () =>
+                    {
+                        if (group.CanAddTrack(copyTrack))
+                        {
+                            App.AddCopyTrackToGroup(group);
+                            App.Refresh();
+                        }
+                    });
                 }
                 else
                 {
@@ -324,21 +331,20 @@ namespace ActionEditor
 
             //menu.AddSeparator("");
 
-            //menu.AddItem(new GUIContent(Lan.ins.TrackCopy), false, () => { App.CopyAsset = track; });
+            if (App.CopyAsset == track)
+            {
+                menu.AddItem(new GUIContent(Lan.ins.ClearCopy), false, () => { App.SetCopyAsset(null, false); });
 
-            //if (track.GetType().RTGetAttribute<UniqueAttribute>(true) == null)
-            //{
-            //    menu.AddItem(new GUIContent(Lan.ins.TrackReplica), false, () =>
-            //    {
-            //        var t1 = (track.Parent as Group).AddTrack(track);
-            //        ActionEditorWindow.current.InitClipWrappers();
-            //        DirectorUtility.selectedObject = t1;
-            //    });
-            //}
-            //else
-            //{
-            //    menu.AddDisabledItem(new GUIContent(Lan.ins.TrackReplica));
-            //}
+            }
+            else
+            {
+                menu.AddItem(new GUIContent(Lan.ins.TrackCopy), false, () => { App.SetCopyAsset(track, false); });
+                menu.AddItem(new GUIContent(Lan.ins.TrackCut), false, () =>
+                   {
+                       App.SetCopyAsset(track, true);
+                   });
+            }
+
 
             menu.AddSeparator("/");
             if (track.IsLocked)
@@ -395,12 +401,7 @@ namespace ActionEditor
             App.Refresh();
         }
 
-        private void PasteTrackContextMenu()
-        {
-            // var t = group.PasteTrack(_copyTrack);
-            // DirectorUtility.selectedObject = t;
-            // ActionEditorWindow.current.InitClipWrappers();
-        }
+
 
         #endregion
     }
@@ -449,9 +450,9 @@ namespace ActionEditor
         //        }
         //    }
         //}
-
         private void DrawClips(Track track)
         {
+
             TrySortClips(track);
             for (int clipIndex = 0; clipIndex < track.Clips.Count; clipIndex++)
             {
@@ -459,11 +460,19 @@ namespace ActionEditor
                 var nextClip = clipIndex < track.Clips.Count - 1 ? track.Clips[clipIndex + 1] : null;
                 var previousClip = clipIndex != 0 ? track.Clips[clipIndex - 1] : null;
                 var draw = ClipDrawer.GetDraw(clip);
+
                 if (draw != null)
                 {
                     draw.PreviousClip = previousClip;
                     draw.NextClip = nextClip;
-                    draw.Draw(Window, Position, TrackRightRect, clip, App.IsSelect(clip));
+                    draw.Draw(Window, Position, TrackRightRect, clip, App.IsSelect(clip), App.CopyAsset == clip);
+                }
+            }
+            if (App.CopyAsset == track)
+            {
+                if ((EditorApplication.timeSinceStartup) % 0.5 > 0.25)
+                {
+                    GUI.Box(Position, "");
                 }
             }
         }
@@ -588,19 +597,21 @@ namespace ActionEditor
                         () => { track.AddClip(info.type, cursorTime); });
                 }
 
-                //if (App.CopyAsset != null && App.CopyAsset is Clip copyClip)
-                //{
-                //    var copyType = copyClip.GetType();
-                //    if (attachableTypeInfos.Select(i => i.type).Contains(copyType))
-                //    {
-                //        menu.AddSeparator("/");
-                //        menu.AddItem(new GUIContent(string.Format(Lan.ins.ClipPaste, copyType.Name)), false,
-                //            () =>
-                //            {
-                //                 track.PasteClip(DirectorUtility.CopyClip, cursorTime);
-                //            });
-                //    }
-                //}
+                if (App.CopyAsset != null && App.CopyAsset is Clip copyClip)
+                {
+                    var copyType = copyClip.GetType();
+                    if (attachableTypeInfos.Select(i => i.type).Contains(copyType))
+                    {
+                        menu.AddSeparator("/");
+                        menu.AddItem(new GUIContent(string.Format(Lan.ins.ClipPaste, copyType.Name)), false,
+                            () =>
+                            {
+                                App.AddCopyClipToTrack(track);
+                                App.Refresh();
+                                //track.PasteClip(DirectorUtility.CopyClip, cursorTime);
+                            });
+                    }
+                }
 
                 menu.ShowAsContext();
             }
@@ -608,6 +619,8 @@ namespace ActionEditor
 
         private void OnClipContextMenu(Clip clip)
         {
+            if (clip.IsLocked) return;
+
             var menu = new GenericMenu();
             // if (multiSelection != null && multiSelection.FindIndex(a => a.action == action) != -1)
             // {
@@ -630,11 +643,28 @@ namespace ActionEditor
             //     return;
             // }
 
-            //menu.AddItem(new GUIContent(Lan.ins.ClipCopy), false, () => { App.CopyAsset = clip; });
-            //menu.AddItem(new GUIContent(Lan.ClipCut), false, () =>
-            //{
-            //    // DirectorUtility.CutClip(clip);
-            //});
+            if (App.CopyAsset == clip)
+            {
+                menu.AddItem(new GUIContent(Lan.ins.ClearCopy), false, () =>
+                {
+                    App.SetCopyAsset(null, false);
+                });
+            }
+            else
+            {
+                menu.AddItem(new GUIContent(Lan.ins.ClipCopy), false, () =>
+                {
+                    App.SetCopyAsset(clip, false);
+                });
+
+
+                menu.AddItem(new GUIContent(Lan.ins.ClipCut), false, () =>
+                {
+                    App.SetCopyAsset(clip, true);
+                });
+            }
+
+
 
             if (clip is ISubClipContainable subContainable && subContainable.SubClipLength > 0)
             {
@@ -647,12 +677,11 @@ namespace ActionEditor
 
             menu.AddSeparator("/");
 
-            if (!clip.IsLocked)
-                menu.AddItem(new GUIContent(Lan.ins.ClipDelete), false, () =>
-                {
-                    if (clip.Parent is Track track) track.DeleteAction(clip);
-                    App.Refresh();
-                });
+            menu.AddItem(new GUIContent(Lan.ins.ClipDelete), false, () =>
+            {
+                if (clip.Parent is Track track) track.DeleteAction(clip);
+                App.Refresh();
+            });
 
             menu.ShowAsContext();
         }

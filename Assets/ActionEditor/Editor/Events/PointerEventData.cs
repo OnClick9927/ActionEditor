@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using static UnityEngine.UIElements.UxmlAttributeDescription;
 
 namespace ActionEditor.Events
 {
@@ -7,7 +6,6 @@ namespace ActionEditor.Events
     {
         public Event _event;
 
-        public bool HasRect;
 
         public Vector2 MousePosition => _event != null ? _event.mousePosition : Vector2.zero;
 

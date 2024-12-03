@@ -113,12 +113,12 @@ namespace ActionEditor
             emptyRect = EditorGUILayout.GetControlRect(GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
             EditorGUILayout.EndScrollView();
             DrawAddGroupButton(emptyRect);
-            GUI.Box(emptyRect, "Empty Rect\nclick to select none",new GUIStyle(EditorStyles.helpBox)
+            GUI.Box(emptyRect, Lan.ins.EmptyRect, new GUIStyle(EditorStyles.helpBox)
             {
-                alignment= TextAnchor.MiddleCenter,
-                fontSize=20,
-                fontStyle= FontStyle.Bold
-                
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 20,
+                fontStyle = FontStyle.Bold
+
             });
 
             GUILayout.EndVertical();
@@ -187,21 +187,21 @@ namespace ActionEditor
 
         public void OnDragBegin(PointerEventData eventData)
         {
-            if (emptyRect.Contains(eventData.MousePosition)) return;
-
+            if (emptyRect.Contains(eventData.MousePosition) || !eventData.IsLeft()) return;
             ItemDragger.OnBeginDrag(eventData);
         }
 
         public void OnPointerDrag(PointerEventData eventData)
         {
-            if (emptyRect.Contains(eventData.MousePosition)) return;
+            if (emptyRect.Contains(eventData.MousePosition) || !eventData.IsLeft()) return;
 
             ItemDragger.OnDrag(eventData);
         }
 
         public void OnDragEnd(PointerEventData eventData)
         {
-            if (emptyRect.Contains(eventData.MousePosition)) return;
+            if (emptyRect.Contains(eventData.MousePosition) || !eventData.IsLeft()) return;
+
             ItemDragger.OnEndDrag(eventData);
         }
 
@@ -236,7 +236,7 @@ namespace ActionEditor
             var bigEnough = false;
             var start = _pointerDownPos;
             if (start.x < Styles.TimelineLeftWidth) return;
-            if (_pointerDown && App.SelectCount <= 1)
+            if (Event.current.button == 1 && _pointerDown && App.SelectCount <= 1)
             {
                 if ((start - mousePosition).magnitude > 10)
                 {

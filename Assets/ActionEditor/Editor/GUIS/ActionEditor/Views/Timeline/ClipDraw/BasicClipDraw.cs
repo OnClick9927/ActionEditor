@@ -14,14 +14,14 @@ namespace ActionEditor
         protected float StartPosX;
         protected float EndPosX;
         protected bool Select;
-
+        protected bool Copy;
         protected GUIStyle NameStyle;
         protected EditorWindow Window;
         private Clip _clip;
         private float _overlapIn;
         private float _overlapOut;
 
-        public void Draw(EditorWindow window, Rect trackRect, Rect trackRightRect, Clip clip, bool select)
+        public void Draw(EditorWindow window, Rect trackRect, Rect trackRightRect, Clip clip, bool select, bool copy)
         {
             if (NameStyle == null)
             {
@@ -34,6 +34,7 @@ namespace ActionEditor
             Window = window;
             _clip = clip;
             Select = select;
+            Copy = copy;
             TrackRect = trackRect;
             StartPosX = clip.Root.TimeToPos(clip.StartTime, App.Width) + trackRect.x;
             EndPosX = clip.Root.TimeToPos(clip.EndTime, App.Width) + trackRect.x;
@@ -46,12 +47,39 @@ namespace ActionEditor
 
 
             OnDraw();
+            if (Select)
+                OnDrawSelect();
+            if (Copy)
+                OnDrawCopy();
+
+
 
             DrawDragCursor();
             DrawValid();
             CheckBlendInAndOut();
         }
-
+        private void OnDrawCopy()
+        {
+            if ((EditorApplication.timeSinceStartup) % 0.5 > 0.25)
+            {
+                GUI.Box(ClipRect, "");
+            }
+        }
+        private void OnDrawSelect()
+        {
+            var lineHeight = 2;
+            GUI.color = Color.cyan;
+            var topRect = new Rect(ClipRect.x, ClipRect.y, ClipRect.width, lineHeight);
+            var bottomRect = new Rect(ClipRect.x, ClipRect.y + ClipRect.height - lineHeight, ClipRect.width,
+                lineHeight);
+            var leftRect = new Rect(ClipRect.x, ClipRect.y, lineHeight, ClipRect.height);
+            var rightRect = new Rect(ClipRect.x + ClipRect.width - lineHeight, ClipRect.y, lineHeight, ClipRect.height);
+            GUI.DrawTexture(topRect, Styles.WhiteTexture);
+            GUI.DrawTexture(bottomRect, Styles.WhiteTexture);
+            GUI.DrawTexture(leftRect, Styles.WhiteTexture);
+            GUI.DrawTexture(rightRect, Styles.WhiteTexture);
+            GUI.color = Color.white;
+        }
         protected virtual void OnDraw()
         {
         }
@@ -143,8 +171,11 @@ namespace ActionEditor
         protected virtual void DrawValid()
         {
             if (_clip.IsValid) return;
-            GUI.color = Color.red.WithAlpha(0.2f);
-            GUI.DrawTexture(ClipRect, Styles.WhiteTexture);
+            //EditorGUIUtility.TrIconContent("console.erroricon");
+            //GUI.color = Color.red.WithAlpha(0.2f);
+            var rect = new Rect(ClipRect.position, new Vector2(ClipRect.height, ClipRect.height));
+            GUI.Label(rect, EditorGUIUtility.TrIconContent("console.erroricon", Lan.ins.ClipInvalid));
+            //GUI.DrawTexture(, EditorGUIUtility.TrIconContent("console.erroricon").image);
         }
 
         #endregion
@@ -176,27 +207,9 @@ namespace ActionEditor
             DrawBlend();
             DrawName();
 
-            if (Select)
-            {
-                OnDrawSelect();
-            }
+
         }
 
 
-        protected void OnDrawSelect()
-        {
-            var lineHeight = 2;
-            GUI.color = Styles.ClipSelectColor;
-            var topRect = new Rect(ClipRect.x, ClipRect.y, ClipRect.width, lineHeight);
-            var bottomRect = new Rect(ClipRect.x, ClipRect.y + ClipRect.height - lineHeight, ClipRect.width,
-                lineHeight);
-            var leftRect = new Rect(ClipRect.x, ClipRect.y, lineHeight, ClipRect.height);
-            var rightRect = new Rect(ClipRect.x + ClipRect.width - lineHeight, ClipRect.y, lineHeight, ClipRect.height);
-            GUI.DrawTexture(topRect, Styles.WhiteTexture);
-            GUI.DrawTexture(bottomRect, Styles.WhiteTexture);
-            GUI.DrawTexture(leftRect, Styles.WhiteTexture);
-            GUI.DrawTexture(rightRect, Styles.WhiteTexture);
-            GUI.color = Color.white;
-        }
     }
 }
