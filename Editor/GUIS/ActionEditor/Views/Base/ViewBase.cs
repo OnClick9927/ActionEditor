@@ -67,7 +67,6 @@ namespace ActionEditor
             // Debug.Log("CheckPointerEvent");
             var hasRect = Position.Contains(_eventData._event.mousePosition);
 
-            _eventData.HasRect = hasRect;
             if (_eventData._event.type == EventType.MouseDown)
             {
                 if (hasRect)

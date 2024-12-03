@@ -65,7 +65,7 @@ namespace ActionEditor
             if (AssetData == null) return;
             var path = AssetDatabase.GetAssetPath(TextAsset);
             var json = AssetData.Serialize();
-         
+
             System.IO.File.WriteAllText(path, json);
             //EditorUtility.SetDirty(TextAsset);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
@@ -123,6 +123,35 @@ namespace ActionEditor
 
         public static IDirectable CopyAsset { get; set; }
         public static bool IsCut { get; set; }
+
+
+        public static void SetCopyAsset(IDirectable asset, bool cut)
+        {
+            CopyAsset = asset;
+            IsCut = cut;
+        }
+        public static void AddCopyClipToTrack(Track track)
+        {
+            Clip clip = CopyAsset as Clip;
+            if (!IsCut)
+            {
+                clip = JsonUtility.FromJson(JsonUtility.ToJson(clip), clip.GetType()) as Clip;
+            }
+            track.AddClip(clip);
+            CopyAsset = null;
+        }
+        public static void AddCopyTrackToGroup(Group group)
+        {
+            Track track = CopyAsset as Track;
+            if (!IsCut)
+            {
+                track = JsonUtility.FromJson(JsonUtility.ToJson(track), track.GetType()) as Track;
+            }
+
+            if (group.CanAddTrack(track))
+                group.AddTrack(track);
+            CopyAsset = null;
+        }
 
         #endregion
 

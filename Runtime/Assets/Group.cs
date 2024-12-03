@@ -10,21 +10,23 @@ namespace ActionEditor
     [Serializable]
     public class Group : IDirectable
     {
-        [SerializeField] [HideInInspector] private string name;
+        [SerializeField][HideInInspector] private string name;
 
 
         [SerializeReference]
-        /*[SerializeField]*/ private List<Track> tracks = new();
-        [SerializeField] [HideInInspector] private bool isCollapsed;
-        [SerializeField] [HideInInspector] private bool active = true;
-        [SerializeField] [HideInInspector] private bool isLocked;
+        /*[SerializeField]*/
+        private List<Track> tracks = new();
+        [SerializeField][HideInInspector] private bool isCollapsed;
+        [SerializeField][HideInInspector] private bool active = true;
+        [SerializeField][HideInInspector] private bool isLocked;
         public List<Track> Tracks
         {
             get => tracks;
             set => tracks = value;
         }
 
-       /* [fsIgnore]*/ public IDirector Root { get; private set; }
+        /* [fsIgnore]*/
+        public IDirector Root { get; private set; }
         IDirectable IDirectable.Parent => null;
 
         IEnumerable<IDirectable> IDirectable.Children => Tracks;
@@ -110,14 +112,32 @@ namespace ActionEditor
             Root = _root;
         }
 
-   
+
 
         public bool ExistSameTypeTrack(Type type)
         {
             return Tracks.FirstOrDefault(t => t.GetType() == type) != null;
         }
 
+        public T AddTrack<T>(T track) where T : Track
+        {
+            if (track != null)
+            {
+                var parent = track.Parent;
+                // if (!clip.CanAdd(this)) return null;
 
+                if (parent != null && parent is Group group)
+                {
+                    group.DeleteTrack(track);
+                }
+                Tracks.Add(track);
+
+                //Clips.Add(clip);
+                Root.Validate();
+            }
+
+            return track;
+        }
         public T AddTrack<T>(string _name = null) where T : Track
         {
             return (T)AddTrack(typeof(T), _name);

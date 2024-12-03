@@ -109,38 +109,39 @@ namespace ActionEditor
             GUI.DrawTexture(new Rect(x, Position.y, 1, Position.height), Styles.WhiteTexture);
             GUI.color = Color.white;
 
-            if (App.IsPlay)
+            //if (App.IsPlay)
             {
                 var playX = asset.TimeToPos(AssetPlayer.Inst.CurrentTime, width);
+                playX = Mathf.Max(0, playX);
                 _playPointerHandler = new Rect(playX - 5, Position.y, 11, height);
                 _pointerTextRect = new Rect(Position.x, Position.y, width, height);
 
                 GUI.DrawTexture(_playPointerHandler, Styles.TimelineTimeCursorIcon);
                 GUI.DrawTexture(new Rect(playX, Position.y, 1, Position.height), Styles.WhiteTexture);
             }
-            
+
 
             //DrawRangeLine();
             DrawDragLine();
         }
 
-        //private void DrawRangeLine()
-        //{
-        //    if (!App.IsRange) return;
+        private void DrawRangeLine()
+        {
+            //if (!App.IsRange) return;
 
-        //    var startX = asset.TimeToPos(asset.RangeMin, App.Width);
-        //    var rect1 = new Rect(startX - Styles.TimelineStartPlaybackIcon.width, Position.y,
-        //        Styles.TimelineStartPlaybackIcon.width,
-        //        Styles.TimelineStartPlaybackIcon.height);
-        //    GUI.DrawTexture(rect1, Styles.TimelineStartPlaybackIcon);
-        //    GUI.DrawTexture(new Rect(startX, Position.y, 1, Position.height), Styles.WhiteTexture);
+            var startX = asset.TimeToPos(asset.RangeMin, App.Width);
+            var rect1 = new Rect(startX - Styles.TimelineStartPlaybackIcon.width, Position.y,
+                Styles.TimelineStartPlaybackIcon.width,
+                Styles.TimelineStartPlaybackIcon.height);
+            GUI.DrawTexture(rect1, Styles.TimelineStartPlaybackIcon);
+            GUI.DrawTexture(new Rect(startX, Position.y, 1, Position.height), Styles.WhiteTexture);
 
-        //    var endX = asset.TimeToPos(asset.RangeMax, App.Width);
-        //    var rect2 = new Rect(endX, Position.y, Styles.TimelineEndPlaybackIcon.width,
-        //        Styles.TimelineEndPlaybackIcon.height);
-        //    GUI.DrawTexture(rect2, Styles.TimelineEndPlaybackIcon);
-        //    GUI.DrawTexture(new Rect(endX, Position.y, 1, Position.height), Styles.WhiteTexture);
-        //}
+            var endX = asset.TimeToPos(asset.RangeMax, App.Width);
+            var rect2 = new Rect(endX, Position.y, Styles.TimelineEndPlaybackIcon.width,
+                Styles.TimelineEndPlaybackIcon.height);
+            GUI.DrawTexture(rect2, Styles.TimelineEndPlaybackIcon);
+            GUI.DrawTexture(new Rect(endX, Position.y, 1, Position.height), Styles.WhiteTexture);
+        }
 
         private void DrawDragLine()
         {
@@ -199,9 +200,9 @@ namespace ActionEditor
 
             var showX = x - width * 0.5f;
 
-            GUI.color = Color.black.WithAlpha(0.8f);
+            //GUI.color = Color.black.WithAlpha(0.8f);
 
-            GUI.DrawTexture(new Rect(showX, Position.y, width, 18), Styles.BackgroundTexture);
+            //GUI.DrawTexture(new Rect(showX, Position.y, width, 18), Styles.BackgroundTexture);
             var stampRect = new Rect(showX + 2, 0, size.x, size.y);
             GUI.color = Color.white;
             GUI.Box(stampRect, text, GUI.skin.label);
