@@ -5,9 +5,9 @@ ActionEditor.BuffAsset
             "rid": 1000
         }
     ],
-    "length": 0.10000000149011612,
+    "length": 2.7699999809265138,
     "viewTimeMin": 0.0,
-    "viewTimeMax": 0.25,
+    "viewTimeMax": 4.428102493286133,
     "rangeMin": 0.0,
     "rangeMax": 5.0,
     "references": {
@@ -31,6 +31,9 @@ ActionEditor.BuffAsset
                         },
                         {
                             "rid": 1003
+                        },
+                        {
+                            "rid": 1004
                         }
                     ],
                     "isCollapsed": false,
@@ -48,7 +51,7 @@ ActionEditor.BuffAsset
                 "data": {
                     "actionClips": [
                         {
-                            "rid": 1004
+                            "rid": 1005
                         }
                     ],
                     "name": "SignalTrack",
@@ -70,7 +73,11 @@ ActionEditor.BuffAsset
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "actionClips": [],
+                    "actionClips": [
+                        {
+                            "rid": 1006
+                        }
+                    ],
                     "name": "EffectTrack",
                     "active": true,
                     "isLocked": false,
@@ -91,7 +98,14 @@ ActionEditor.BuffAsset
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "actionClips": [],
+                    "actionClips": [
+                        {
+                            "rid": 1007
+                        },
+                        {
+                            "rid": 1008
+                        }
+                    ],
                     "name": "AudioTrack",
                     "active": true,
                     "isLocked": false,
@@ -106,6 +120,36 @@ ActionEditor.BuffAsset
             {
                 "rid": 1004,
                 "type": {
+                    "class": "ActionTrack",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "actionClips": [
+                        {
+                            "rid": 1009
+                        },
+                        {
+                            "rid": 1010
+                        }
+                    ],
+                    "name": "ActionTrack",
+                    "active": true,
+                    "isLocked": false,
+                    "color": {
+                        "r": 1.0,
+                        "g": 1.0,
+                        "b": 1.0,
+                        "a": 1.0
+                    },
+                    "Test1": 0,
+                    "Test2": 0.0,
+                    "Test3": ""
+                }
+            },
+            {
+                "rid": 1005,
+                "type": {
                     "class": "TriggerLog",
                     "ns": "ActionEditor",
                     "asm": "Assembly-CSharp"
@@ -115,6 +159,90 @@ ActionEditor.BuffAsset
                     "length": 1.0,
                     "name": "TriggerLog",
                     "log": "dsa"
+                }
+            },
+            {
+                "rid": 1006,
+                "type": {
+                    "class": "PlayParticle",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 0.07000000029802323,
+                    "length": 1.0,
+                    "name": "PlayParticle",
+                    "resPath": "Assets/ResRaw/Effects/Prefabs/VFX_Fire Magic Array 004.prefab",
+                    "scale": false
+                }
+            },
+            {
+                "rid": 1007,
+                "type": {
+                    "class": "PlayAudio",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 0.0,
+                    "length": 1.2212698459625245,
+                    "name": "PlayAudio",
+                    "blendIn": 0.0,
+                    "blendOut": 0.0012698173522949219,
+                    "resPath": "Assets/ResRaw/Sound/open_door.wav",
+                    "volume": 1.0,
+                    "clipOffset": 0.0
+                }
+            },
+            {
+                "rid": 1008,
+                "type": {
+                    "class": "PlayAudio",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 1.2999999523162842,
+                    "length": 1.2212698459625245,
+                    "name": "PlayAudio",
+                    "blendIn": 0.0012698173522949219,
+                    "blendOut": 0.25,
+                    "resPath": "Assets/ResRaw/Sound/open_door.wav",
+                    "volume": 1.0,
+                    "clipOffset": 10.0
+                }
+            },
+            {
+                "rid": 1009,
+                "type": {
+                    "class": "RotateTo",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 0.4399999976158142,
+                    "length": 1.0,
+                    "name": "RotateTo",
+                    "interpolation": 6,
+                    "targetRotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            },
+            {
+                "rid": 1010,
+                "type": {
+                    "class": "VisibleTo",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 1.7699999809265137,
+                    "length": 1.0,
+                    "name": "VisibleTo",
+                    "visible": true
                 }
             }
         ]
