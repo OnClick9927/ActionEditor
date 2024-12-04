@@ -39,11 +39,17 @@ namespace ActionEditor
             var size = GUI.skin.label.CalcSize(new GUIContent(gName));
             var width = size.x + 8;
             if (width < 80) width = 80;
-            if (GUILayout.Button($"[{gName}]", EditorStyles.toolbarDropDown, GUILayout.Width(width)))
+            if (GUILayout.Button($"[{gName}]", EditorStyles.toolbarDropDown, GUILayout.Width(150)))
             {
                 App.AutoSave();
                 var rect = GUILayoutUtility.GetLastRect();
-                AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", App.OnObjectPickerConfig, (x) =>
+                rect.x = 200;
+                AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", (o) =>
+                {
+
+                    App.OnObjectPickerConfig(o);
+                    GUIUtility.ExitGUI();
+                }, (x) =>
                 {
                     return x.EndsWith(Asset.FileEx);
 
