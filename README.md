@@ -1,4 +1,6 @@
 # upm 地址  https://github.com/OnClick9927/ActionEditor.git#upm
-ActionEditor
+* ActionEditor
+* 类Timeline 编辑器，只有Editor，RT 自己扩展
 # [魔改源](https://github.com/NoBugCn/ActionEditor)
-![image](https://github.com/user-attachments/assets/60f4ce20-c644-494e-ae4c-64c5e141d182)
+![界面](https://github.com/user-attachments/assets/8bc366a7-12f4-4f8b-8d31-994e79d9f9d8)
+
