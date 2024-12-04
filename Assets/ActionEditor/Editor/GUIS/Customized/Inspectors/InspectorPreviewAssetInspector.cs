@@ -7,7 +7,7 @@ using UnityEngine;
 namespace ActionEditor
 {
     [CustomEditor(typeof(InspectorPreviewAsset))]
-    public class InspectorPreviewAssetInspector : Editor
+    class InspectorPreviewAssetInspector : Editor
     {
         private bool _optionsAssetFold = true;
 

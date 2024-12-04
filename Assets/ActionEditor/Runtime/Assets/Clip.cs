@@ -42,7 +42,7 @@ namespace ActionEditor
 
         IEnumerable<IDirectable> IDirectable.Children => null;
 
-        public GameObject Actor => Parent?.Actor;
+        //public GameObject Actor => Parent?.Actor;
 
         public string Name
         {

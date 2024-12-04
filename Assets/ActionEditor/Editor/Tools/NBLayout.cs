@@ -11,7 +11,7 @@ namespace ActionEditor
         public float X;
     }
 
-    public class NBLayout
+    static class NBLayout
     {
         #region Horizontal
 
@@ -57,7 +57,10 @@ namespace ActionEditor
             Space(width);
             return ret;
         }
-
+        public static float GetY(this Rect rect, float height, float lineHeight = Styles.LineHeight)
+        {
+            return rect.y + (lineHeight - height) * 0.5f;
+        }
 
         public static void EndHorizontal()
         {

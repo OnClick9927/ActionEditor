@@ -42,7 +42,7 @@ namespace ActionEditor
 
         IEnumerable<IDirectable> IDirectable.Children => Clips;
 
-        public GameObject Actor => Parent?.Actor;
+        //public GameObject Actor => Parent?.Actor;
 
         public virtual bool IsCollapsed
         {

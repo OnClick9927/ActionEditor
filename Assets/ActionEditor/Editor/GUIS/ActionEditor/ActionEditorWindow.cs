@@ -21,7 +21,6 @@ namespace ActionEditor
 
         void InitializeAll()
         {
-            Styles.Load();
             Prefs.InitializeAssetTypes();
             App.OnInitialize?.Invoke();
             //停止播放
@@ -46,8 +45,8 @@ namespace ActionEditor
             Lan.Load();
 
             App.Window = this;
-            EditorSceneManager.sceneSaving -= OnWillSaveScene;
-            EditorSceneManager.sceneSaving += OnWillSaveScene;
+            //EditorSceneManager.sceneSaving -= OnWillSaveScene;
+            //EditorSceneManager.sceneSaving += OnWillSaveScene;
 
             EditorApplication.update -= OnEditorUpdate;
             EditorApplication.update += OnEditorUpdate;
@@ -61,7 +60,7 @@ namespace ActionEditor
         void OnDisable()
         {
             App.Window = null;
-            EditorSceneManager.sceneSaving -= OnWillSaveScene;
+            //EditorSceneManager.sceneSaving -= OnWillSaveScene;
             EditorApplication.update -= OnEditorUpdate;
             
             App.OnDisable?.Invoke();
@@ -86,19 +85,20 @@ namespace ActionEditor
             //    return;
             //}
 
-            if (Event.current.type == EventType.MouseMove)
-            {
-                Debug.Log("MouseMove===11");
-                Repaint();
-            }
+            //if (Event.current.type == EventType.MouseMove)
+            //{
+            //    Debug.Log("MouseMove===11");
+            //    Repaint();
+            //}
             
             _timelineView.OnGUI(this.position);
             App.OnGUIEnd();
+            App.KeyBoardEvent(Event.current);
         }
 
-        void OnWillSaveScene(UnityEngine.SceneManagement.Scene scene, string path)
-        {
-        }
+        //void OnWillSaveScene(UnityEngine.SceneManagement.Scene scene, string path)
+        //{
+        //}
 
         #endregion
 

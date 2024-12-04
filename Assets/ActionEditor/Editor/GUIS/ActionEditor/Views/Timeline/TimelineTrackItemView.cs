@@ -3,6 +3,7 @@ using System.Linq;
 using ActionEditor.Events;
 using UnityEditor;
 using UnityEngine;
+using static UnityEditor.PlayerSettings;
 
 namespace ActionEditor
 {
@@ -82,18 +83,18 @@ namespace ActionEditor
             string overlayLabel = null;
             if (!Data.IsActive && Data.IsLocked)
             {
-                overlayLabel = "禁用 & 锁定";
+                overlayLabel = $"{Lan.ins.Locked} & {Lan.ins.Disable}";
             }
             else
             {
                 if (!Data.IsActive)
                 {
-                    overlayLabel = "禁用";
+                    overlayLabel = Lan.ins.Disable;
                 }
 
                 if (Data.IsLocked)
                 {
-                    overlayLabel = "锁定";
+                    overlayLabel =Lan.ins.Locked ;
                 }
             }
 
@@ -123,9 +124,7 @@ namespace ActionEditor
                 GUI.color = Color.white.WithAlpha(0.5f);
 
                 var collapseAllRect = NBLayout.GetHRect(16, 16);
-
-                if (GUI.Button(collapseAllRect, Data.IsCollapsed ? Styles.CollapsedIcon : Styles.ExpandedIcon,
-                        GUIStyle.none))
+                if (GUI.Button(collapseAllRect, "", EditorStyles.foldout))
                 {
                     Debug.Log("click Expanded");
                     group.IsCollapsed = !Data.IsCollapsed;
@@ -154,7 +153,7 @@ namespace ActionEditor
             NBLayout.BeginHorizontal(rect, true);
             if (!isTrack)
             {
-                if (GUI.Button(NBLayout.GetHRect(16, 16), Styles.MenuIcon, GUIStyle.none))
+                if (GUI.Button(NBLayout.GetHRect(16, 16), EditorGUIUtility.TrIconContent("VerticalLayoutGroup Icon"), GUIStyle.none))
                 {
                     OnGroupContextMenu();
                     Event.current.Use();
@@ -164,7 +163,7 @@ namespace ActionEditor
             if (Data.IsLocked)
             {
                 NBLayout.Space(2);
-                if (GUI.Button(NBLayout.GetHRect(16, 16), Styles.LockIcon, GUIStyle.none))
+                if (GUI.Button(NBLayout.GetHRect(16, 16), EditorGUIUtility.TrIconContent("InspectorLock"), GUIStyle.none))
                 {
                     Data.IsLocked = !Data.IsLocked;
                     Event.current.Use();
@@ -174,7 +173,7 @@ namespace ActionEditor
             if (!Data.IsActive)
             {
                 NBLayout.Space(2);
-                if (GUI.Button(NBLayout.GetHRect(16, 16), Styles.EyeIcon, GUIStyle.none))
+                if (GUI.Button(NBLayout.GetHRect(16, 16), EditorGUIUtility.TrIconContent("animationvisibilitytoggleoff"), GUIStyle.none))
                 {
                     Data.IsActive = !Data.IsActive;
                     Event.current.Use();
@@ -410,7 +409,7 @@ namespace ActionEditor
     {
         public IDirectable Data;
 
-        public Rect TrackRightRect;
+        public static Rect TrackRightRect {  get; private set; }
 
         public void SetData(IDirectable asset)
         {
@@ -419,6 +418,7 @@ namespace ActionEditor
 
         public override void OnGUI(Rect rect)
         {
+            
             TrackRightRect = rect;
             var localRect = new Rect(0, 0, rect.width, rect.height);
             base.OnGUI(localRect);
@@ -553,7 +553,6 @@ namespace ActionEditor
         }
 
         #region ContextMenu
-
         private void OnTrackRightContextMenu(Track track, PointerEventData ev)
         {
             var attachableTypeInfos = new List<EditorTools.TypeMetaInfo>();

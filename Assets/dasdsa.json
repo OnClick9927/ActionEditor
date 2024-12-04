@@ -8,9 +8,9 @@ ActionEditor.BuffAsset
             "rid": 1001
         }
     ],
-    "length": 3.0412697792053224,
+    "length": 4.649999618530273,
     "viewTimeMin": 0.0,
-    "viewTimeMax": 4.007766246795654,
+    "viewTimeMax": 4.982004165649414,
     "rangeMin": 0.0,
     "rangeMax": 5.0,
     "references": {
@@ -41,7 +41,7 @@ ActionEditor.BuffAsset
                     ],
                     "isCollapsed": false,
                     "active": true,
-                    "isLocked": true
+                    "isLocked": false
                 }
             },
             {
@@ -62,9 +62,6 @@ ActionEditor.BuffAsset
                         },
                         {
                             "rid": 1008
-                        },
-                        {
-                            "rid": 1009
                         }
                     ],
                     "isCollapsed": false,
@@ -81,6 +78,9 @@ ActionEditor.BuffAsset
                 },
                 "data": {
                     "actionClips": [
+                        {
+                            "rid": 1009
+                        },
                         {
                             "rid": 1010
                         }
@@ -249,31 +249,7 @@ ActionEditor.BuffAsset
                     "actionClips": [
                         {
                             "rid": 1020
-                        }
-                    ],
-                    "name": "ActionTrack",
-                    "active": true,
-                    "isLocked": false,
-                    "color": {
-                        "r": 1.0,
-                        "g": 1.0,
-                        "b": 1.0,
-                        "a": 1.0
-                    },
-                    "Test1": 0,
-                    "Test2": 0.0,
-                    "Test3": ""
-                }
-            },
-            {
-                "rid": 1009,
-                "type": {
-                    "class": "ActionTrack",
-                    "ns": "ActionEditor",
-                    "asm": "Assembly-CSharp"
-                },
-                "data": {
-                    "actionClips": [
+                        },
                         {
                             "rid": 1021
                         },
@@ -296,7 +272,7 @@ ActionEditor.BuffAsset
                 }
             },
             {
-                "rid": 1010,
+                "rid": 1009,
                 "type": {
                     "class": "PlayParticle",
                     "ns": "ActionEditor",
@@ -311,6 +287,25 @@ ActionEditor.BuffAsset
                 }
             },
             {
+                "rid": 1010,
+                "type": {
+                    "class": "RotateTo",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 3.6499998569488527,
+                    "length": 1.0,
+                    "name": "RotateTo",
+                    "interpolation": 6,
+                    "targetRotation": {
+                        "x": 2.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            },
+            {
                 "rid": 1011,
                 "type": {
                     "class": "TriggerLog",
@@ -318,7 +313,7 @@ ActionEditor.BuffAsset
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 0.09999999403953552,
+                    "startTime": 0.25,
                     "length": 1.0,
                     "name": "TriggerLog",
                     "log": "dsa"
@@ -332,10 +327,10 @@ ActionEditor.BuffAsset
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 0.5899999737739563,
+                    "startTime": 0.4699999988079071,
                     "length": 1.0,
                     "name": "TriggerLog",
-                    "log": ""
+                    "log": "5"
                 }
             },
             {
@@ -467,7 +462,7 @@ ActionEditor.BuffAsset
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 0.25,
+                    "startTime": 0.09999999403953552,
                     "length": 1.0,
                     "name": "RotateTo",
                     "interpolation": 6,
@@ -486,7 +481,7 @@ ActionEditor.BuffAsset
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 0.25,
+                    "startTime": 1.9299999475479127,
                     "length": 1.0,
                     "name": "RotateTo",
                     "interpolation": 6,
@@ -505,7 +500,7 @@ ActionEditor.BuffAsset
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 1.8199999332427979,
+                    "startTime": 3.359999895095825,
                     "length": 1.0,
                     "name": "RotateTo",
                     "interpolation": 6,

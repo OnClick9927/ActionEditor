@@ -45,24 +45,30 @@ namespace ActionEditor
             //    // return;
             //}
 
-            if (DrawButton(Styles.FirstFrameIcon, Lan.ins.FirstFrame))
+            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.FirstKey").image, Lan.ins.FirstFrame))
             {
                 AssetPlayer.Inst.CurrentTime = 0;
             }
 
-            if (DrawButton(Styles.PrevFrameIcon, Lan.ins.StepBackwardTips))
+            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.PrevKey").image, Lan.ins.StepBackwardTips))
             {
                 App.StepBackward();
             }
 
             EditorGUI.BeginChangeCheck();
 
-            var isPlaying = DrawToggle(App.IsPlay, App.IsPlay ? Styles.StopIcon : Styles.PlayIcon,
+            if (App.IsPlay)
+                GUI.backgroundColor = ColorUtility.WithAlpha(Color.blue + Color.cyan, 0.8f);
+            var isPlaying = DrawToggle(App.IsPlay, EditorGUIUtility.TrIconContent("d_Animation.Play").image,
                 App.IsPlay ? Lan.ins.StopTips : Lan.ins.PlayTips);
+            GUI.backgroundColor = Color.white;
+
+
             if (EditorGUI.EndChangeCheck())
             {
                 if (isPlaying)
                 {
+                    App.Pause(false);
                     App.Play();
                 }
                 else
@@ -71,18 +77,22 @@ namespace ActionEditor
                 }
             }
 
-            var isPause = DrawToggle(App.IsPause, Styles.PauseIcon, Lan.ins.PauseTips);
+            if (App.IsPause)
+                GUI.backgroundColor = ColorUtility.WithAlpha(Color.blue + Color.cyan, 0.8f);
+            var isPause = DrawToggle(App.IsPause, EditorGUIUtility.TrIconContent("d_PauseButton").image, Lan.ins.PauseTips);
+            GUI.backgroundColor = Color.white;
+
             if (EditorGUI.EndChangeCheck())
             {
                 App.Pause(isPause);
             }
 
-            if (DrawButton(Styles.NextFrameIcon, Lan.ins.StepForwardTips))
+            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.NextKey").image, Lan.ins.StepForwardTips))
             {
                 App.StepForward();
             }
 
-            if (DrawButton(Styles.LastFrameIcon, Lan.ins.PlayForwardTips))
+            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.LastKey").image, Lan.ins.PlayForwardTips))
             {
                 AssetPlayer.Inst.CurrentTime = AssetPlayer.Inst.Length;
             }

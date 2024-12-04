@@ -1,5 +1,4 @@
 ﻿using ActionEditor;
-using ActionEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 

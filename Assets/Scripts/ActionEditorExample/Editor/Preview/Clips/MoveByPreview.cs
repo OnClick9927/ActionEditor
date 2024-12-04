@@ -1,5 +1,4 @@
 ﻿using ActionEditor;
-using ActionEditor;
 using UnityEngine;
 
 namespace ActionEditorExample
@@ -11,6 +10,7 @@ namespace ActionEditorExample
     public class MoveByPreview : PreviewBase<MoveBy>
     {
         private Vector3 originalPos;
+
 
         public override void Update(float time, float previousTime)
         {
