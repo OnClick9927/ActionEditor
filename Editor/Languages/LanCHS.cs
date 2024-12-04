@@ -1,7 +1,7 @@
 ﻿namespace ActionEditor
 {
     [Name("简体中文")]
-    public class LanCHS : ILanguages
+     class LanCHS : ILanguages
     {
 
         //**********  Welcome *********

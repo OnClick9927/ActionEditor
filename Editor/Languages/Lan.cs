@@ -4,7 +4,7 @@ using UnityEditor;
 
 namespace ActionEditor
 {
-    internal class Lan
+    class Lan
     {
         #region 静态
 

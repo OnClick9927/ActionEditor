@@ -45,7 +45,7 @@ namespace ActionEditor
                 var rect = GUILayoutUtility.GetLastRect();
                 AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", App.OnObjectPickerConfig, (x) =>
                 {
-                    return x.EndsWith(".json");
+                    return x.EndsWith(Asset.FileEx);
 
                 });
             }
