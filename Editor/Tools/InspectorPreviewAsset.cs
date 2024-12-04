@@ -2,7 +2,7 @@
 
 namespace ActionEditor
 {
-    public class InspectorPreviewAsset : ScriptableObject
+    class InspectorPreviewAsset : ScriptableObject
     {
         
     }

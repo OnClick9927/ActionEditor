@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
 {
-    public static class DirectableExtends
+    static class DirectableExtends
     {
         private static readonly Dictionary<Type, Texture2D> _iconDictionary = new Dictionary<Type, Texture2D>();
         private static readonly Dictionary<Type, Color> _colorDictionary = new Dictionary<Type, Color>();
@@ -99,6 +100,21 @@ namespace ActionEditor
             }
 
             return _nameDictionary[type];
+        }
+
+        public static bool CanAddTrack(this Group group, Track track)
+        {
+
+            if (track == null) return false;
+            var type = track.GetType();
+            if (type == null || !type.IsSubclassOf(typeof(Track)) || type.IsAbstract) return false;
+            if (type.IsDefined(typeof(UniqueAttribute), true) &&
+                group.ExistSameTypeTrack(type))
+                return false;
+            var attachAtt = type.RTGetAttribute<AttachableAttribute>(true);
+            if (attachAtt == null || attachAtt.Types == null || attachAtt.Types.All(t => t != group.GetType())) return false;
+
+            return true;
         }
     }
 }

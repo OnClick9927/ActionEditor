@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace ActionEditor
 {
+
     public class HeaderGUI : ICustomized
     {
         public void OnGUI()
@@ -41,7 +42,12 @@ namespace ActionEditor
             if (GUILayout.Button($"[{gName}]", EditorStyles.toolbarDropDown, GUILayout.Width(width)))
             {
                 App.AutoSave();
-                ObjectSelectorWindow.ShowObjectPicker<TextAsset>(null, App.OnObjectPickerConfig, "Assets/", (x) => { return x.EndsWith(".json"); });
+                var rect = GUILayoutUtility.GetLastRect();
+                AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", App.OnObjectPickerConfig, (x) =>
+                {
+                    return x.EndsWith(".json");
+
+                });
             }
         }
 
@@ -50,7 +56,7 @@ namespace ActionEditor
         {
             //显示保持状态
 
-            if ( App.AssetData != null)
+            if (App.AssetData != null)
             {
                 GUI.color = Color.white.WithAlpha(0.3f);
                 GUI.skin.label.richText = true;
@@ -58,7 +64,7 @@ namespace ActionEditor
                     $"<size=11>{string.Format(Lan.ins.HeaderLastSaveTime, App.LastSaveTime.ToString("HH:mm:ss"))}</size>");
                 GUI.color = Color.white;
 
-                if (GUILayout.Button(new GUIContent(Styles.SaveIcon, Lan.ins.Save), EditorStyles.toolbarButton,
+                if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("SaveActive").image, Lan.ins.Save), EditorStyles.toolbarButton,
                         GUILayout.Width(26)))
                 {
                     App.AutoSave(); //先保存当前的
@@ -68,7 +74,7 @@ namespace ActionEditor
 
 
 
-            if (GUILayout.Button(new GUIContent(Styles.SettingsIcon, Lan.ins.OpenPreferencesTips),
+            if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("Settings").image, Lan.ins.OpenPreferencesTips),
                     EditorStyles.toolbarButton, GUILayout.Width(26)))
             {
                 PreferencesWindow.Show(new Rect(Styles.ScreenWidth - 5 - 400 - Styles.TimelineLeftTotalWidth, 25, 400,

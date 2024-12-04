@@ -10,7 +10,7 @@ namespace ActionEditor
     public static class Prefs
     {
         public static readonly string CONFIG_PATH =
-            $"{Application.dataPath}/../ProjectSettings/WhootActionSequencer.txt";
+            $"{Application.dataPath}/Editor/ActionEditor.txt";
 
         [Serializable]
         public enum TimeStepMode
@@ -26,7 +26,7 @@ namespace ActionEditor
             public float SnapInterval = 0.1f;
             public int FrameRate = 30;
 
-            public int AutoSaveSeconds;
+            public int AutoSaveSeconds = 10;
             //public string SavePath = "Assets/";
             //public bool ScrollWheelZooms = true;
 
@@ -43,6 +43,9 @@ namespace ActionEditor
             {
                 if (_data == null)
                 {
+                    if (!Directory.Exists("Assets/Editor"))
+                        Directory.CreateDirectory("Assets/Editor");
+
                     if (File.Exists(CONFIG_PATH))
                     {
                         var json = File.ReadAllText(CONFIG_PATH);
@@ -74,7 +77,7 @@ namespace ActionEditor
         //        }
         //    }
         //}
-        
+
         public static int autoSaveSeconds
         {
             get => data.AutoSaveSeconds;

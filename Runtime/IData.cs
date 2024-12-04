@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using UnityEngine;
 
 namespace ActionEditor
 {
@@ -14,7 +13,7 @@ namespace ActionEditor
         IDirectable Parent { get; }
         IEnumerable<IDirectable> Children { get; }
 
-        GameObject Actor { get; }
+        //GameObject Actor { get; }
         string Name { get; }
 
         bool IsActive { get; set; }

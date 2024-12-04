@@ -2,7 +2,7 @@
 
 namespace ActionEditor
 {
-    public static class FieldInfoExtensions
+    static class FieldInfoExtensions
     {
         public static string GetShowName(this FieldInfo field)
         {

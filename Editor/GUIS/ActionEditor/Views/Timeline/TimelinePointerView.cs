@@ -1,4 +1,5 @@
 ﻿using ActionEditor.Events;
+using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
@@ -116,8 +117,12 @@ namespace ActionEditor
                 _playPointerHandler = new Rect(playX - 5, Position.y, 11, height);
                 _pointerTextRect = new Rect(Position.x, Position.y, width, height);
 
-                GUI.DrawTexture(_playPointerHandler, Styles.TimelineTimeCursorIcon);
                 GUI.DrawTexture(new Rect(playX, Position.y, 1, Position.height), Styles.WhiteTexture);
+
+                var matrix = GUI.matrix;
+                GUIUtility.ScaleAroundPivot(new Vector2(6,1.5f), _playPointerHandler.center);
+                GUI.DrawTexture(_playPointerHandler, EditorGUIUtility.IconContent("AnimationWindowEvent Icon").image);
+                GUI.matrix = matrix;
             }
 
 
@@ -125,23 +130,23 @@ namespace ActionEditor
             DrawDragLine();
         }
 
-        private void DrawRangeLine()
-        {
-            //if (!App.IsRange) return;
+        //private void DrawRangeLine()
+        //{
+        //    //if (!App.IsRange) return;
 
-            var startX = asset.TimeToPos(asset.RangeMin, App.Width);
-            var rect1 = new Rect(startX - Styles.TimelineStartPlaybackIcon.width, Position.y,
-                Styles.TimelineStartPlaybackIcon.width,
-                Styles.TimelineStartPlaybackIcon.height);
-            GUI.DrawTexture(rect1, Styles.TimelineStartPlaybackIcon);
-            GUI.DrawTexture(new Rect(startX, Position.y, 1, Position.height), Styles.WhiteTexture);
+        //    var startX = asset.TimeToPos(asset.RangeMin, App.Width);
+        //    var rect1 = new Rect(startX - Styles.TimelineStartPlaybackIcon.width, Position.y,
+        //        Styles.TimelineStartPlaybackIcon.width,
+        //        Styles.TimelineStartPlaybackIcon.height);
+        //    GUI.DrawTexture(rect1, Styles.TimelineStartPlaybackIcon);
+        //    GUI.DrawTexture(new Rect(startX, Position.y, 1, Position.height), Styles.WhiteTexture);
 
-            var endX = asset.TimeToPos(asset.RangeMax, App.Width);
-            var rect2 = new Rect(endX, Position.y, Styles.TimelineEndPlaybackIcon.width,
-                Styles.TimelineEndPlaybackIcon.height);
-            GUI.DrawTexture(rect2, Styles.TimelineEndPlaybackIcon);
-            GUI.DrawTexture(new Rect(endX, Position.y, 1, Position.height), Styles.WhiteTexture);
-        }
+        //    var endX = asset.TimeToPos(asset.RangeMax, App.Width);
+        //    var rect2 = new Rect(endX, Position.y, Styles.TimelineEndPlaybackIcon.width,
+        //        Styles.TimelineEndPlaybackIcon.height);
+        //    GUI.DrawTexture(rect2, Styles.TimelineEndPlaybackIcon);
+        //    GUI.DrawTexture(new Rect(endX, Position.y, 1, Position.height), Styles.WhiteTexture);
+        //}
 
         private void DrawDragLine()
         {

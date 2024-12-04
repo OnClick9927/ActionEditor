@@ -3,7 +3,7 @@ using UnityEditor;
 
 namespace ActionEditor
 {
-    public static class EditorWindowExtensions
+    static class EditorWindowExtensions
     {
         private static Dictionary<EditorWindow, List<ViewBase>> _views =
             new Dictionary<EditorWindow, List<ViewBase>>();

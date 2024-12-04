@@ -4,6 +4,8 @@ using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using System.Linq;
+using System.IO;
+using UnityEngine.UIElements;
 
 namespace ActionEditor
 {
@@ -11,8 +13,24 @@ namespace ActionEditor
 
     public delegate void OpenAssetFunction(Asset asset);
 
+    [InitializeOnLoad]
     public static class App
     {
+        static App()
+        {
+            string key = "ActionEditor.APP";
+            string path = EditorPrefs.GetString(key);
+            OnObjectPickerConfig(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path));
+            OnDisable += () =>
+            {
+                if (TextAsset != null)
+                {
+                    string path = AssetDatabase.GetAssetPath(TextAsset);
+                    EditorPrefs.SetString(key, path);
+                }
+            };
+
+        }
         private static TextAsset _textAsset;
 
         public static CallbackFunction OnInitialize;
@@ -137,7 +155,14 @@ namespace ActionEditor
             {
                 clip = JsonUtility.FromJson(JsonUtility.ToJson(clip), clip.GetType()) as Clip;
             }
+            var rect = TimelineTrackItemRightView.TrackRightRect;
+            var time = track.Root.PosToTime(Event.current.mousePosition.x - rect.x, rect.width);
+            clip.StartTime = track.Root.SnapTime(time);
+
+
+
             track.AddClip(clip);
+            App.Select(clip);
             CopyAsset = null;
         }
         public static void AddCopyTrackToGroup(Group group)
@@ -150,7 +175,9 @@ namespace ActionEditor
 
             if (group.CanAddTrack(track))
                 group.AddTrack(track);
+            App.Select(track);
             CopyAsset = null;
+
         }
 
         #endregion
@@ -167,7 +194,7 @@ namespace ActionEditor
 
         [System.NonSerialized] private static InspectorPreviewAsset _currentInspectorPreviewAsset;
 
-        public static InspectorPreviewAsset CurrentInspectorPreviewAsset
+        private static InspectorPreviewAsset CurrentInspectorPreviewAsset
         {
             get
             {
@@ -346,6 +373,104 @@ namespace ActionEditor
             Repaint();
         }
 
-        #endregion
+        internal static void KeyBoardEvent(Event eve)
+        {
+            if (AssetData == null) return;
+            if (eve.control && eve.type == EventType.KeyDown)
+            {
+                if (eve.keyCode == KeyCode.S)
+                {
+                    App.AutoSave();
+                    eve.Use();
+
+                }
+                else if (eve.keyCode == KeyCode.C)
+                {
+                    if (App.SelectCount == 1)
+                    {
+                        var _asset = App._selectList[0];
+                        if (!_asset.IsLocked)
+
+                            if (_asset is Clip || _asset is Track)
+                            {
+                                App.SetCopyAsset(_asset, false);
+                                eve.Use();
+
+                            }
+                    }
+
+                }
+                else if (eve.keyCode == KeyCode.X)
+                {
+                    if (App.SelectCount == 1)
+                    {
+                        var _asset = App._selectList[0];
+                        if (!_asset.IsLocked)
+
+                            if (_asset is Clip || _asset is Track)
+                            {
+
+                                App.SetCopyAsset(App._selectList[0], true);
+                                eve.Use();
+
+                            }
+                    }
+                }
+                else if (eve.keyCode == KeyCode.V)
+                {
+                    if (App.SelectCount == 1)
+                    {
+                        var _asset = App._selectList[0];
+                        if (!_asset.IsLocked)
+
+                            if (_asset is Group && App.CopyAsset is Track)
+                            {
+                                Group group = _asset as Group;
+                                App.AddCopyTrackToGroup(group);
+                                App.Refresh();
+                                eve.Use();
+
+                            }
+                            else if (_asset is Track && App.CopyAsset is Clip)
+                            {
+                                Track track = _asset as Track;
+                                App.AddCopyClipToTrack(track);
+                                App.Refresh();
+                                eve.Use();
+
+                            }
+                    }
+                }
+
+            }
+            if (!eve.isMouse && eve.type == EventType.KeyDown && eve.keyCode == KeyCode.Delete)
+            {
+                var ss = App.SelectItems.Where(x => !x.IsLocked).ToArray();
+                for (int i = 0; i < ss.Length; i++)
+                {
+                    if (ss[i] is Group)
+                    {
+                        var group = ss[i] as Group;
+                        AssetData.DeleteGroup(group);
+                    }
+                    else if (ss[i] is Track)
+                    {
+                        var track = ss[i] as Track;
+                        Group group = track.Parent as Group;
+                        group.DeleteTrack(track);
+                    }
+                    else if (ss[i] is Clip)
+                    {
+                        var track = ss[i] as Clip;
+                        Track group = track.Parent as Track;
+                        group.DeleteAction(track);
+                    }
+                }
+                App.Select();
+                App.Refresh();
+                eve.Use();
+            }
+            #endregion
+        }
     }
 }

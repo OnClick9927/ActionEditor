@@ -2,7 +2,7 @@
 
 namespace ActionEditor
 {
-    public static class DirectableAssetExtensions
+    static class DirectableAssetExtensions
     {
         public static float SnapTime(this IDirector asset, float time)
         {
@@ -18,7 +18,7 @@ namespace ActionEditor
         {
             return pos / width * asset.ViewTime + asset.ViewTimeMin;
         }
-        
+
         public static float WidthToTime(this IDirector asset, float pos, float width)
         {
             return pos / width * asset.ViewTime;
