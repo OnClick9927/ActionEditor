@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -25,36 +26,42 @@ namespace ActionEditor
 
         public override void OnGUI(Rect rect)
         {
-            GUILayout.BeginVertical("box");
 
-            GUI.color = new Color(0, 0, 0, 0.3f);
 
-            GUILayout.BeginHorizontal();
-            GUI.color = Color.white;
+
             GUILayout.Label($"<size=30><b>{Lan.ins.CreateAsset}</b></size>");
-            GUILayout.EndHorizontal();
             GUILayout.Space(2);
 
-            GUILayout.BeginVertical("box");
-            if (string.IsNullOrEmpty(_selectType))
-                _selectType = Prefs.AssetNames.FirstOrDefault();
-            _selectType = EditorTools.CleanPopup(Lan.ins.CrateAssetType, _selectType, Prefs.AssetNames);
-            _createName = EditorGUILayout.TextField(new GUIContent(Lan.ins.CrateAssetName, Lan.ins.CreateAssetFileName),
-                _createName);
-            if (GUILayout.Button(new GUIContent(Lan.ins.CreateAssetConfirm)))
+            if (Prefs.AssetNames.Count == 0)
             {
-                CreateConfirm();
+                EditorGUILayout.HelpBox("None Type Sub Class of Asset", MessageType.Error);
             }
-            GUILayout.EndVertical();
+            else
+            {
+
+                GUILayout.BeginVertical("box");
+                if (string.IsNullOrEmpty(_selectType))
+                    _selectType = Prefs.AssetNames.FirstOrDefault();
+                _selectType = EditorTools.CleanPopup(Lan.ins.CrateAssetType, _selectType, Prefs.AssetNames);
+                _createName = EditorGUILayout.TextField(new GUIContent(Lan.ins.CrateAssetName, Lan.ins.CreateAssetFileName),
+                    _createName);
+                if (GUILayout.Button(new GUIContent(Lan.ins.CreateAssetConfirm)))
+                {
+                    CreateConfirm();
+                }
+            }
+
+
         }
 
         void CreateConfirm()
         {
             //var path = $"{Prefs.savePath}/{_createName}.json";
 
-            var path = EditorUtility.SaveFilePanelInProject("save", _createName, "json", "");
-            if (string.IsNullOrEmpty(path)) return;
+            var path = EditorUtility.SaveFolderPanel("SelectFolder", "Assets", "");
 
+            if (string.IsNullOrEmpty(path)) return;
+            path = Path.Combine(path, $"{_createName}.{Asset.FileEx}");
 
             if (string.IsNullOrEmpty(_createName))
             {
@@ -66,6 +73,7 @@ namespace ActionEditor
             }
             else
             {
+
                 var t = Prefs.AssetTypes[_selectType];
                 var inst = Activator.CreateInstance(t) as Asset;
                 if (inst != null)

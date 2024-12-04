@@ -4,8 +4,8 @@ using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using System.Linq;
-using System.IO;
-using UnityEngine.UIElements;
+using UnityEngine.Windows;
+using UnityEditor.VersionControl;
 
 namespace ActionEditor
 {
@@ -52,14 +52,20 @@ namespace ActionEditor
                 }
                 else
                 {
-                    var obj = Asset.Deserialize(typeof(Asset), _textAsset.text);
-                    if (obj is Asset asset)
+                    try
                     {
+                        var asset = Asset.Deserialize(typeof(Asset), _textAsset.text);
                         AssetData = asset;
                         asset.Init();
                         OnOpenAsset?.Invoke(AssetData);
-                        App.Refresh();
                     }
+                    catch (Exception)
+                    {
+                        _textAsset = null;
+                        AssetData = null;
+                    }
+                    App.Refresh();
+
                 }
             }
         }

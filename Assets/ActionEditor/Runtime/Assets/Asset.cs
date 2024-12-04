@@ -9,6 +9,9 @@ namespace ActionEditor
     [Serializable]
     public abstract class Asset : IDirector
     {
+        public const string FileEx = "action.json";
+
+
         [HideInInspector][SerializeReference] public List<Group> groups = new();
         [SerializeField] private float length = 5f;
         [SerializeField] private float viewTimeMin;
@@ -23,7 +26,8 @@ namespace ActionEditor
         }
 
 
-       /* [fsIgnore]*/ public List<IDirectable> directables { get; private set; }
+        /* [fsIgnore]*/
+        public List<IDirectable> directables { get; private set; }
 
         public float Length
         {

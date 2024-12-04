@@ -1,7 +1,7 @@
 ﻿namespace ActionEditor
 {
     [Name("English")]
-    public class LanEN : ILanguages
+    class LanEN : ILanguages
     {
 
         //**********  Welcome *********

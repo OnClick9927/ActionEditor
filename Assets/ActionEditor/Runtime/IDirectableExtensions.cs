@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Reflection;
-using UnityEngine;
+//using UnityEngine;
 
 namespace ActionEditor
 {
@@ -14,10 +14,22 @@ namespace ActionEditor
             return directable.EndTime - directable.StartTime;
         }
 
+        private static float Clamp(float value, float min, float max)
+        {
+            if (value < min)
+            {
+                value = min;
+            }
+            else if (value > max)
+            {
+                value = max;
+            }
 
+            return value;
+        }
         public static float ToLocalTime(this IDirectable directable, float time)
         {
-            return Mathf.Clamp(time - directable.StartTime, 0, directable.GetLength());
+            return Clamp(time - directable.StartTime, 0, directable.GetLength());
         }
 
 
@@ -290,7 +302,7 @@ namespace ActionEditor
             if (clipLength > loopLength)
             {
                 var mod = (clipLength - clip.SubClipOffset) % loopLength;
-                var aproxZero = Mathf.Abs(mod) < 0.01f;
+                var aproxZero = Math.Abs(mod) < 0.01f;
                 return clipLength - (aproxZero ? loopLength : mod);
             }
 
@@ -307,7 +319,7 @@ namespace ActionEditor
             var clipLength = clip.GetLength();
             var loopLength = clip.SubClipLength / clip.SubClipSpeed;
             var mod = (clipLength - clip.SubClipOffset) % loopLength;
-            var aproxZero = Mathf.Abs(mod) < 0.01f || Mathf.Abs(loopLength - mod) < 0.01f;
+            var aproxZero = Math.Abs(mod) < 0.01f || Math.Abs(loopLength - mod) < 0.01f;
             return clipLength + (aproxZero ? loopLength : loopLength - mod);
         }
 
