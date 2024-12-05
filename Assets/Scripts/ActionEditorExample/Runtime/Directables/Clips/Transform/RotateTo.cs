@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using ActionEditor;
 using UnityEngine;
 
@@ -13,7 +14,10 @@ namespace ActionEditor
 
         [MenuName("运动曲线")] public EaseType interpolation = EaseType.QuadInOut;
         [MenuName("旋转角度")] public Vector3 targetRotation = Vector3.zero;
+        public List<int> test;
+        public Vector2[] test2;
 
+        public int hh;
         public override float Length
         {
             get => length;

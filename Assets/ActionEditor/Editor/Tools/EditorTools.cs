@@ -166,7 +166,7 @@ namespace ActionEditor
         public static List<TypeMetaInfo> GetTypeMetaDerivedFrom(Type baseType)
         {
             var infos = new List<TypeMetaInfo>();
-            foreach (var type in ReflectionTools.GetImplementationsOf(baseType))
+            foreach (var type in Tools.GetImplementationsOf(baseType))
             {
                 if (type.GetCustomAttributes(typeof(System.ObsoleteAttribute), true).FirstOrDefault() != null)
                 {
