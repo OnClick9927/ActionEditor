@@ -41,7 +41,7 @@ namespace ActionEditor
             }
         }
 
-        [Range(0f, 1f)] [MenuName("音量")] public float volume = 1;
+        [Range(0f, 1f)][MenuName("音量")] public float volume = 1;
         [MenuName("偏移量")] public float clipOffset;
 
 

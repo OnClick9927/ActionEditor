@@ -115,7 +115,7 @@ namespace ActionEditor
         }
         private float DrawRange(string name, float value, float min, float max)
         {
-            return EditorGUILayout.Slider(name, (float)value, min, min);
+            return EditorGUILayout.Slider(name, (float)value, min, max);
         }
         private string DrawSelectObj(string name, string value, Type objType)
         {
