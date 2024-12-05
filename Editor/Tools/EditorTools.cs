@@ -12,7 +12,7 @@ namespace ActionEditor
         {
             public Type type;
             public string name;
-            public string category;
+            //public string category;
             public Type[] attachableTypes;
             public bool isUnique;
         }
@@ -182,11 +182,7 @@ namespace ActionEditor
                             : type.Name
                 };
 
-                if (type.GetCustomAttributes(typeof(CategoryAttribute), true).FirstOrDefault() is CategoryAttribute
-                    catAtt)
-                {
-                    info.category = catAtt.category;
-                }
+       
 
                 if (type.GetCustomAttributes(typeof(AttachableAttribute), true).FirstOrDefault() is AttachableAttribute
                     attachAtt)
@@ -194,12 +190,12 @@ namespace ActionEditor
                     info.attachableTypes = attachAtt.Types;
                 }
 
-                info.isUnique = type.IsDefined(typeof(UniqueAttribute), true);
+                info.isUnique = type.IsDefined(typeof(UniqueTrackAttribute), true);
 
                 infos.Add(info);
             }
 
-            infos = infos.OrderBy(i => i.name).ThenBy(i => i.category).ToList();
+            infos = infos.OrderBy(i => i.name).ToList();
             return infos;
         }
 

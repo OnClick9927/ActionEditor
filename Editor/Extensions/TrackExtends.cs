@@ -21,7 +21,7 @@ namespace ActionEditor
                 return icon;
             }
 
-            var att = track.GetType().RTGetAttribute<ShowIconAttribute>(true);
+            var att = track.GetType().RTGetAttribute<TrackIconAttribute>(true);
 
             if (att != null)
             {
@@ -108,7 +108,7 @@ namespace ActionEditor
             if (track == null) return false;
             var type = track.GetType();
             if (type == null || !type.IsSubclassOf(typeof(Track)) || type.IsAbstract) return false;
-            if (type.IsDefined(typeof(UniqueAttribute), true) &&
+            if (type.IsDefined(typeof(UniqueTrackAttribute), true) &&
                 group.ExistSameTypeTrack(type))
                 return false;
             var attachAtt = type.RTGetAttribute<AttachableAttribute>(true);

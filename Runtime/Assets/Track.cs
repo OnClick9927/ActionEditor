@@ -55,9 +55,7 @@ namespace ActionEditor
 
         public Clip AddClip(Type type, float time)
         {
-            var catAtt =
-                type.GetCustomAttributes(typeof(CategoryAttribute), true).FirstOrDefault() as CategoryAttribute;
-            if (catAtt != null && Clips.Count == 0) Name = catAtt.category + " Track";
+       
 
             var newAction = Activator.CreateInstance(type) as Clip;
 
