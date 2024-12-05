@@ -12,8 +12,8 @@ namespace ActionEditor
     public class RotateTo : Clip
     {
 
-        [MenuName("运动曲线")] public EaseType interpolation = EaseType.QuadInOut;
-        [MenuName("旋转角度")] public Vector3 targetRotation = Vector3.zero;
+        [Name("运动曲线")] public EaseType interpolation = EaseType.QuadInOut;
+        [Name("旋转角度")] public Vector3 targetRotation = Vector3.zero;
         public List<int> test;
         public Vector2[] test2;
 

@@ -9,7 +9,7 @@ namespace ActionEditor
     [Color(0f, 1f, 1f)]
     public class EffectTrack : Track
     {
-        [MenuName("轨道层")] 
+        [Name("轨道层")] 
         public int Layer;
     }
 }

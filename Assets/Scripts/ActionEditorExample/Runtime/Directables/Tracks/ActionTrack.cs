@@ -10,10 +10,10 @@ namespace ActionEditor
     [Color(70f / 255f, 1, 140f / 255f)]
     public class ActionTrack : Track
     {
-        [MenuName("测试1")] public int Test1;
+        [Name("测试1")] public int Test1;
 
-        [MenuName("测试2")] public float Test2;
+        [Name("测试2")] public float Test2;
 
-        [MenuName("测试3")] public string Test3;
+        [Name("测试3")] public string Test3;
     }
 }

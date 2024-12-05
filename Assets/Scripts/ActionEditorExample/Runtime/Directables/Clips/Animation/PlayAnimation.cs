@@ -13,7 +13,7 @@ namespace ActionEditor
         [SerializeField] [HideInInspector] private float blendIn = 0.25f;
         [SerializeField] [HideInInspector] private float blendOut = 0.25f;
 
-        [MenuName("播放音频")] [SelectObjectPath(typeof(AnimationClip))]
+        [Name("播放音频")] [SelectObjectPath(typeof(AnimationClip))]
         public string resPath = "";
 
         private AnimationClip _animationClip;
@@ -39,8 +39,8 @@ namespace ActionEditor
             }
         }
 
-        [Range(0.1f, 10f)] [MenuName("播放速度")] public float playbackSpeed = 1;
-        [MenuName("偏移量")] public float clipOffset;
+        [Range(0.1f, 10f)] [Name("播放速度")] public float playbackSpeed = 1;
+        [Name("偏移量")] public float clipOffset;
 
 
         public override float Length

@@ -187,9 +187,9 @@ namespace ActionEditor
             var newValue = value;
             var name = field.Name;
             var attributes = field.GetCustomAttributes();
-            MenuNameAttribute menuName = attributes.FirstOrDefault(x => x is MenuNameAttribute) as MenuNameAttribute;
-            if (menuName != null)
-                name = menuName.showName;
+            NameAttribute Name = attributes.FirstOrDefault(x => x is NameAttribute) as NameAttribute;
+            if (Name != null)
+                name = Name.name;
             RangeAttribute range = attributes.FirstOrDefault(x => x is RangeAttribute) as RangeAttribute;
             SelectObjectPathAttribute selectObjectPath = attributes.FirstOrDefault(x => x is SelectObjectPathAttribute) as SelectObjectPathAttribute;
 

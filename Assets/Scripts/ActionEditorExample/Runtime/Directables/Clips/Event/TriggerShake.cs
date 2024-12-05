@@ -8,26 +8,26 @@ namespace ActionEditor
     [Attachable(typeof(SignalTrack))]
     public class TriggerShake : ClipSignal
     {
-        [MenuName("类型")]    
+        [Name("类型")]    
         public int shakeType;
 
-        [MenuName("屏幕抖动时长")] 
+        [Name("屏幕抖动时长")] 
         public float duration = 0.5f;
 
-        [MenuName("屏幕抖动幅度")]
+        [Name("屏幕抖动幅度")]
         public int range = 5;
 
-        [MenuName("设备震动时长")]
+        [Name("设备震动时长")]
         public float vibrationDuration = 0.5f;
 
-        [MenuName("设备震动强度")]
+        [Name("设备震动强度")]
         public int vibrationForce = EventShakeForceType.Default;
 
         //public override string Info
         //{
         //    get
         //    {
-        //        var name = AttributesUtility.GetMenuName(shakeType, typeof(EventShakeType));
+        //        var name = AttributesUtility.GetName(shakeType, typeof(EventShakeType));
         //        if (shakeType == EventShakeType.Screen || shakeType == EventShakeType.ScreenAndPhone)
         //        {
         //            return "震动\n" + name + duration + "s " + range+"px";

@@ -11,8 +11,8 @@ namespace ActionEditor
     public class ScaleTo: Clip
     {
 
-        [MenuName("缩放曲线")] public EaseType interpolation = EaseType.QuadInOut;
-        [MenuName("缩放目标")] public Vector2 targetScale = Vector2.one;
+        [Name("缩放曲线")] public EaseType interpolation = EaseType.QuadInOut;
+        [Name("缩放目标")] public Vector2 targetScale = Vector2.one;
 
         public override float Length
         {

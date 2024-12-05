@@ -10,7 +10,7 @@ namespace ActionEditor
     [Attachable(typeof(ActionTrack))]
     public class VisibleTo : Clip
     {
-        [MenuName("显示")] public bool visible = true;
+        [Name("显示")] public bool visible = true;
 
         public override float Length
         {

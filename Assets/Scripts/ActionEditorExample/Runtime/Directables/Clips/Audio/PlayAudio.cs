@@ -15,7 +15,7 @@ namespace ActionEditor
         [SerializeField] [HideInInspector] private float blendIn = 0.25f;
         [SerializeField] [HideInInspector] private float blendOut = 0.25f;
 
-        [MenuName("播放音频")] [SelectObjectPath(typeof(AudioClip))]
+        [Name("播放音频")] [SelectObjectPath(typeof(AudioClip))]
         public string resPath = "";
 
         private AudioClip _audioClip;
@@ -41,8 +41,8 @@ namespace ActionEditor
             }
         }
 
-        [Range(0f, 1f)][MenuName("音量")] public float volume = 1;
-        [MenuName("偏移量")] public float clipOffset;
+        [Range(0f, 1f)][Name("音量")] public float volume = 1;
+        [Name("偏移量")] public float clipOffset;
 
 
         public override float Length

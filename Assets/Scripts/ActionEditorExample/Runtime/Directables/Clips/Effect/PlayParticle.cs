@@ -12,10 +12,10 @@ namespace ActionEditor
     [Attachable(typeof(EffectTrack))]
     public class PlayParticle : Clip
     {
-        [MenuName("特效对象")] [SelectObjectPath(typeof(GameObject))]
+        [Name("特效对象")] [SelectObjectPath(typeof(GameObject))]
         public string resPath = "";
 
-        [MenuName("是否变形")] public bool scale;
+        [Name("是否变形")] public bool scale;
 
         private GameObject _effectObject;
 

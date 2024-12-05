@@ -8,10 +8,10 @@ namespace ActionEditor
         {
             var name = System.Threading.Thread.CurrentThread.CurrentCulture.TextInfo.ToTitleCase(field.Name);
 
-            var menuNameAttribute = field.GetCustomAttribute<MenuNameAttribute>();
-            if (menuNameAttribute != null)
+            var NameAttribute = field.GetCustomAttribute<NameAttribute>();
+            if (NameAttribute != null)
             {
-                return menuNameAttribute.showName;
+                return NameAttribute.name;
             }
 
             return name;

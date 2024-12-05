@@ -11,11 +11,11 @@ namespace ActionEditor
     public class MoveBy : Clip
     {
 
-        [MenuName("运动曲线")] public AnimationCurve curve;
+        [Name("运动曲线")] public AnimationCurve curve;
 
-        [MenuName("运动补间")] public EaseType interpolation = EaseType.QuadInOut;
+        [Name("运动补间")] public EaseType interpolation = EaseType.QuadInOut;
 
-        [MenuName("移动量")] public Vector3 move;
+        [Name("移动量")] public Vector3 move;
 
         //public override string Info => $"位移:\n{move}";
 

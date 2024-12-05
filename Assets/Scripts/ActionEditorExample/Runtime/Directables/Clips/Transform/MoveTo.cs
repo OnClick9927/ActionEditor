@@ -9,13 +9,13 @@ namespace ActionEditor
     [Attachable(typeof(ActionTrack))]
     public class MoveTo : Clip
     {
-        [MenuName("运动补间")] public EaseType interpolation = EaseType.QuadInOut;
+        [Name("运动补间")] public EaseType interpolation = EaseType.QuadInOut;
         
-        [MenuName("位移终点")] 
+        [Name("位移终点")] 
         public int moveType;
 
         
-        //public override string Info => $"移动至:\n{AttributesUtility.GetMenuName(moveType, typeof(MoveToType))}";
+        //public override string Info => $"移动至:\n{AttributesUtility.GetName(moveType, typeof(MoveToType))}";
 
         public override float Length
         {
