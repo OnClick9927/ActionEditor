@@ -1,12 +1,22 @@
 ﻿using System;
 using System.Linq;
 using System.Reflection;
-//using UnityEngine;
+using UnityEngine;
 
 namespace ActionEditor
 {
     public static class IDirectableExtensions
     {
+
+        public static T DeepCopy<T>(this T directable) where T : class, IDirectable
+        {
+            directable.BeforeSerialize();
+            var copy = JsonUtility.FromJson(JsonUtility.ToJson(directable), directable.GetType()) as T;
+            copy.AfterDeserialize();
+            return copy;
+        }
+
+
         #region 长度 and 时间转换
 
         public static float GetLength(this IDirectable directable)
@@ -48,7 +58,7 @@ namespace ActionEditor
         /// <param name="directable"></param>
         /// <param name="other"></param>
         /// <returns></returns>
-        public static bool CanCrossBlend(this IDirectable directable, IDirectable other)
+        public static bool CanCrossBlend(this IClip directable, IClip other)
         {
             if (directable == null || other == null) return false;
 
@@ -58,14 +68,14 @@ namespace ActionEditor
             return false;
         }
 
-        public static bool CanBlendIn(this IDirectable directable)
+        public static bool CanBlendIn(this Clip directable)
         {
             var blendInProp = directable.GetType().GetProperty("BlendIn", BindingFlags.Instance | BindingFlags.Public);
             return blendInProp != null && blendInProp.CanWrite && Math.Abs(directable.BlendIn - -1) > 0.0001f &&
                    blendInProp.DeclaringType != typeof(Clip);
         }
 
-        public static bool CanBlendOut(this IDirectable directable)
+        public static bool CanBlendOut(this Clip directable)
         {
             var blendOutProp =
                 directable.GetType().GetProperty("BlendOut", BindingFlags.Instance | BindingFlags.Public);
@@ -73,9 +83,9 @@ namespace ActionEditor
                    blendOutProp.DeclaringType != typeof(Clip);
         }
 
-        public static bool CanScale(this IDirectable directable)
+        public static bool CanScale(this Clip directable)
         {
-            var lengthProp = directable.GetType().GetProperty("Length", BindingFlags.Instance | BindingFlags.Public);
+            var lengthProp = directable.GetType().GetProperty(nameof(Clip.Length), BindingFlags.Instance | BindingFlags.Public);
             return lengthProp != null && lengthProp.CanWrite && lengthProp.DeclaringType != typeof(Clip);
         }
 
@@ -84,7 +94,7 @@ namespace ActionEditor
         /// </summary>
         /// <param name="directable"></param>
         /// <returns></returns>
-        public static bool CanValidTime(this IDirectable directable)
+        public static bool CanValidTime(this IClip directable)
         {
             return CanValidTime(directable, directable.StartTime, directable.EndTime);
         }
@@ -96,7 +106,7 @@ namespace ActionEditor
         /// <param name="startTime"></param>
         /// <param name="endTime"></param>
         /// <returns></returns>
-        public static bool CanValidTime(this IDirectable directable, float startTime, float endTime)
+        public static bool CanValidTime(this IClip directable, float startTime, float endTime)
         {
             if (directable.Parent != null)
             {
@@ -114,7 +124,7 @@ namespace ActionEditor
         /// <param name="startTime"></param>
         /// <param name="endTime"></param>
         /// <returns></returns>
-        public static bool CanValidTime(this IDirectable directable, IDirectable parent, float startTime, float endTime)
+        public static bool CanValidTime(this IClip directable, IDirectable parent, float startTime, float endTime)
         {
             var prevDirectable = directable.GetPreviousSibling(parent);
             var nextDirectable = directable.GetNextSibling(parent);
@@ -186,22 +196,22 @@ namespace ActionEditor
             return Array.Empty<IDirectable>();
         }
 
-        public static T GetPreviousSibling<T>(this IDirectable directable) where T : IDirectable
+        public static T GetPreviousSibling<T>(this IClip directable) where T : IClip
         {
             return (T)GetPreviousSibling(directable, directable.Parent);
         }
 
-        public static IDirectable GetPreviousSibling(this IDirectable directable)
+        public static IClip GetPreviousSibling(this IClip directable)
         {
             return GetPreviousSibling(directable, directable.Parent);
         }
 
-        public static IDirectable GetPreviousSibling(this IDirectable directable, IDirectable parent)
+        public static IClip GetPreviousSibling(this IClip directable, IDirectable parent)
         {
             if (parent != null)
             {
                 return parent.Children.LastOrDefault(d =>
-                    d != directable && (d.StartTime < directable.StartTime));
+                    d != directable && (d.StartTime < directable.StartTime)) as IClip;
             }
 
             return null;
@@ -213,7 +223,7 @@ namespace ActionEditor
         /// <param name="directable"></param>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
-        public static T GetNextSibling<T>(this IDirectable directable) where T : IDirectable
+        public static T GetNextSibling<T>(this IClip directable) where T : IClip
         {
             return (T)GetNextSibling(directable, directable.Parent);
         }
@@ -223,7 +233,7 @@ namespace ActionEditor
         /// </summary>
         /// <param name="directable"></param>
         /// <returns></returns>
-        public static IDirectable GetNextSibling(this IDirectable directable)
+        public static IClip GetNextSibling(this IClip directable)
         {
             return GetNextSibling(directable, directable.Parent);
         }
@@ -234,12 +244,12 @@ namespace ActionEditor
         /// <param name="directable"></param>
         /// <param name="parent"></param>
         /// <returns></returns>
-        public static IDirectable GetNextSibling(this IDirectable directable, IDirectable parent)
+        public static IClip GetNextSibling(this IClip directable, IDirectable parent)
         {
             if (parent != null)
             {
                 return parent.Children.FirstOrDefault(d =>
-                    d != directable && d.StartTime > directable.StartTime);
+                    d != directable && d.StartTime > directable.StartTime) as IClip;
             }
 
             return null;
@@ -255,7 +265,7 @@ namespace ActionEditor
         /// <param name="directable"></param>
         /// <param name="time"></param>
         /// <returns></returns>
-        public static float GetWeight(this IDirectable directable, float time)
+        public static float GetWeight(this IClip directable, float time)
         {
             return GetWeight(directable, time, directable.BlendIn, directable.BlendOut);
         }

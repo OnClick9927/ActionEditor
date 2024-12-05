@@ -13,7 +13,6 @@ namespace ActionEditor
         IDirectable Parent { get; }
         IEnumerable<IDirectable> Children { get; }
 
-        //GameObject Actor { get; }
         string Name { get; }
 
         bool IsActive { get; set; }
@@ -23,17 +22,17 @@ namespace ActionEditor
         float StartTime { get; }
         float EndTime { get; }
 
-        float BlendIn { get; set; }
-        float BlendOut { get; set; }
-        bool CanCrossBlend { get; }
-
         void Validate(IDirector root, IDirectable parent);
-    }
+        void AfterDeserialize();
 
+        void BeforeSerialize();
+    }
 
     public interface IClip : IDirectable
     {
-        object AnimatedParametersTarget { get; }
+        float BlendIn { get; set; }
+        float BlendOut { get; set; }
+        bool CanCrossBlend { get; }
     }
     public interface IDirector : IData
     {
@@ -44,8 +43,6 @@ namespace ActionEditor
 
         float ViewTime { get; }
 
-        float RangeMin { get; set; }
-        float RangeMax { get; set; }
 
         void DeleteGroup(Group group);
 

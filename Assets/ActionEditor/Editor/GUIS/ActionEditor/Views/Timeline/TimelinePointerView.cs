@@ -120,7 +120,7 @@ namespace ActionEditor
                 GUI.DrawTexture(new Rect(playX, Position.y, 1, Position.height), Styles.WhiteTexture);
 
                 var matrix = GUI.matrix;
-                GUIUtility.ScaleAroundPivot(new Vector2(6,1.5f), _playPointerHandler.center);
+                GUIUtility.ScaleAroundPivot(new Vector2(6, 1.5f), _playPointerHandler.center);
                 GUI.DrawTexture(_playPointerHandler, EditorGUIUtility.IconContent("AnimationWindowEvent Icon").image);
                 GUI.matrix = matrix;
             }
@@ -235,6 +235,7 @@ namespace ActionEditor
             if (eventData.IsLeft() && _playPointerHandler.Contains(eventData.MousePosition))
             {
                 Debug.Log("拖动当前播放指针");
+                App.Select();
                 _dragType = PointerDragType.Play;
             }
             else
@@ -252,7 +253,7 @@ namespace ActionEditor
         {
 
             var rect = _playPointerHandler;
-            rect.width *= 20;
+            rect.width *= 60;
             rect.x -= rect.width / 2;
             if (rect.Contains(eventData.MousePosition) && eventData.IsLeft() && _dragType == PointerDragType.Play)
             {

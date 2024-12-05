@@ -101,14 +101,8 @@ namespace ActionEditor
             {
                 foreach (var t in timePointers)
                 {
-                    try
-                    {
-                        t.TriggerForward(currentTime, previousTime);
-                    }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogException(e);
-                    }
+                    t.TriggerForward(currentTime, previousTime);
+
                 }
             }
 
@@ -117,14 +111,8 @@ namespace ActionEditor
             {
                 for (var i = timePointers.Count - 1; i >= 0; i--)
                 {
-                    try
-                    {
-                        timePointers[i].TriggerBackward(currentTime, previousTime);
-                    }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogException(e);
-                    }
+                    timePointers[i].TriggerBackward(currentTime, previousTime);
+
                 }
             }
 

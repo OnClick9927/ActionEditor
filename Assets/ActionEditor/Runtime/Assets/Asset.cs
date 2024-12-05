@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-//using FullSerializer;
 using UnityEngine;
 
 namespace ActionEditor
@@ -17,16 +16,10 @@ namespace ActionEditor
         [SerializeField] private float viewTimeMin;
         [SerializeField] private float viewTimeMax = 5f;
 
-        [SerializeField] private float rangeMin;
-        [SerializeField] private float rangeMax = 5f;
-
         public Asset()
         {
             Init();
         }
-
-
-        /* [fsIgnore]*/
         public List<IDirectable> directables { get; private set; }
 
         public float Length
@@ -52,26 +45,6 @@ namespace ActionEditor
 
 
         public float ViewTime => ViewTimeMax - ViewTimeMin;
-
-        public float RangeMin
-        {
-            get => rangeMin;
-            set
-            {
-                rangeMin = value;
-                if (rangeMin < 0) rangeMin = 0;
-            }
-        }
-
-        public float RangeMax
-        {
-            get => rangeMax;
-            set
-            {
-                rangeMax = value;
-                if (rangeMax < length) rangeMax = length;
-            }
-        }
 
 
         public void UpdateMaxTime()
@@ -105,31 +78,14 @@ namespace ActionEditor
             {
                 directables.Add(group);
                 group.Validate(this, null);
-
-
                 foreach (var track in group.Children.Reverse())
                 {
                     directables.Add(track);
-                    try
-                    {
-                        track.Validate(this, group);
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogException(e);
-                    }
-
+                    track.Validate(this, group);
                     foreach (var clip in track.Children)
                     {
                         directables.Add(clip);
-                        try
-                        {
-                            clip.Validate(this, track);
-                        }
-                        catch (Exception e)
-                        {
-                            Debug.LogException(e);
-                        }
+                        clip.Validate(this, track);
                     }
                 }
             }
@@ -174,10 +130,22 @@ namespace ActionEditor
             this.BeforeSerialize();
             return $"{GetType().FullName}\n{JsonUtility.ToJson(this, false)}";
         }
+
+        public static event Func<string, System.Type> GetTypeByTypeName;
+
         internal static Type GetType(string typeName)
         {
-            var type = Type.GetType(typeName);
-            if (type != null) return type;
+            Type type = null;
+#if !UNITY_EDITOR
+
+            if (GetTypeByTypeName != null)
+            {
+                type = GetTypeByTypeName.Invoke(typeName);
+                if (type != null)
+                    return type;
+            }
+
+#endif
             foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
             {
                 type = a.GetType(typeName);
@@ -200,26 +168,21 @@ namespace ActionEditor
             asset.AfterDeserialize();
             return asset;
         }
-
+        protected virtual void OnAfterDeserialize() { }
+        protected virtual void OnBeforeSerialize() { }
         private void AfterDeserialize()
         {
 
             for (int i = 0; i < groups.Count; i++)
-            {
-                groups[i].AfterDeserialize();
-
-
-            }
+                (groups[i] as IDirectable).AfterDeserialize();
+            OnAfterDeserialize();
         }
 
         private void BeforeSerialize()
         {
             for (int i = 0; i < groups.Count; i++)
-            {
-                groups[i].BeforeSerialize();
-
-
-            }
+                (groups[i] as IDirectable).BeforeSerialize();
+            OnBeforeSerialize();
         }
     }
 }
