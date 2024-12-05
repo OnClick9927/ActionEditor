@@ -14,7 +14,7 @@ namespace ActionEditor
         internal static void Load()
         {
             var lan = EditorPrefs.GetString("ActionEditor_x", string.Empty);
-            var types = ReflectionTools.GetImplementationsOf(typeof(ILanguages));
+            var types = Tools.GetImplementationsOf(typeof(ILanguages));
             //ins = new LanEN();
             foreach (var t in types)
             {

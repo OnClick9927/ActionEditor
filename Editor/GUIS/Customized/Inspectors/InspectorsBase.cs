@@ -3,7 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Xml.Linq;
 using UnityEditor;
+using UnityEditor.Graphs;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -31,11 +33,11 @@ namespace ActionEditor
             DrawDefaultInspector(target);
         }
 
-        public void DrawDefaultInspector(object obj)
+        public object DrawDefaultInspector(object obj)
         {
-            var t = obj.GetType();
+            var type = obj.GetType();
             //得到字段的值,只能得到public类型的字典的值
-            FieldInfo[] fieldInfos = t.GetFields();
+            FieldInfo[] fieldInfos = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
             //排序一下，子类的字段在后，父类的在前
             Array.Sort(fieldInfos, FieldsSprtBy);
 
@@ -53,7 +55,7 @@ namespace ActionEditor
                         break;
                     }
 
-        
+
                 }
 
                 if (need)
@@ -61,12 +63,121 @@ namespace ActionEditor
                     needShowField.Add(field);
                 }
             }
-
             foreach (var field in needShowField)
             {
                 FieldDefaultInspector(field, obj);
             }
+            return obj;
         }
+
+        static List<Type> _base = new List<Type>()
+        {
+            typeof(int),typeof(float),typeof(double),typeof(bool),typeof(long),typeof(string),
+            typeof(Color),typeof(Vector2),typeof(Vector3),typeof(Vector4),typeof(Vector2Int),typeof(Vector3Int),
+            typeof(Rect),typeof(RectInt),typeof(Bounds),typeof(Object),typeof(AnimationCurve),
+        };
+        private static bool IsBaseType(Type type)
+        {
+            if (type.IsEnum || _base.Contains(type)) return true;
+            return false;
+        }
+        private object DrawBase(object value, string name, Type fieldType)
+        {
+
+            if (fieldType == typeof(int)) return EditorGUILayout.IntField(name, (int)value);
+            else if (fieldType == typeof(float)) return EditorGUILayout.FloatField(name, (float)value);
+            else if (fieldType == typeof(bool)) return EditorGUILayout.Toggle(name, (bool)value);
+            else if (fieldType == typeof(string)) return EditorGUILayout.TextField(name, (string)value);
+            else if (fieldType == typeof(long)) return EditorGUILayout.LongField(name, (long)value);
+            else if (fieldType == typeof(double)) return EditorGUILayout.DoubleField(name, (double)value);
+            else if (fieldType.IsEnum) return EditorGUILayout.EnumPopup(name, (Enum)value);
+            else if (fieldType == typeof(Color)) return EditorGUILayout.ColorField(name, (Color)value);
+            else if (fieldType == typeof(Vector2)) return EditorGUILayout.Vector2Field(name, (Vector2)value);
+            else if (fieldType == typeof(Vector3)) return EditorGUILayout.Vector3Field(name, (Vector3)value);
+            else if (fieldType == typeof(Vector4)) return EditorGUILayout.Vector4Field(name, (Vector4)value);
+            else if (fieldType == typeof(Vector2Int)) return EditorGUILayout.Vector2IntField(name, (Vector2Int)value);
+            else if (fieldType == typeof(Vector3Int)) return EditorGUILayout.Vector3IntField(name, (Vector3Int)value);
+            else if (fieldType == typeof(Rect)) return EditorGUILayout.RectField(name, (Rect)value);
+            else if (fieldType == typeof(RectInt)) return EditorGUILayout.RectIntField(name, (RectInt)value);
+            else if (fieldType == typeof(Bounds)) return EditorGUILayout.BoundsField(name, (Bounds)value);
+            else if (fieldType.IsSubclassOf(typeof(Object))) return EditorGUILayout.ObjectField(name, (Object)value, fieldType, false);
+            else if (fieldType == typeof(AnimationCurve))
+            {
+                AnimationCurve curve = value as AnimationCurve;
+                if (curve == null)
+                {
+                    curve = new AnimationCurve();
+                }
+
+                return EditorGUILayout.CurveField(name, curve);
+            }
+            return value;
+        }
+        private float DrawRange(string name, float value, float min, float max)
+        {
+            return EditorGUILayout.Slider(name, (float)value, min, min);
+        }
+        private string DrawSelectObj(string name, string value, Type objType)
+        {
+            Object o = null;
+            var path = value.ToString();
+            if (!string.IsNullOrEmpty(path))
+                o = AssetDatabase.LoadAssetAtPath(path, objType);
+            var newObj = EditorGUILayout.ObjectField(name, o, objType, false);
+            return AssetDatabase.GetAssetPath(newObj);
+        }
+
+        private IList DrawArr(ref bool fold, string name, IList arr, Type ele)
+        {
+            IList array = Activator.CreateInstance(typeof(List<>).MakeGenericType(ele)) as IList;
+          
+            for (int i = 0; i < arr.Count; i++)
+                array.Add(arr[i]);
+            var cout = array.Count;
+            GUILayout.BeginHorizontal();
+            fold = EditorGUILayout.Foldout(fold, $"{name}({ele.Name})");
+            if (GUILayout.Button("+", GUILayout.Width(30)))
+            {
+                Array newArray = Array.CreateInstance(ele, array != null ? array.Count + 1 : 1);
+                if (array != null)
+                {
+                    array.CopyTo(newArray, 0);
+                }
+
+                newArray.SetValue(Activator.CreateInstance(ele), newArray.Length - 1);
+                array = newArray;
+                SetFoldout(newArray, true);
+            }
+            GUILayout.EndHorizontal();
+            if (fold)
+            {
+                GUILayout.Space(6);
+                GUILayout.BeginVertical(GUI.skin.box);
+                for (int i = 0; i < array.Count; i++)
+                {
+                    object listItem = array[i];
+                    EditorGUILayout.BeginHorizontal();
+                    {
+                        if (IsBaseType(ele))
+                            array[i] = DrawBase(listItem, $"Element {i}", ele);
+                        else
+                            array[i] = DrawDefaultInspector(listItem);
+                        if (GUILayout.Button("x", GUILayout.Width(20)))
+                        {
+                            array.Remove(listItem);
+                            break;
+                        }
+                    }
+
+                    EditorGUILayout.EndHorizontal();
+                    DrawDivider();
+                }
+                GUILayout.EndVertical();
+            }
+            return array;
+        }
+
+
 
         protected void FieldDefaultInspector(FieldInfo field, object obj)
         {
@@ -74,261 +185,58 @@ namespace ActionEditor
             var showType = field.FieldType;
             var value = field.GetValue(obj);
             var newValue = value;
-
-            var name = System.Threading.Thread.CurrentThread.CurrentCulture.TextInfo.ToTitleCase(field.Name);
-
-            List<object> args = new List<object>();
-
+            var name = field.Name;
             var attributes = field.GetCustomAttributes();
-            foreach (var attribute in attributes)
-            {
-                var t = attribute.GetType();
-                if (attribute is MenuNameAttribute menuNameAttribute)
-                {
-                    name = menuNameAttribute.showName;
-                }
-                else if (attribute is RangeAttribute rangeAttribute && fieldType == typeof(float))
-                {
-                    showType = t;
-                    args = new List<object> { rangeAttribute.min, rangeAttribute.max };
-                }
-       
-                else if (attribute is SelectObjectPathAttribute selectObjectPathAttribute)
-                {
-                    showType = t;
-                    args = new List<object> { selectObjectPathAttribute.type };
-                }
-            }
+            MenuNameAttribute menuName = attributes.FirstOrDefault(x => x is MenuNameAttribute) as MenuNameAttribute;
+            if (menuName != null)
+                name = menuName.showName;
+            RangeAttribute range = attributes.FirstOrDefault(x => x is RangeAttribute) as RangeAttribute;
+            SelectObjectPathAttribute selectObjectPath = attributes.FirstOrDefault(x => x is SelectObjectPathAttribute) as SelectObjectPathAttribute;
 
-
-            if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(List<>))
+            if (range != null && fieldType == typeof(float))
+                newValue = DrawRange(name, (float)value, range.min, range.max);
+            else if (selectObjectPath != null && fieldType == typeof(string))
+                newValue = DrawSelectObj(name, (string)value, selectObjectPath.type);
+            else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(List<>))
             {
                 Type elementType = fieldType.GetGenericArguments()[0];
-                IList list = (IList)value;
-                var foldout = EditorGUILayout.Foldout(GetFoldout(value), field.GetShowName());
-                if (foldout)
-                {
-                    GUILayout.Space(6);
-                    GUILayout.BeginVertical(GUI.skin.box);
-                    if (list != null)
-                    {
-                        for (int i = 0; i < list.Count; i++)
-                        {
-                            object listItem = list[i];
-                            EditorGUILayout.BeginHorizontal();
-                            EditorGUILayout.LabelField($"Element {i}");
-                            if (GUILayout.Button("X", GUILayout.Width(20)))
-                            {
-                                list.Remove(listItem);
-                                i--;
-                                continue;
-                            }
-
-                            EditorGUILayout.EndHorizontal();
-                            EditorGUILayout.BeginHorizontal();
-                            GUILayout.Space(12);
-                            EditorGUILayout.BeginVertical();
-                            DrawDefaultInspector(listItem);
-                            EditorGUILayout.EndVertical();
-                            EditorGUILayout.EndHorizontal();
-                            DrawDivider();
-                        }
-                    }
-
-                    GUILayout.Space(6);
-                    EditorGUILayout.BeginHorizontal();
-                    GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("+", GUILayout.Width(30)))
-                    {
-                        if (list == null)
-                        {
-                            list = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType));
-                            field.SetValue(obj, list);
-                        }
-
-                        list.Add(Activator.CreateInstance(elementType));
-                    }
-
-                    EditorGUILayout.EndHorizontal();
-                    GUILayout.EndVertical();
-                }
-
-                SetFoldout(value, foldout);
+                IList array = (IList)value;
+                if (array == null)
+                    array = Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType)) as IList;
+                var fold = GetFoldout(value);
+                var result = DrawArr(ref fold, name, array, elementType);
+                array.Clear();
+                SetFoldout(array, fold);
+                for (int i = 0; i < result.Count; i++)
+                    array.Add(result[i]);
+                newValue = array;
             }
             // 处理数组类型
             else if (fieldType.IsArray)
             {
+
                 Type elementType = fieldType.GetElementType();
-
                 Array array = (Array)value;
+
                 if (array == null)
-                {
                     array = Array.CreateInstance(elementType, 0);
-                    field.SetValue(obj, array);
-                }
+                var fold = GetFoldout(value);
+                var result = DrawArr(ref fold, name, array, elementType);
+                Array.Clear(array, 0, array.Length);
+                if (array.Length != result.Count)
+                    array = Array.CreateInstance(elementType, result.Count);
+                SetFoldout(array, fold);
 
-                var foldout = EditorGUILayout.Foldout(GetFoldout(value), field.GetShowName());
-                if (foldout)
-                {
-                    GUILayout.Space(6);
-                    GUILayout.BeginVertical(GUI.skin.box);
-                    for (int i = 0; i < array.Length; i++)
-                    {
-                        object listItem = array.GetValue(i);
-                        EditorGUILayout.BeginHorizontal();
-                        EditorGUILayout.LabelField($"Element {i}");
-                        if (GUILayout.Button("x", GUILayout.Width(20)))
-                        {
-                            Array newArray = Array.CreateInstance(elementType, array.Length - 1);
-                            for (int j = 0, k = 0; j < array.Length; j++)
-                            {
-                                if (j != i) // 跳过被移除的元素
-                                {
-                                    newArray.SetValue(array.GetValue(j), k);
-                                    k++;
-                                }
-                            }
-
-                            RemoveFoldout(value);
-                            array = newArray;
-                            field.SetValue(obj, newArray);
-                            SetFoldout(newArray, true);
-                            break; // 退出循环以避免数组长度更改引起的冲突
-                        }
-
-                        EditorGUILayout.EndHorizontal();
-                        EditorGUILayout.BeginHorizontal();
-                        GUILayout.Space(12);
-                        EditorGUILayout.BeginVertical();
-                        DrawDefaultInspector(listItem);
-                        EditorGUILayout.EndVertical();
-                        EditorGUILayout.EndHorizontal();
-                        DrawDivider();
-                    }
-
-                    GUILayout.Space(6);
-                    EditorGUILayout.BeginHorizontal();
-                    GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("+", GUILayout.Width(30)))
-                    {
-                        Array newArray = Array.CreateInstance(elementType, array != null ? array.Length + 1 : 1);
-                        if (array != null)
-                        {
-                            array.CopyTo(newArray, 0);
-                        }
-
-                        newArray.SetValue(Activator.CreateInstance(elementType), newArray.Length - 1);
-                        RemoveFoldout(value);
-                        array = newArray;
-                        field.SetValue(obj, array);
-                        SetFoldout(newArray, true);
-                    }
-
-                    EditorGUILayout.EndHorizontal();
-                    GUILayout.EndVertical();
-                }
-
-                SetFoldout(value, foldout);
-            }
-            else if (showType == typeof(int))
-            {
-                newValue = EditorGUILayout.IntField(name, (int)value);
-            }
-            else if (showType == typeof(float))
-            {
-                newValue = EditorGUILayout.FloatField(name, (float)value);
-            }
-            else if (showType == typeof(bool))
-            {
-                newValue = EditorGUILayout.Toggle(name, (bool)value);
-            }
-            else if (showType == typeof(string))
-            {
-                newValue = EditorGUILayout.TextField(name, (string)value);
-            }
-            else if (showType == typeof(Color))
-            {
-                newValue = EditorGUILayout.ColorField(name, (Color)value);
-            }
-            else if (showType.IsSubclassOf(typeof(Object)))
-            {
-                newValue = EditorGUILayout.ObjectField(name, (Object)value, fieldType, false);
-            }
-            else if (showType.IsEnum)
-            {
-                newValue = EditorGUILayout.EnumPopup(name, (Enum)value);
-            }
-            else if (showType == typeof(AnimationCurve))
-            {
-                AnimationCurve curve = field.GetValue(obj) as AnimationCurve;
-                if (curve == null)
-                {
-                    curve = new AnimationCurve();
-                }
-
-                newValue = EditorGUILayout.CurveField(name, curve);
-            }
-            else if (showType == typeof(Vector2))
-            {
-                newValue = EditorGUILayout.Vector2Field(name, (Vector2)value);
-            }
-            else if (showType == typeof(Vector3))
-            {
-                newValue = EditorGUILayout.Vector3Field(name, (Vector3)value);
-            }
-            else if (showType == typeof(Vector4))
-            {
-                newValue = EditorGUILayout.Vector4Field(name, (Vector4)value);
-            }
-            else if (showType == typeof(Vector2Int))
-            {
-                newValue = EditorGUILayout.Vector2IntField(name, (Vector2Int)value);
-            }
-            else if (showType == typeof(Vector3Int))
-            {
-                newValue = EditorGUILayout.Vector3IntField(name, (Vector3Int)value);
-            }
-            else if (showType == typeof(Rect))
-            {
-                newValue = EditorGUILayout.RectField(name, (Rect)value);
-            }
-            else if (showType == typeof(RectInt))
-            {
-                newValue = EditorGUILayout.RectIntField(name, (RectInt)value);
-            }
-            else if (showType == typeof(Bounds))
-            {
-                newValue = EditorGUILayout.BoundsField(name, (Bounds)value);
-            }
-            else if (showType == typeof(RangeAttribute))
-            {
-                if (fieldType == typeof(float))
-                {
-                    newValue = EditorGUILayout.Slider(name, (float)value, (float)args[0], (float)args[1]);
-                }
+                for (int i = 0; i < result.Count; i++)
+                    array.SetValue(result[i], i);
+                newValue = array;
             }
 
-            else if (showType == typeof(SelectObjectPathAttribute))
-            {
-                if (args[0] is Type type)
-                {
-                    Object o = null;
-                    var path = value.ToString();
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        o = AssetDatabase.LoadAssetAtPath(path, type);
-                    }
-
-                    var newObj = EditorGUILayout.ObjectField(name, o, type, false);
-                    if (newObj != o)
-                    {
-                        newValue = AssetDatabase.GetAssetPath(newObj);
-                    }
-                }
-            }
-
+            else
+                newValue = DrawBase(value, name, fieldType);
             if (value != newValue)
                 field.SetValue(obj, newValue);
+
         }
 
         private int FieldsSprtBy(FieldInfo f1, FieldInfo f2)
@@ -349,24 +257,6 @@ namespace ActionEditor
             return 0;
         }
 
-        private int FieldsSort(FieldInfo f1, FieldInfo f2)
-        {
-            var sort1 = f1.GetCustomAttribute<OptionSortAttribute>();
-            var sort2 = f2.GetCustomAttribute<OptionSortAttribute>();
-            var i1 = 99;
-            var i2 = 99;
-            if (sort1 != null)
-            {
-                i1 = sort1.sort;
-            }
-
-            if (sort2 != null)
-            {
-                i2 = sort2.sort;
-            }
-
-            return i1 - i2;
-        }
 
         private bool GetFoldout(object obj)
         {
@@ -384,19 +274,12 @@ namespace ActionEditor
             if (obj == null) return;
             _unfoldDictionary[obj.GetHashCode()] = unfold;
         }
-
-        public void RemoveFoldout(object obj)
-        {
-            if (obj == null) return;
-            _unfoldDictionary.Remove(obj.GetHashCode());
-        }
-
         private void DrawDivider()
         {
             GUILayout.Space(2);
-            Color color = Color.black.WithAlpha(0.1f);
+            //Color color = Color.black.WithAlpha(0.1f);
             Rect rect = EditorGUILayout.GetControlRect(false, 2);
-            EditorGUI.DrawRect(rect, color);
+            GUI.Label(rect, "", (GUIStyle)"WindowBottomResize");
             GUILayout.Space(2);
         }
     }

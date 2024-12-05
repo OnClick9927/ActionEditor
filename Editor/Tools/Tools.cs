@@ -1,12 +1,40 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor;
+using UnityEngine;
 
 namespace ActionEditor
 {
 
-    public static class ReflectionTools
+    public static class Tools
     {
+        public static void DrawDashedLine(float x, float startY, float endY, Color color)
+        {
+            Handles.BeginGUI();
+            Handles.color = color;
+
+            var totalLength = Mathf.Abs(endY - startY);
+            var dashes = Mathf.FloorToInt(totalLength / 10); // 每段长度为10
+
+            for (var i = 0; i < dashes; i++)
+            {
+                var t1 = (float)i / dashes;
+                var t2 = (i + 0.5f) / dashes;
+                var point1Y = Mathf.Lerp(startY, endY, t1);
+                var point2Y = Mathf.Lerp(startY, endY, t2);
+
+                Handles.DrawLine(new Vector2(x, point1Y), new Vector2(x, point2Y));
+            }
+
+            Handles.EndGUI();
+        }
+
+        public static Color WithAlpha(this Color color, float alpha)
+        {
+            color.a = alpha;
+            return color;
+        }
 
         public static IEnumerable<Type> GetAllTypes()
         {
