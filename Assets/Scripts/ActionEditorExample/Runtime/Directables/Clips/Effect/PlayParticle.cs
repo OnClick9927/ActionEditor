@@ -7,7 +7,6 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Name("普通粒子片段")]
-    [Description("播放一个粒子特效")]
     [Color(0.0f, 1f, 1f)]
     [Attachable(typeof(EffectTrack))]
     public class PlayParticle : Clip

@@ -4,7 +4,6 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Name("移动至")]
-    [Description("将对象移动一定距离")]
     [Color(70f / 255f, 1, 140f / 255f)]
     [Attachable(typeof(ActionTrack))]
     public class MoveTo : Clip

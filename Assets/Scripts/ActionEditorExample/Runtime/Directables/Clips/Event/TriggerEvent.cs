@@ -3,7 +3,6 @@
 namespace ActionEditor
 {
     [Name("触发事件")]
-    [Description("触发一个事件")]
     [Color(1, 0, 0)]
     [Attachable(typeof(SignalTrack))]
     public class TriggerEvent : ClipSignal

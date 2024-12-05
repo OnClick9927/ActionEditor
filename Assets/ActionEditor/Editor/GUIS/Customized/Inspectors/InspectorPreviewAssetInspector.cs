@@ -162,13 +162,6 @@ namespace ActionEditor
 
             GUILayout.EndHorizontal();
 
-            var desAtt =
-                type.GetCustomAttributes(typeof(DescriptionAttribute), false).FirstOrDefault() as DescriptionAttribute;
-            var description = desAtt != null ? desAtt.description : string.Empty;
-            if (!string.IsNullOrEmpty(description))
-            {
-                EditorGUILayout.HelpBox(description, MessageType.None);
-            }
 
             GUILayout.Space(2);
         }

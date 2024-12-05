@@ -3,7 +3,6 @@ using System.Linq;
 using ActionEditor.Events;
 using UnityEditor;
 using UnityEngine;
-using static UnityEditor.PlayerSettings;
 
 namespace ActionEditor
 {
@@ -263,11 +262,7 @@ namespace ActionEditor
                     canAdd = false;
                 }
 
-                var finalPath = string.IsNullOrEmpty(info.category)
-                    ? info.name
-                    : info.category + "/" + info.name;
-
-                var path = $"{Lan.ins.MenuAddTrack}/" + finalPath;
+                var path = $"{Lan.ins.MenuAddTrack}/" + info.name;
                 if (canAdd)
                 {
                     genericMenu.AddItem(new GUIContent(path), false, () =>
@@ -558,9 +553,7 @@ namespace ActionEditor
             var attachableTypeInfos = new List<EditorTools.TypeMetaInfo>();
 
             var existing = track.Clips.FirstOrDefault();
-            var existingCatAtt =
-                existing?.GetType().GetCustomAttributes(typeof(CategoryAttribute), true).FirstOrDefault() as
-                    CategoryAttribute;
+     
 
             var time = track.Root.PosToTime(ev.MousePosition.x - Position.x, Position.width);
             var cursorTime = track.Root.SnapTime(time);
@@ -572,17 +565,8 @@ namespace ActionEditor
                     continue;
                 }
 
-                if (existingCatAtt != null)
-                {
-                    if (existingCatAtt.category == clip.category)
-                    {
-                        attachableTypeInfos.Add(clip);
-                    }
-                }
-                else
-                {
-                    attachableTypeInfos.Add(clip);
-                }
+                attachableTypeInfos.Add(clip);
+
             }
 
             if (attachableTypeInfos.Count > 0)
@@ -591,9 +575,8 @@ namespace ActionEditor
                 foreach (var metaInfo in attachableTypeInfos)
                 {
                     var info = metaInfo;
-                    var category = string.IsNullOrEmpty(info.category) ? string.Empty : (info.category + "/");
                     var tName = info.name;
-                    menu.AddItem(new GUIContent(category + tName), false,
+                    menu.AddItem(new GUIContent(tName), false,
                         () => { track.AddClip(info.type, cursorTime); });
                 }
 

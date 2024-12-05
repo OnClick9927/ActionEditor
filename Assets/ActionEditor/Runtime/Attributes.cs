@@ -34,61 +34,6 @@ namespace ActionEditor
         }
     }
 
-
-    /// <summary>
-    /// 指定类别
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class CategoryAttribute : Attribute
-    {
-        public readonly string category;
-
-        public CategoryAttribute(string category)
-        {
-            this.category = category;
-        }
-    }
-
-    /// <summary>
-    /// 指定描述
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class DescriptionAttribute : Attribute
-    {
-        public readonly string description;
-
-        public DescriptionAttribute(string description)
-        {
-            this.description = description;
-        }
-    }
-
-    /// <summary>
-    /// 指定类型的图标
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class ShowIconAttribute : Attribute
-    {
-        public readonly string iconPath;
-        public readonly Type fromType;
-        public readonly Texture2D texture;
-
-        public ShowIconAttribute(Texture2D texture)
-        {
-            this.texture = texture;
-        }
-
-        public ShowIconAttribute(string iconPath)
-        {
-            this.iconPath = iconPath;
-        }
-
-        public ShowIconAttribute(Type fromType)
-        {
-            this.fromType = fromType;
-        }
-    }
-
     /// <summary>
     /// 指定显示的颜色
     /// </summary>
@@ -126,63 +71,33 @@ namespace ActionEditor
     /// 组内唯一性
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
-    public class UniqueAttribute : Attribute
+    public class UniqueTrackAttribute : Attribute
     {
     }
-
     /// <summary>
-    /// 自定义片段预览
+    /// 指定类型的图标
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
-    public class CustomPreviewAttribute : Attribute
+    public class TrackIconAttribute : Attribute
     {
-        public Type PreviewType;
+        public readonly string iconPath;
+        public readonly Type fromType;
+        public readonly Texture2D texture;
 
-        public CustomPreviewAttribute(Type type)
+        public TrackIconAttribute(Texture2D texture)
         {
-            PreviewType = type;
+            this.texture = texture;
+        }
+
+        public TrackIconAttribute(string iconPath)
+        {
+            this.iconPath = iconPath;
+        }
+
+        public TrackIconAttribute(Type fromType)
+        {
+            this.fromType = fromType;
         }
     }
 
-
-
-    /// <summary>
-    /// 自定义检视面板
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class CustomInspectors : Attribute
-    {
-        public Type InspectedType;
-        public bool _editorForChildClasses;
-
-        public CustomInspectors(Type inspectedType)
-        {
-            InspectedType = inspectedType;
-        }
-
-        public CustomInspectors(Type inspectedType, bool editorForChildClasses)
-        {
-            InspectedType = inspectedType;
-            _editorForChildClasses = editorForChildClasses;
-        }
-    }
-
-    /// <summary>
-    /// 自定义检视面板
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class CustomHeader : Attribute
-    {
-        public Type InspectedType;
-
-        public CustomHeader(Type inspectedType)
-        {
-            InspectedType = inspectedType;
-        }
-
-        public CustomHeader(Type inspectedType, bool editorForChildClasses)
-        {
-            InspectedType = inspectedType;
-        }
-    }
 }

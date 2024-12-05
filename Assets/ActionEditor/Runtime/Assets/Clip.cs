@@ -22,7 +22,7 @@ namespace ActionEditor
             }
         }
 
-        public virtual bool IsValid => false;
+        public abstract bool IsValid { get; }
 
         public sealed override IEnumerable<IDirectable> Children => null;
 
@@ -84,7 +84,7 @@ namespace ActionEditor
             get => 0;
             set { }
         }
-
+    
         public virtual bool CanCrossBlend => false;
 
 
@@ -123,7 +123,7 @@ namespace ActionEditor
     [Serializable]
     public abstract class ClipSignal : Clip
     {
-        public override float Length
+        public sealed override float Length
         {
             get => 0;
             //set => TimeCache();
