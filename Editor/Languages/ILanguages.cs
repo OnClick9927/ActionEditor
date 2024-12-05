@@ -3,104 +3,104 @@
     interface ILanguages
     {
         //**********  Welcome *********
-        public string Title { get; }
-        public string CreateAsset { get; }
-        public string SelectAsset { get; }
-        public string Seeting { get; }
+        string Title { get; }
+        string CreateAsset { get; }
+        string SelectAsset { get; }
+        string Seeting { get; }
 
 
         //**********  Crate Window *********
-        public string CrateAssetType { get; }
-        public string CrateAssetName { get; }
-        public string CreateAssetFileName { get; }
-        public string CreateAssetConfirm { get; }
-        //public string CreateAssetReset { get; }
-        public string CreateAssetTipsNameNull { get; }
-        public string CreateAssetTipsRepetitive { get; }
+        string CrateAssetType { get; }
+        string CrateAssetName { get; }
+        string CreateAssetFileName { get; }
+        string CreateAssetConfirm { get; }
+        // string CreateAssetReset { get; }
+        string CreateAssetTipsNameNull { get; }
+        string CreateAssetTipsRepetitive { get; }
 
 
         //**********  Preferences Window *********
-        public string PreferencesTitle { get; }
-        public string PreferencesTimeStepMode { get; }
-        public string PreferencesSnapInterval { get; }
-        public string PreferencesFrameRate { get; }
-        public string PreferencesMagnetSnapping { get; }
-        public string PreferencesMagnetSnappingTips { get; }
-        //public string PreferencesScrollWheelZooms { get; }
-        public string PreferencesScrollWheelZoomsTips { get; }
-        public string PreferencesSavePath { get; }
-        public string PreferencesSavePathTips { get; }
-        public string PreferencesAutoSaveTime { get; }
-        public string PreferencesAutoSaveTimeTips { get; }
-        //public string PreferencesHelpDoc { get; }
+        string PreferencesTitle { get; }
+        string PreferencesTimeStepMode { get; }
+        string PreferencesSnapInterval { get; }
+        string PreferencesFrameRate { get; }
+        string PreferencesMagnetSnapping { get; }
+        string PreferencesMagnetSnappingTips { get; }
+        // string PreferencesScrollWheelZooms { get; }
+        string PreferencesScrollWheelZoomsTips { get; }
+        string PreferencesSavePath { get; }
+        string PreferencesSavePathTips { get; }
+        string PreferencesAutoSaveTime { get; }
+        string PreferencesAutoSaveTimeTips { get; }
+        // string PreferencesHelpDoc { get; }
 
 
         //**********  Commom *********
-        public string Select { get; }
-        public string SelectFile { get; }
-        public string SelectFolder { get; }
-        public string TipsTitle { get; }
-        public string TipsConfirm { get; }
-        public string TipsCancel { get; }
-        public string CompilingTips { get; }
-        public string Disable { get; }
-        public string Locked { get; }
-        public string Save { get; }
-        public string Rename { get; }
+        string Select { get; }
+        string SelectFile { get; }
+        string SelectFolder { get; }
+        string TipsTitle { get; }
+        string TipsConfirm { get; }
+        string TipsCancel { get; }
+        string CompilingTips { get; }
+        string Disable { get; }
+        string Locked { get; }
+        string Save { get; }
+        string Rename { get; }
 
         //**********  Header *********
-        public string HeaderLastSaveTime { get; }
-        public string HeaderSelectAsset { get; }
-        public string OpenPreferencesTips { get; }
-        public string SelectAssetTips { get; }
-        public string OpenMagnetSnappingTips { get; }
-        public string NewAssetTips { get; }
-        public string BackMenuTips { get; }
-        public string PlayLoopTips { get; }
-        public string PlayForwardTips { get; }
-        public string StepForwardTips { get; }
-        public string PauseTips { get; }
-        public string PlayTips { get; }
-        public string StopTips { get; }
-        public string StepBackwardTips { get; }
+        string HeaderLastSaveTime { get; }
+        string HeaderSelectAsset { get; }
+        string OpenPreferencesTips { get; }
+        string SelectAssetTips { get; }
+        string OpenMagnetSnappingTips { get; }
+        string NewAssetTips { get; }
+        string BackMenuTips { get; }
+        string PlayLoopTips { get; }
+        string PlayForwardTips { get; }
+        string StepForwardTips { get; }
+        string PauseTips { get; }
+        string PlayTips { get; }
+        string StopTips { get; }
+        string StepBackwardTips { get; }
 
-        public string FirstFrame { get; }
+        string FirstFrame { get; }
 
         //**********  Group Menu *********
-        public string MenuAddTrack { get; }
-        public string MenuPasteTrack { get; }
-        public string GroupAdd { get; }
-        public string GroupDisable { get; }
-        public string GroupLocked { get; }
-        public string GroupReplica { get; }
-        public string GroupDelete { get; }
-        public string GroupDeleteTips { get; }
+        string MenuAddTrack { get; }
+        string MenuPasteTrack { get; }
+        string GroupAdd { get; }
+        string GroupDisable { get; }
+        string GroupLocked { get; }
+        string GroupReplica { get; }
+        string GroupDelete { get; }
+        string GroupDeleteTips { get; }
 
         //**********  Track Menu *********
-        public string TrackDisable { get; }
-        public string TrackLocked { get; }
-        public string TrackCopy { get; }
-        public string TrackCut { get; }
-        public string TrackDelete { get; }
-        public string TrackDeleteTips { get; }
+        string TrackDisable { get; }
+        string TrackLocked { get; }
+        string TrackCopy { get; }
+        string TrackCut { get; }
+        string TrackDelete { get; }
+        string TrackDeleteTips { get; }
         //**********  Clip Menu *********
-        public string ClearCopy { get; }
+        string ClearCopy { get; }
 
-        public string ClipCopy { get; }
-        public string ClipCut { get; }
-        public string ClipDelete { get; }
-        public string MatchClipLength { get; }
-        public string MatchPreviousLoop { get; }
-        public string MatchNextLoop { get; }
-        public string ClipPaste { get; }
+        string ClipCopy { get; }
+        string ClipCut { get; }
+        string ClipDelete { get; }
+        string MatchClipLength { get; }
+        string MatchPreviousLoop { get; }
+        string MatchNextLoop { get; }
+        string ClipPaste { get; }
         //**********  Inspector *********
-        public string NotSelectAsset { get; }
-        public string InsBaseInfo { get; }
-        public string OverflowInvalid { get; }
-        public string EndTimeOverflowInvalid { get; }
-        public string StartTimeOverflowInvalid { get; }
+        string NotSelectAsset { get; }
+        string InsBaseInfo { get; }
+        string OverflowInvalid { get; }
+        string EndTimeOverflowInvalid { get; }
+        string StartTimeOverflowInvalid { get; }
 
-        public string ClipInvalid { get; }
-        string EmptyRect { get;}
+        string ClipInvalid { get; }
+        string EmptyRect { get; }
     }
 }

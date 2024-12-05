@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
@@ -105,7 +104,10 @@ namespace ActionEditor
 
         public static ClipDrawBase GetDraw<T>(T clip) where T : Clip
         {
-            return _clipDraws.GetValueOrDefault(clip);
+            ClipDrawBase result = null;
+
+            _clipDraws.TryGetValue(clip, out result);
+            return result;
         }
 
         // public static ClipDrawBase Draw<T>(EditorWindow window, Rect trackRect, Rect trackRightRect, T clip,

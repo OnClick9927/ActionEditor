@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 //using FullSerializer;
 using UnityEngine;
+using static ActionEditor.Group;
 
 namespace ActionEditor
 {
@@ -10,13 +11,15 @@ namespace ActionEditor
     [Attachable(typeof(Group))]
     public abstract class Track : IDirectable
     {
-        [SerializeReference]
-        /*[SerializeField]*/ private List<Clip> actionClips = new();
+        //[SerializeReference]
+        /*[SerializeField]*/
+        private List<Clip> actionClips = new List<Clip>();
 
-        [SerializeField] [HideInInspector] private string name;
-        [SerializeField] [HideInInspector] private bool active = true;
-        [SerializeField] [HideInInspector] private bool isLocked;
+        [SerializeField][HideInInspector] private string name;
+        [SerializeField][HideInInspector] private bool active = true;
+        [SerializeField][HideInInspector] private bool isLocked;
         [SerializeField] private Color color = Color.white;
+        [UnityEngine.SerializeField] private List<Temp> Temps;
 
         public Color Color => color.a > 0.1f ? color : Color.white;
 
@@ -29,11 +32,14 @@ namespace ActionEditor
             set => actionClips = value;
         }
 
-       /* [fsIgnore]*/ public IDirector Root => Parent?.Root;
-       /* [fsIgnore]*/ public IDirectable Parent { get; private set; }
+        /* [fsIgnore]*/
+        public IDirector Root => Parent?.Root;
+        /* [fsIgnore]*/
+        public IDirectable Parent { get; private set; }
 
-       /* [fsIgnore]*/ public Group Group => Parent as Group;
-        
+        /* [fsIgnore]*/
+        public Group Group => Parent as Group;
+
         public string Name
         {
             get => name;
@@ -180,6 +186,27 @@ namespace ActionEditor
         {
             Clips.Remove(action);
             Root.Validate();
+        }
+
+        internal void AfterDeserialize()
+        {
+            actionClips = this.Temps.ConvertAll(x =>
+            {
+                return JsonUtility.FromJson(x.json, Asset.GetType(x.type)) as Clip;
+            });
+            //Temps.Clear();
+
+        }
+
+        internal void BeforeSerialize()
+        {
+            Temps = actionClips.ConvertAll(x => new Temp()
+            {
+                type = x.GetType().FullName,
+                json = JsonUtility.ToJson(x)
+
+            });
+            //actionClips.Clear();
         }
     }
 }

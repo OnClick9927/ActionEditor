@@ -76,7 +76,7 @@ namespace ActionEditor
                     App.Stop();
                 }
             }
-
+            EditorGUI.BeginChangeCheck();
             if (App.IsPause)
                 GUI.backgroundColor = Tools.WithAlpha(Color.blue + Color.cyan, 0.8f);
             var isPause = DrawToggle(App.IsPause, EditorGUIUtility.TrIconContent("d_PauseButton").image, Lan.ins.PauseTips);

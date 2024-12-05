@@ -244,7 +244,8 @@ namespace ActionEditor
             if (selectItems == null || selectItems.Length < 1) return;
             foreach (var item in selectItems)
             {
-                if (item.IsLocked || item is not Clip clip) continue;
+                Clip clip = item as Clip;
+                if (item.IsLocked || clip == null) continue;
                 NowDragClips.Add(clip);
             }
 
@@ -417,7 +418,11 @@ namespace ActionEditor
 
         private static void CheckMoveToTrack(PointerEventData eventDat, bool confirm = false)
         {
-            if (App.FistSelect is not Track targetTrack) return;
+            Track targetTrack = App.FistSelect as Track;
+            if (targetTrack == null) return;
+
+
+
             var trackItem = TimelineMiddleView.GetItem(eventDat.MousePosition);
 
             if (trackItem != null)
@@ -530,7 +535,8 @@ namespace ActionEditor
             {
                 foreach (var directable in _tracks)
                 {
-                    if (directable is not Track track) continue;
+                    Track track = directable as Track;
+                    if (track == null) continue;
                     foreach (var clip in track.Clips)
                     {
                         if (selectItems.Contains(clip)) continue;

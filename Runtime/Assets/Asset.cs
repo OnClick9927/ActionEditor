@@ -12,7 +12,7 @@ namespace ActionEditor
         public const string FileEx = "action.json";
 
 
-        [HideInInspector][SerializeReference] public List<Group> groups = new();
+        [HideInInspector] public List<Group> groups = new List<Group>();
         [SerializeField] private float length = 5f;
         [SerializeField] private float viewTimeMin;
         [SerializeField] private float viewTimeMax = 5f;
@@ -104,14 +104,8 @@ namespace ActionEditor
             foreach (IDirectable group in groups.AsEnumerable().Reverse())
             {
                 directables.Add(group);
-                try
-                {
-                    group.Validate(this, null);
-                }
-                catch (Exception e)
-                {
-                    Debug.LogException(e);
-                }
+                group.Validate(this, null);
+
 
                 foreach (var track in group.Children.Reverse())
                 {
@@ -177,8 +171,22 @@ namespace ActionEditor
         }
         public string Serialize()
         {
-            return $"{GetType().FullName}\n{JsonUtility.ToJson(this, true)}";
+            this.BeforeSerialize();
+            return $"{GetType().FullName}\n{JsonUtility.ToJson(this, false)}";
         }
+        internal static Type GetType(string typeName)
+        {
+            var type = Type.GetType(typeName);
+            if (type != null) return type;
+            foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                type = a.GetType(typeName);
+                if (type != null)
+                    return type;
+            }
+            return null;
+        }
+
 
         public static Asset Deserialize(Type type, string serializedState)
         {
@@ -188,7 +196,30 @@ namespace ActionEditor
             type = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes())
                 .FirstOrDefault(x => x.FullName == typename);
 #endif
-            return JsonUtility.FromJson(serializedState.Remove(0, sps[0].Length), type) as Asset;
+            var asset = JsonUtility.FromJson(serializedState.Remove(0, sps[0].Length), type) as Asset;
+            asset.AfterDeserialize();
+            return asset;
+        }
+
+        private void AfterDeserialize()
+        {
+
+            for (int i = 0; i < groups.Count; i++)
+            {
+                groups[i].AfterDeserialize();
+
+
+            }
+        }
+
+        private void BeforeSerialize()
+        {
+            for (int i = 0; i < groups.Count; i++)
+            {
+                groups[i].BeforeSerialize();
+
+
+            }
         }
     }
 }

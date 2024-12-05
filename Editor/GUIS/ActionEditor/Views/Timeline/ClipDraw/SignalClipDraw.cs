@@ -1,5 +1,4 @@
-﻿using System.Drawing.Drawing2D;
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
