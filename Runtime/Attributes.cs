@@ -3,48 +3,7 @@ using UnityEngine;
 
 namespace ActionEditor
 {
-    /// <summary>
-    /// 类排序
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class OrderAttribute : Attribute
-    {
-        public int Order;
 
-        public OrderAttribute(int order)
-        {
-            this.Order = order;
-        }
-    }
-
-    /// <summary>
-    /// 菜单自定义名称
-    /// </summary>
-    [AttributeUsage(AttributeTargets.All, Inherited = false)]
-    public sealed class MenuNameAttribute : Attribute
-    {
-        public MenuNameAttribute(string name)
-        {
-            showName = name;
-        }
-
-        public string showName;
-    }
-
-
-    /// <summary>
-    /// 选项排序
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Field)]
-    public class OptionSortAttribute : Attribute
-    {
-        public int sort;
-
-        public OptionSortAttribute(int sort)
-        {
-            this.sort = sort;
-        }
-    }
 
     /// <summary>
     /// 选择对象路径
@@ -60,50 +19,11 @@ namespace ActionEditor
         }
     }
 
-    /// <summary>
-    /// 自定义检视面板
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class CustomInspectors : Attribute
-    {
-        public Type InspectedType;
-        public bool _editorForChildClasses;
-
-        public CustomInspectors(Type inspectedType)
-        {
-            InspectedType = inspectedType;
-        }
-
-        public CustomInspectors(Type inspectedType, bool editorForChildClasses)
-        {
-            InspectedType = inspectedType;
-            _editorForChildClasses = editorForChildClasses;
-        }
-    }
-
-    /// <summary>
-    /// 自定义检视面板
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class CustomHeader : Attribute
-    {
-        public Type InspectedType;
-
-        public CustomHeader(Type inspectedType)
-        {
-            InspectedType = inspectedType;
-        }
-
-        public CustomHeader(Type inspectedType, bool editorForChildClasses)
-        {
-            InspectedType = inspectedType;
-        }
-    }
 
     /// <summary>
     /// 自定义名称
     /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property)]
     public class NameAttribute : Attribute
     {
         public readonly string name;
@@ -221,6 +141,48 @@ namespace ActionEditor
         public CustomPreviewAttribute(Type type)
         {
             PreviewType = type;
+        }
+    }
+
+
+
+    /// <summary>
+    /// 自定义检视面板
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class)]
+    public class CustomInspectors : Attribute
+    {
+        public Type InspectedType;
+        public bool _editorForChildClasses;
+
+        public CustomInspectors(Type inspectedType)
+        {
+            InspectedType = inspectedType;
+        }
+
+        public CustomInspectors(Type inspectedType, bool editorForChildClasses)
+        {
+            InspectedType = inspectedType;
+            _editorForChildClasses = editorForChildClasses;
+        }
+    }
+
+    /// <summary>
+    /// 自定义检视面板
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class)]
+    public class CustomHeader : Attribute
+    {
+        public Type InspectedType;
+
+        public CustomHeader(Type inspectedType)
+        {
+            InspectedType = inspectedType;
+        }
+
+        public CustomHeader(Type inspectedType, bool editorForChildClasses)
+        {
+            InspectedType = inspectedType;
         }
     }
 }
