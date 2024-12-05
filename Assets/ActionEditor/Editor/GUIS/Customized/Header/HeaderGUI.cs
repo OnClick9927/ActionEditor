@@ -10,8 +10,9 @@ namespace ActionEditor
         {
             GUILayout.BeginHorizontal(EditorStyles.toolbar);
 
-            if (GUILayout.Button(Lan.ins.CreateAsset, EditorStyles.toolbarButton))
-                CreateAssetWindow.Show();
+            var rect = EditorGUILayout.GetControlRect(GUILayout.Width(80));
+            if (GUI.Button(rect, Lan.ins.CreateAsset, EditorStyles.toolbarButton))
+                CreateAssetWindow.Show(rect);
             GUILayout.Space(10);
 
 
@@ -39,14 +40,13 @@ namespace ActionEditor
             var size = GUI.skin.label.CalcSize(new GUIContent(gName));
             var width = size.x + 8;
             if (width < 80) width = 80;
-            if (GUILayout.Button($"[{gName}]", EditorStyles.toolbarDropDown, GUILayout.Width(150)))
+            var rect = EditorGUILayout.GetControlRect(GUILayout.Width(width + 20));
+            if (GUI.Button(rect, $"[{gName}]", EditorStyles.toolbarDropDown))
             {
                 App.AutoSave();
-                var rect = GUILayoutUtility.GetLastRect();
-                rect.x = 200;
+
                 AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", (o) =>
                 {
-
                     App.OnObjectPickerConfig(o);
                     GUIUtility.ExitGUI();
                 }, (x) =>
@@ -64,11 +64,9 @@ namespace ActionEditor
 
             if (App.AssetData != null)
             {
-                GUI.color = Color.white.WithAlpha(0.3f);
                 GUI.skin.label.richText = true;
                 GUILayout.Label(
-                    $"<size=11>{string.Format(Lan.ins.HeaderLastSaveTime, App.LastSaveTime.ToString("HH:mm:ss"))}</size>");
-                GUI.color = Color.white;
+                   string.Format(Lan.ins.HeaderLastSaveTime, App.LastSaveTime.ToString("HH:mm:ss")));
 
                 if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("SaveActive").image, Lan.ins.Save), EditorStyles.toolbarButton,
                         GUILayout.Width(26)))
@@ -79,14 +77,11 @@ namespace ActionEditor
             }
 
 
-
-            if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("Settings").image, Lan.ins.OpenPreferencesTips),
-                    EditorStyles.toolbarButton, GUILayout.Width(26)))
+            var rect = EditorGUILayout.GetControlRect(GUILayout.Width(25));
+            if (GUI.Button(rect, EditorGUIUtility.TrIconContent("Settings", Lan.ins.OpenPreferencesTips),
+                    EditorStyles.toolbarButton))
             {
-                PreferencesWindow.Show(new Rect(Styles.ScreenWidth - 5 - 400 - Styles.TimelineLeftTotalWidth, 25, 400,
-                    Styles.ScreenHeight - 70));
-
-
+                PreferencesWindow.Show(rect);
             }
         }
     }

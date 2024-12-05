@@ -6,29 +6,17 @@ using UnityEngine;
 
 namespace ActionEditor
 {
-    public class CreateAssetWindow : PopupWindowContent
+    class CreateAssetWindow : PopupWindowContent
     {
-        private static Rect _myRect;
         private static string _selectType;
         private static string _createName;
 
-        public static void Show()
-        {
-            var rect = new Rect(20, 25, 300, 130);
-            _myRect = rect;
-            PopupWindow.Show(new Rect(rect.x, rect.y, 0, 0), new CreateAssetWindow());
-        }
+        public static void Show(Rect rect) => PopupWindow.Show(rect, new CreateAssetWindow());
 
-        public override Vector2 GetWindowSize()
-        {
-            return new Vector2(_myRect.width, _myRect.height);
-        }
+        public override Vector2 GetWindowSize() => new Vector2(300, 120);
 
         public override void OnGUI(Rect rect)
         {
-
-
-
             GUILayout.Label($"<size=30><b>{Lan.ins.CreateAsset}</b></size>");
             GUILayout.Space(2);
 
@@ -38,8 +26,6 @@ namespace ActionEditor
             }
             else
             {
-
-                GUILayout.BeginVertical("box");
                 if (string.IsNullOrEmpty(_selectType))
                     _selectType = Prefs.AssetNames.FirstOrDefault();
                 _selectType = EditorTools.CleanPopup(Lan.ins.CrateAssetType, _selectType, Prefs.AssetNames);

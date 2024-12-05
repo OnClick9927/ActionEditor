@@ -171,6 +171,9 @@ ActionEditor.BuffAsset
                         },
                         {
                             "rid": 1017
+                        },
+                        {
+                            "rid": 1018
                         }
                     ],
                     "name": "AudioTrack",
@@ -194,7 +197,7 @@ ActionEditor.BuffAsset
                 "data": {
                     "actionClips": [
                         {
-                            "rid": 1018
+                            "rid": 1019
                         }
                     ],
                     "name": "ActionTrack",
@@ -221,7 +224,7 @@ ActionEditor.BuffAsset
                 "data": {
                     "actionClips": [
                         {
-                            "rid": 1019
+                            "rid": 1020
                         }
                     ],
                     "name": "ActionTrack",
@@ -248,13 +251,13 @@ ActionEditor.BuffAsset
                 "data": {
                     "actionClips": [
                         {
-                            "rid": 1020
-                        },
-                        {
                             "rid": 1021
                         },
                         {
                             "rid": 1022
+                        },
+                        {
+                            "rid": 1023
                         }
                     ],
                     "name": "ActionTrack",
@@ -410,7 +413,7 @@ ActionEditor.BuffAsset
                     "length": 1.2212698459625245,
                     "name": "PlayAudio",
                     "blendIn": 0.0012699365615844727,
-                    "blendOut": 0.09873008728027344,
+                    "blendOut": 0.0012698173522949219,
                     "resPath": "Assets/ResRaw/Sound/open_door.wav",
                     "volume": 1.0,
                     "clipOffset": 10.0
@@ -419,20 +422,19 @@ ActionEditor.BuffAsset
             {
                 "rid": 1018,
                 "type": {
-                    "class": "RotateTo",
+                    "class": "PlayAudio",
                     "ns": "ActionEditor",
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 0.5600000023841858,
-                    "length": 1.0,
-                    "name": "RotateTo",
-                    "interpolation": 6,
-                    "targetRotation": {
-                        "x": 2.0,
-                        "y": 0.0,
-                        "z": 0.0
-                    }
+                    "startTime": 3.2100000381469728,
+                    "length": 1.2212698459625245,
+                    "name": "PlayAudio",
+                    "blendIn": 0.0012698173522949219,
+                    "blendOut": 0.09873008728027344,
+                    "resPath": "Assets/ResRaw/Sound/open_door.wav",
+                    "volume": 1.0,
+                    "clipOffset": 10.0
                 }
             },
             {
@@ -462,7 +464,7 @@ ActionEditor.BuffAsset
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 0.09999999403953552,
+                    "startTime": 0.5600000023841858,
                     "length": 1.0,
                     "name": "RotateTo",
                     "interpolation": 6,
@@ -481,7 +483,7 @@ ActionEditor.BuffAsset
                     "asm": "Assembly-CSharp"
                 },
                 "data": {
-                    "startTime": 1.9299999475479127,
+                    "startTime": 0.09999999403953552,
                     "length": 1.0,
                     "name": "RotateTo",
                     "interpolation": 6,
@@ -494,6 +496,25 @@ ActionEditor.BuffAsset
             },
             {
                 "rid": 1022,
+                "type": {
+                    "class": "RotateTo",
+                    "ns": "ActionEditor",
+                    "asm": "Assembly-CSharp"
+                },
+                "data": {
+                    "startTime": 1.9299999475479127,
+                    "length": 1.0,
+                    "name": "RotateTo",
+                    "interpolation": 6,
+                    "targetRotation": {
+                        "x": 2.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    }
+                }
+            },
+            {
+                "rid": 1023,
                 "type": {
                     "class": "RotateTo",
                     "ns": "ActionEditor",
