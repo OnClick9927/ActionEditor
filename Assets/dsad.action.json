@@ -1,0 +1,30 @@
+ActionEditor.BuffAsset
+{
+    "groups": [
+        {
+            "name": "New Group",
+            "isCollapsed": false,
+            "active": true,
+            "isLocked": false,
+            "Temps": [
+                {
+                    "type": "ActionEditor.SignalTrack",
+                    "json": "{\"name\":\"SignalTrack\",\"active\":true,\"isLocked\":false,\"color\":{\"r\":1.0,\"g\":1.0,\"b\":1.0,\"a\":1.0},\"Temps\":[{\"type\":\"ActionEditor.TriggerLog\",\"json\":\"{\\\"startTime\\\":0.8899999856948853,\\\"length\\\":1.0,\\\"name\\\":\\\"TriggerLog\\\",\\\"log\\\":\\\"\\\"}\"},{\"type\":\"ActionEditor.TriggerEvent\",\"json\":\"{\\\"startTime\\\":1.25,\\\"length\\\":1.0,\\\"name\\\":\\\"TriggerEvent\\\",\\\"eventName\\\":0,\\\"calculateType\\\":0,\\\"calculateArgs\\\":0,\\\"kill\\\":0}\"}]}"
+                },
+                {
+                    "type": "ActionEditor.EffectTrack",
+                    "json": "{\"name\":\"EffectTrack\",\"active\":true,\"isLocked\":false,\"color\":{\"r\":1.0,\"g\":1.0,\"b\":1.0,\"a\":1.0},\"Temps\":[{\"type\":\"ActionEditor.PlayParticle\",\"json\":\"{\\\"startTime\\\":0.019999999552965165,\\\"length\\\":1.0,\\\"name\\\":\\\"PlayParticle\\\",\\\"resPath\\\":\\\"\\\",\\\"scale\\\":false}\"}],\"Layer\":0}"
+                },
+                {
+                    "type": "ActionEditor.ActionTrack",
+                    "json": "{\"name\":\"ActionTrack\",\"active\":true,\"isLocked\":false,\"color\":{\"r\":1.0,\"g\":1.0,\"b\":1.0,\"a\":1.0},\"Temps\":[{\"type\":\"ActionEditor.RotateTo\",\"json\":\"{\\\"startTime\\\":0.10999999940395355,\\\"length\\\":1.0,\\\"name\\\":\\\"RotateTo\\\",\\\"interpolation\\\":6,\\\"targetRotation\\\":{\\\"x\\\":0.0,\\\"y\\\":0.0,\\\"z\\\":0.0},\\\"test\\\":[],\\\"test2\\\":[],\\\"hh\\\":0}\"},{\"type\":\"ActionEditor.ScaleTo\",\"json\":\"{\\\"startTime\\\":1.1699999570846558,\\\"length\\\":1.0,\\\"name\\\":\\\"ScaleTo\\\",\\\"interpolation\\\":6,\\\"targetScale\\\":{\\\"x\\\":1.0,\\\"y\\\":1.0}}\"}],\"Test1\":0,\"Test2\":0.0,\"Test3\":\"\"}"
+                }
+            ]
+        }
+    ],
+    "length": 2.1700000762939455,
+    "viewTimeMin": 0.0,
+    "viewTimeMax": 5.43306827545166,
+    "rangeMin": 0.0,
+    "rangeMax": 5.0
+}

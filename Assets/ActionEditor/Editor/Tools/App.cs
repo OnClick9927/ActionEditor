@@ -4,8 +4,6 @@ using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using System.Linq;
-using UnityEngine.Windows;
-using UnityEditor.VersionControl;
 
 namespace ActionEditor
 {
@@ -25,8 +23,7 @@ namespace ActionEditor
             {
                 if (TextAsset != null)
                 {
-                    string path = AssetDatabase.GetAssetPath(TextAsset);
-                    EditorPrefs.SetString(key, path);
+                    EditorPrefs.SetString(key, AssetDatabase.GetAssetPath(TextAsset));
                 }
             };
 
@@ -253,7 +250,7 @@ namespace ActionEditor
                 // DirectorUtility.selectedObject = FistSelect;
             }
 
-            if (_selectList.Count == 1 && _selectList[0] is not Clip)
+            if (_selectList.Count == 1 && (_selectList[0] as Clip) == null)
             {
                 CanMultipleSelect = true;
             }

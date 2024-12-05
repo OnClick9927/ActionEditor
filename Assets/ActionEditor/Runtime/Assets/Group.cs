@@ -13,9 +13,9 @@ namespace ActionEditor
         [SerializeField][HideInInspector] private string name;
 
 
-        [SerializeReference]
+        //[SerializeReference]
         /*[SerializeField]*/
-        private List<Track> tracks = new();
+        private List<Track> tracks = new List<Track>();
         [SerializeField][HideInInspector] private bool isCollapsed;
         [SerializeField][HideInInspector] private bool active = true;
         [SerializeField][HideInInspector] private bool isLocked;
@@ -198,6 +198,38 @@ namespace ActionEditor
         public int GetTrackIndex(Track track)
         {
             return tracks.FindIndex(t => t == track);
+        }
+        [System.Serializable]
+        internal class Temp
+        {
+            public string type;
+            public string json;
+        }
+        [UnityEngine.SerializeField] private List<Temp> Temps;
+        internal void AfterDeserialize()
+        {
+            tracks = this.Temps.ConvertAll(x =>
+            {
+                return JsonUtility.FromJson(x.json, Asset.GetType(x.type)) as Track;
+            });
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                tracks[i].AfterDeserialize();
+            }
+        }
+
+        internal void BeforeSerialize()
+        {
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                tracks[i].BeforeSerialize();
+            }
+            Temps = tracks.ConvertAll(x => new Temp()
+            {
+                type = x.GetType().FullName,
+                json = JsonUtility.ToJson(x)
+            });
+
         }
     }
 }

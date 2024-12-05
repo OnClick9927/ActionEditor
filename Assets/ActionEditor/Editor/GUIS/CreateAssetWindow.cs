@@ -47,7 +47,10 @@ namespace ActionEditor
             var path = EditorUtility.SaveFolderPanel("SelectFolder", "Assets", "");
 
             if (string.IsNullOrEmpty(path)) return;
-            path = Path.Combine(path, $"{_createName}.{Asset.FileEx}");
+            path = Path.Combine(path, $"{_createName}.{Asset.FileEx}").Replace("\\", "/");
+
+            var index = path.IndexOf("Assets");
+            path = path.Remove(0, index);
 
             if (string.IsNullOrEmpty(_createName))
             {

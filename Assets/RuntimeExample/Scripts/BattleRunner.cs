@@ -9,8 +9,8 @@ namespace ActionEditor
     /// </summary>
     public class BattleRunner : Runner
     {
-        private static BattleRunner _updateRunner;
-        public static BattleRunner Scheduler => _updateRunner ??= new BattleRunner();
+        private static BattleRunner _updateRunner = new BattleRunner();
+        public static BattleRunner Scheduler => _updateRunner;
 
         private readonly List<IProcess> _updateRoutines = new List<IProcess>();
 
