@@ -7,129 +7,46 @@ using static ActionEditor.Group;
 
 namespace ActionEditor
 {
+
+
+
     [Serializable]
     [Attachable(typeof(Group))]
-    public abstract class Track : IDirectable
+    public abstract class Track : DirectableBase, IDirectable
     {
-        //[SerializeReference]
-        /*[SerializeField]*/
-        private List<Clip> actionClips = new List<Clip>();
+        private List<Clip> clips = new List<Clip>();
 
-        [SerializeField][HideInInspector] private string name;
-        [SerializeField][HideInInspector] private bool active = true;
-        [SerializeField][HideInInspector] private bool isLocked;
-        [SerializeField] private Color color = Color.white;
         [UnityEngine.SerializeField] private List<Temp> Temps;
 
-        public Color Color => color.a > 0.1f ? color : Color.white;
-
-
-        public virtual string info => string.Empty;
 
         public List<Clip> Clips
         {
-            get => actionClips;
-            set => actionClips = value;
+            get => clips;
+            set => clips = value;
         }
 
-        /* [fsIgnore]*/
-        public IDirector Root => Parent?.Root;
-        /* [fsIgnore]*/
-        public IDirectable Parent { get; private set; }
-
-        /* [fsIgnore]*/
         public Group Group => Parent as Group;
 
-        public string Name
-        {
-            get => name;
-            set => name = value;
-        }
-
-        IEnumerable<IDirectable> IDirectable.Children => Clips;
-
-        //public GameObject Actor => Parent?.Actor;
-
-        public virtual bool IsCollapsed
+        public sealed override IEnumerable<IDirectable> Children => clips;
+        public override bool IsCollapsed
         {
             get => Parent != null && Parent.IsCollapsed;
             set { }
         }
 
-        public virtual bool IsActive
-        {
-            get => Parent != null && Parent.IsActive && active;
-            set
-            {
-                if (active != value)
-                {
-                    active = value;
-                    if (Root != null) Root.Validate();
-                }
-            }
-        }
 
-        public virtual bool IsLocked
-        {
-            get => Parent != null && (Parent.IsLocked || isLocked);
-            set => isLocked = value;
-        }
-
-
-        public int StartTimeInt => 0;
-        public int EndTimeInt => 0;
-
-        public virtual float StartTime
+        public sealed override float StartTime
         {
             get => Parent?.StartTime ?? 0;
             set { }
         }
 
 
-        public virtual float EndTime
+        public sealed override float EndTime
         {
             get => Parent?.EndTime ?? 0;
             set { }
         }
-
-        public virtual float BlendIn
-        {
-            get => 0f;
-            set { }
-        }
-
-
-        public virtual float BlendOut
-        {
-            get => 0f;
-            set { }
-        }
-
-        public bool CanCrossBlend => false;
-
-
-        public void Validate(IDirector root, IDirectable parent)
-        {
-            // Debug.Log($"设置轨道的父节点==={parent}");
-            Parent = parent;
-            OnAfterValidate();
-        }
-
-        protected virtual void OnCreate()
-        {
-        }
-
-        protected virtual void OnAfterValidate()
-        {
-        }
-
-
-        public void PostCreate(IDirectable parent)
-        {
-            Parent = parent;
-            OnCreate();
-        }
-
 
         public T AddClip<T>(float time) where T : Clip
         {
@@ -153,7 +70,7 @@ namespace ActionEditor
                 newAction.StartTime = time;
                 newAction.Name = type.Name;
                 Clips.Add(newAction);
-                newAction.PostCreate(this);
+                //newAction.PostCreate(this);
 
                 var nextAction = Clips.FirstOrDefault(a => a.StartTime > newAction.StartTime);
                 if (nextAction != null) newAction.EndTime = Mathf.Min(newAction.EndTime, nextAction.StartTime);
@@ -188,25 +105,25 @@ namespace ActionEditor
             Root.Validate();
         }
 
-        internal void AfterDeserialize()
+
+        protected override void OnAfterDeserialize()
         {
-            actionClips = this.Temps.ConvertAll(x =>
+            clips = this.Temps.ConvertAll(x =>
             {
                 return JsonUtility.FromJson(x.json, Asset.GetType(x.type)) as Clip;
             });
-            //Temps.Clear();
-
         }
-
-        internal void BeforeSerialize()
+        protected override void OnBeforeSerialize()
         {
-            Temps = actionClips.ConvertAll(x => new Temp()
+
+            Temps = clips.ConvertAll(x => new Temp()
             {
                 type = x.GetType().FullName,
                 json = JsonUtility.ToJson(x)
 
             });
-            //actionClips.Clear();
         }
+
+
     }
 }

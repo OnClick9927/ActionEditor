@@ -155,9 +155,8 @@ namespace ActionEditor
         {
             Clip clip = CopyAsset as Clip;
             if (!IsCut)
-            {
-                clip = JsonUtility.FromJson(JsonUtility.ToJson(clip), clip.GetType()) as Clip;
-            }
+                clip = clip.DeepCopy();
+
             var rect = TimelineTrackItemRightView.TrackRightRect;
             var time = track.Root.PosToTime(Event.current.mousePosition.x - rect.x, rect.width);
             clip.StartTime = track.Root.SnapTime(time);
@@ -172,9 +171,8 @@ namespace ActionEditor
         {
             Track track = CopyAsset as Track;
             if (!IsCut)
-            {
-                track = JsonUtility.FromJson(JsonUtility.ToJson(track), track.GetType()) as Track;
-            }
+                track = track.DeepCopy();
+
 
             if (group.CanAddTrack(track))
                 group.AddTrack(track);

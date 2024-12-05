@@ -6,12 +6,11 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Serializable]
-    public abstract class Clip : IClip
+    public abstract class Clip : DirectableBase, IClip
     {
         [SerializeField] private float startTime;
-        [SerializeField] [HideInInspector] protected float length = 1f;
-        [SerializeField] private string name;
-        
+        [SerializeField][HideInInspector] protected float length = 1f;
+
 
         [MenuName("片段长度")]
         public virtual float Length
@@ -23,36 +22,13 @@ namespace ActionEditor
             }
         }
 
-        //public virtual string Info
-        //{
-        //    get
-        //    {
-        //        var nameAtt = GetType().RTGetAttribute<NameAttribute>(true);
-        //        if (nameAtt != null) return nameAtt.name;
-
-        //        return GetType().Name;
-        //    }
-        //}
-
         public virtual bool IsValid => false;
 
-      /*  [fsIgnore]*/ public IDirector Root => Parent?.Root;
+        public sealed override IEnumerable<IDirectable> Children => null;
 
-      /*  [fsIgnore]*/ public IDirectable Parent { get; private set; }
-
-        IEnumerable<IDirectable> IDirectable.Children => null;
-
-        //public GameObject Actor => Parent?.Actor;
-
-        public string Name
-        {
-            get => name;
-            set => name = value;
-        }
-        
 
         [MenuName("开始时间")]
-        public float StartTime
+        public sealed override float StartTime
         {
             get => startTime;
             set
@@ -60,14 +36,12 @@ namespace ActionEditor
                 if (Math.Abs(startTime - value) > 0.0001f)
                 {
                     startTime = Mathf.Max(value, 0);
-                    // BlendIn = Mathf.Clamp(BlendIn, 0, Length - BlendOut);
-                    // BlendOut = Mathf.Clamp(BlendOut, 0, Length - BlendIn);
                 }
             }
         }
 
         [MenuName("结束时间")]
-        public float EndTime
+        public sealed override float EndTime
         {
             get => StartTime + Length;
             set
@@ -81,19 +55,19 @@ namespace ActionEditor
             }
         }
 
-        public bool IsActive
+        public sealed override bool IsActive
         {
             get => Parent?.IsActive ?? false;
             set { }
         }
 
-        public bool IsCollapsed
+        public sealed override bool IsCollapsed
         {
             get { return Parent != null && Parent.IsCollapsed; }
             set { }
         }
 
-        public bool IsLocked
+        public sealed override bool IsLocked
         {
             get { return Parent != null && Parent.IsLocked; }
             set { }
@@ -111,42 +85,17 @@ namespace ActionEditor
             set { }
         }
 
-        public virtual bool CanCrossBlend { get; }
+        public virtual bool CanCrossBlend => false;
 
 
+        public Clip GetNextClip() => this.GetNextSibling<Clip>();
 
-        public void Validate(IDirector root, IDirectable parent)
-        {
-            Parent = parent;
-            // hideFlags = HideFlags.HideInHierarchy;
-            // ValidateAnimParams();
-            // OnAfterValidate();
-        }
+        public float GetClipWeight(float time) => GetClipWeight(time, BlendIn, BlendOut);
 
+        public float GetClipWeight(float time, float blendInOut) => GetClipWeight(time, blendInOut, blendInOut);
 
-        public object AnimatedParametersTarget { get; }
+        public float GetClipWeight(float time, float blendIn, float blendOut) => this.GetWeight(time, blendIn, blendOut);
 
-        public Clip GetNextClip()
-        {
-            return this.GetNextSibling<Clip>();
-        }
-
-        public float GetClipWeight(float time)
-        {
-            return GetClipWeight(time, BlendIn, BlendOut);
-        }
-
-        public float GetClipWeight(float time, float blendInOut)
-        {
-            return GetClipWeight(time, blendInOut, blendInOut);
-        }
-
-        public float GetClipWeight(float time, float blendIn, float blendOut)
-        {
-            return this.GetWeight(time, blendIn, blendOut);
-        }
-        
-        #region 长度匹配
 
         public void TryMatchSubClipLength()
         {
@@ -168,27 +117,6 @@ namespace ActionEditor
                 if (nextClip == null || StartTime + targetLength <= nextClip.StartTime) Length = targetLength;
             }
         }
-
-        #endregion
-
-        #region 混合切片
-
-        public virtual void SetCrossBlendIn(float value)
-        {
-        }
-
-        public virtual void SetCrossBlendOut(float value)
-        {
-        }
-
-        #endregion
-
-        public void PostCreate(IDirectable parent)
-        {
-            Parent = parent;
-            // CreateAnimationDataCollection();
-            // OnCreate();
-        }
     }
 
 
@@ -202,78 +130,4 @@ namespace ActionEditor
         }
     }
 
-    [Serializable]
-    public abstract class ClipCrossBlend : Clip
-    {
-        [SerializeField] [HideInInspector] protected float blendIn = 0f;
-        [SerializeField] [HideInInspector] protected float blendOut = 0f;
-
-        [SerializeField] [HideInInspector] private float CrossBlendIn = 0f;
-        [SerializeField] [HideInInspector] private float CrossBlendOut = 0f;
-
-
-        public override bool CanCrossBlend => true;
-
-        [MenuName("渐入时间")]
-        public override float BlendIn
-        {
-            get
-            {
-                if (CrossBlendIn > 0)
-                {
-                    return CrossBlendIn;
-                }
-
-                return blendIn;
-            }
-            set
-            {
-                blendIn = value;
-                if (blendIn < 0)
-                {
-                    blendIn = 0;
-                }
-                else if (blendIn > Length - BlendOut)
-                {
-                    blendIn = Length - BlendOut;
-                }
-            }
-        }
-
-        [MenuName("渐出时间")]
-        public override float BlendOut
-        {
-            get
-            {
-                if (CrossBlendOut > 0)
-                {
-                    return CrossBlendOut;
-                }
-
-                return blendOut;
-            }
-            set
-            {
-                blendOut = value;
-                if (blendOut < 0)
-                {
-                    blendOut = 0;
-                }
-                else if (blendOut > Length - BlendIn)
-                {
-                    blendOut = Length - BlendIn;
-                }
-            }
-        }
-
-        public override void SetCrossBlendIn(float value)
-        {
-            CrossBlendIn = value;
-        }
-
-        public override void SetCrossBlendOut(float value)
-        {
-            CrossBlendOut = value;
-        }
-    }
 }

@@ -8,116 +8,48 @@ namespace ActionEditor
 {
     [Name("Default Group")]
     [Serializable]
-    public class Group : IDirectable
+    public class Group : DirectableBase
     {
-        [SerializeField][HideInInspector] private string name;
 
-
-        //[SerializeReference]
-        /*[SerializeField]*/
+        [System.Serializable]
+        internal class Temp
+        {
+            public string type;
+            public string json;
+        }
+        [UnityEngine.SerializeField] private List<Temp> Temps;
         private List<Track> tracks = new List<Track>();
         [SerializeField][HideInInspector] private bool isCollapsed;
-        [SerializeField][HideInInspector] private bool active = true;
-        [SerializeField][HideInInspector] private bool isLocked;
         public List<Track> Tracks
         {
             get => tracks;
             set => tracks = value;
         }
-
-        /* [fsIgnore]*/
-        public IDirector Root { get; private set; }
-        IDirectable IDirectable.Parent => null;
-
-        IEnumerable<IDirectable> IDirectable.Children => Tracks;
-        private GameObject _actor;
-
-        [HideInInspector]
-        public GameObject Actor
-        {
-            get { return _actor; }
-            set
-            {
-                _actor = value;
-                // var key = _actor.GetComponent<ObjectKey>();
-                // if ((key == null))
-                // {
-                //     _actor.AddComponent<ObjectKey>();
-                //     ActorId = _actor.GetInstanceID();
-                // }
-                // else
-                // {
-                //     ActorId = key.ObjectId;
-                // }
-            }
-        }
-
-        public int StartTimeInt => 0;
-        public int EndTimeInt => 0;
-
-        float IDirectable.StartTime => 0;
-
-        float IDirectable.EndTime => Root.Length;
-
-        public float BlendIn
-        {
-            get => 0;
-            set { }
-        }
-
-        public float BlendOut
-        {
-            get => 0;
-            set { }
-        }
-
-        // float IDirectable.BlendIn => 0f;
-        //
-        // float IDirectable.BlendOut => 0f;
-
-        bool IDirectable.CanCrossBlend => false;
-
-        public string Name
-        {
-            get => name;
-            set => name = value;
-        }
-
-        public bool IsActive
-        {
-            get => active;
-            set
-            {
-                if (active == value) return;
-                active = value;
-                if (Root != null) Root?.Validate();
-            }
-        }
-
-        public bool IsCollapsed
-        {
-            get => isCollapsed;
-            set => isCollapsed = value;
-        }
-
-        public bool IsLocked
+        public sealed override bool IsLocked
         {
             get => isLocked;
             set => isLocked = value;
         }
-
-
-        public void Validate(IDirector _root, IDirectable _parent)
+        public sealed override bool IsActive
         {
-            Root = _root;
+            get => active;
+            set
+            {
+                if (active != value)
+                {
+                    active = value;
+                    if (Root != null) Root.Validate();
+                }
+            }
         }
+        public sealed override IEnumerable<IDirectable> Children => Tracks;
 
 
+        public override bool IsCollapsed { get => isCollapsed; set => isCollapsed = value; }
+        public override float StartTime { get => 0; set { } }
+        public override float EndTime { get => Root.Length; set { } }
 
-        public bool ExistSameTypeTrack(Type type)
-        {
-            return Tracks.FirstOrDefault(t => t.GetType() == type) != null;
-        }
+        public bool ExistSameTypeTrack(Type type) => Tracks.FirstOrDefault(t => t.GetType() == type) != null;
 
         public T AddTrack<T>(T track) where T : Track
         {
@@ -138,10 +70,7 @@ namespace ActionEditor
 
             return track;
         }
-        public T AddTrack<T>(string _name = null) where T : Track
-        {
-            return (T)AddTrack(typeof(T), _name);
-        }
+        public T AddTrack<T>(string _name = null) where T : Track => (T)AddTrack(typeof(T), _name);
 
         public Track AddTrack(Type type, string _name = null)
         {
@@ -185,28 +114,15 @@ namespace ActionEditor
 
         public void DeleteTrack(Track track)
         {
-            // Undo.RegisterCompleteObjectUndo(this, "Delete Track");
             Tracks.Remove(track);
-            // if (ReferenceEquals(DirectorUtility.selectedObject, track))
-            // {
-            //     DirectorUtility.selectedObject = null;
-            // }
-
             Root?.Validate();
         }
 
-        public int GetTrackIndex(Track track)
-        {
-            return tracks.FindIndex(t => t == track);
-        }
-        [System.Serializable]
-        internal class Temp
-        {
-            public string type;
-            public string json;
-        }
-        [UnityEngine.SerializeField] private List<Temp> Temps;
-        internal void AfterDeserialize()
+        public int GetTrackIndex(Track track) => tracks.FindIndex(t => t == track);
+
+
+
+        protected override void OnAfterDeserialize()
         {
             tracks = this.Temps.ConvertAll(x =>
             {
@@ -214,22 +130,22 @@ namespace ActionEditor
             });
             for (int i = 0; i < tracks.Count; i++)
             {
-                tracks[i].AfterDeserialize();
+                ((IDirectable)tracks[i]).AfterDeserialize();
             }
         }
-
-        internal void BeforeSerialize()
+        protected override void OnBeforeSerialize()
         {
             for (int i = 0; i < tracks.Count; i++)
             {
-                tracks[i].BeforeSerialize();
+                (tracks[i] as IDirectable).BeforeSerialize();
             }
             Temps = tracks.ConvertAll(x => new Temp()
             {
                 type = x.GetType().FullName,
                 json = JsonUtility.ToJson(x)
             });
-
         }
+
+
     }
 }
