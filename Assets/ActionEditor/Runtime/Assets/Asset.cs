@@ -2,16 +2,18 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using static ActionEditor.Group;
 
 namespace ActionEditor
 {
     [Serializable]
     public abstract class Asset : IDirector
     {
-        public const string FileEx = "action.json";
+        public const string FileEx = "action.bytes";
 
+        [UnityEngine.SerializeField] private List<Temp> Temps;
 
-        [HideInInspector] public List<Group> groups = new List<Group>();
+        [NonSerialized][HideInInspector] public List<Group> groups = new List<Group>();
         [SerializeField] private float length = 5f;
         [SerializeField] private float viewTimeMin;
         [SerializeField] private float viewTimeMax = 5f;
@@ -172,7 +174,10 @@ namespace ActionEditor
         protected virtual void OnBeforeSerialize() { }
         private void AfterDeserialize()
         {
-
+            groups = this.Temps.ConvertAll(x =>
+            {
+                return JsonUtility.FromJson(x.json, Asset.GetType(x.type)) as Group;
+            });
             for (int i = 0; i < groups.Count; i++)
                 (groups[i] as IDirectable).AfterDeserialize();
             OnAfterDeserialize();
@@ -182,6 +187,12 @@ namespace ActionEditor
         {
             for (int i = 0; i < groups.Count; i++)
                 (groups[i] as IDirectable).BeforeSerialize();
+            Temps = groups.ConvertAll(x => new Temp()
+            {
+                type = x.GetType().FullName,
+                json = JsonUtility.ToJson(x)
+            });
+
             OnBeforeSerialize();
         }
     }
