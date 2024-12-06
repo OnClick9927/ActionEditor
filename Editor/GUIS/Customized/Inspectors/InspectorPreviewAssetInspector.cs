@@ -160,7 +160,10 @@ namespace ActionEditor
             GUILayout.BeginHorizontal();
             GUI.color = Color.white;
 
-            GUILayout.Label($"<b><size=18>{name}</size></b>");
+            GUILayout.Label($"<b><size=18>{name}</size></b>", new GUIStyle(EditorStyles.label)
+            {
+                richText = true,
+            });
 
 
             GUILayout.EndHorizontal();

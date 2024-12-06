@@ -102,5 +102,6 @@
 
         string ClipInvalid { get; }
         string EmptyRect { get; }
+        string NoAssetExtendType { get; }
     }
 }

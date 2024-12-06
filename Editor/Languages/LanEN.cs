@@ -108,5 +108,7 @@
         public string ClearCopy => "Clear Cut or Copy";
 
         public string EmptyRect => "Empty Rect\nclick to select none";
+
+        public string NoAssetExtendType => "None Type Sub Class of Asset";
     }
 }
