@@ -22,7 +22,10 @@ namespace ActionEditor
         {
     
 
-            GUILayout.Label($"<size=22><b>{Lan.ins.PreferencesTitle}</b></size>");
+            GUILayout.Label($"<size=22><b>{Lan.ins.PreferencesTitle}</b></size>", new GUIStyle(EditorStyles.label)
+            {
+                richText = true,
+            });
             GUILayout.Space(2);
 
             var lan = EditorTools.CleanPopup<string>("Language", Lan.Language,

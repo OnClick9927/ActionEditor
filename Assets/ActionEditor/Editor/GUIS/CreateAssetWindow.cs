@@ -17,7 +17,10 @@ namespace ActionEditor
 
         public override void OnGUI(Rect rect)
         {
-            GUILayout.Label($"<size=30><b>{Lan.ins.CreateAsset}</b></size>");
+            GUILayout.Label($"<size=30><b>{Lan.ins.CreateAsset}</b></size>", new GUIStyle(EditorStyles.label)
+            {
+                richText = true,
+            });
             GUILayout.Space(2);
 
             if (Prefs.AssetNames.Count == 0)
