@@ -107,5 +107,7 @@
         public string ClearCopy => "取消拷贝或者复制";
 
         public string EmptyRect => "空白区域\n点击清空选择";
+
+        public string NoAssetExtendType => "没有 继承于 Asset 的 类型";
     }
 }

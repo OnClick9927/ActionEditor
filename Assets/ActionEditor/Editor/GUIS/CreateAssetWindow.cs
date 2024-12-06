@@ -25,7 +25,7 @@ namespace ActionEditor
 
             if (Prefs.AssetNames.Count == 0)
             {
-                EditorGUILayout.HelpBox("None Type Sub Class of Asset", MessageType.Error);
+                EditorGUILayout.HelpBox(Lan.ins.NoAssetExtendType, MessageType.Error);
             }
             else
             {
@@ -46,10 +46,15 @@ namespace ActionEditor
         void CreateConfirm()
         {
             //var path = $"{Prefs.savePath}/{_createName}.json";
-
-            var path = EditorUtility.SaveFolderPanel("SelectFolder", "Assets", "");
+            var defaut_ = EditorPrefs.GetString(GetType().FullName, "Assets");
+            var path = EditorUtility.SaveFolderPanel(Lan.ins.SelectFolder, defaut_, "");
 
             if (string.IsNullOrEmpty(path)) return;
+            EditorPrefs.SetString(GetType().FullName, path);
+
+
+
+
             path = Path.Combine(path, $"{_createName}.{Asset.FileEx}").Replace("\\", "/");
 
             var index = path.IndexOf("Assets");
@@ -70,7 +75,6 @@ namespace ActionEditor
                 var inst = Activator.CreateInstance(t) as Asset;
                 if (inst != null)
                 {
-                    inst.AddGroup(typeof(Group));
                     var json = inst.Serialize();
                     System.IO.File.WriteAllText(path, json);
                     AssetDatabase.Refresh();
