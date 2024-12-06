@@ -3,9 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Xml.Linq;
 using UnityEditor;
-using UnityEditor.Graphs;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -126,11 +124,39 @@ namespace ActionEditor
             var newObj = EditorGUILayout.ObjectField(name, o, objType, false);
             return AssetDatabase.GetAssetPath(newObj);
         }
+        private string DrawMutiLine(string name, string value, int lines)
+        {
+            GUILayout.Label(name);
+            return EditorGUILayout.TextArea(value, GUILayout.MinHeight(lines * 18));
+        }
+
+        static MethodInfo method;
+        static private Dictionary<FieldInfo, Vector2> scrolls = new Dictionary<FieldInfo, Vector2>();
+
+        private string DrawTextArea(string name, string value, FieldInfo field)
+        {
+            GUILayout.Label(name);
+            if (method == null)
+                method = typeof(EditorGUI).GetMethod("ScrollableTextAreaInternal", BindingFlags.Static | BindingFlags.NonPublic);
+            Rect rect = EditorGUILayout.GetControlRect(GUILayout.Height(80));
+            Vector2 scroll = Vector2.zero;
+            scrolls.TryGetValue(field, out scroll);
+            object[] parameters = new object[] {
+                rect,
+                value,
+                scroll,
+                EditorStyles.textArea
+             };
+            object methodResult = method.Invoke(null, parameters);
+            scroll = (Vector2)(parameters[2]);
+            scrolls[field] = scroll;
+            return methodResult.ToString();
+        }
 
         private IList DrawArr(ref bool fold, string name, IList arr, Type ele)
         {
             IList array = Activator.CreateInstance(typeof(List<>).MakeGenericType(ele)) as IList;
-          
+
             for (int i = 0; i < arr.Count; i++)
                 array.Add(arr[i]);
             var cout = array.Count;
@@ -187,16 +213,44 @@ namespace ActionEditor
             var newValue = value;
             var name = field.Name;
             var attributes = field.GetCustomAttributes();
+            SpaceAttribute space = attributes.FirstOrDefault(x => x is SpaceAttribute) as SpaceAttribute;
+            if (space != null)
+            {
+                GUILayout.Space(space.height);
+            }
+
+            ValidCheckAttribute notNull = attributes.FirstOrDefault(x => x is ValidCheckAttribute) as ValidCheckAttribute;
+            if (notNull != null)
+            {
+                string err;
+                bool valid = notNull.IsValid(field, value, out err);
+                if (!valid)
+                {
+                    EditorGUILayout.HelpBox(err, MessageType.Error);
+                }
+
+            }
+            HeaderAttribute header = attributes.FirstOrDefault(x => x is HeaderAttribute) as HeaderAttribute;
+            if (header != null)
+                GUILayout.Label(header.header, EditorStyles.boldLabel);
+
+
             NameAttribute Name = attributes.FirstOrDefault(x => x is NameAttribute) as NameAttribute;
             if (Name != null)
                 name = Name.name;
             RangeAttribute range = attributes.FirstOrDefault(x => x is RangeAttribute) as RangeAttribute;
-            SelectObjectPathAttribute selectObjectPath = attributes.FirstOrDefault(x => x is SelectObjectPathAttribute) as SelectObjectPathAttribute;
+            ObjectPathAttribute selectObjectPath = attributes.FirstOrDefault(x => x is ObjectPathAttribute) as ObjectPathAttribute;
+            MultilineAttribute mutiline = attributes.FirstOrDefault(x => x is MultilineAttribute) as MultilineAttribute;
+            TextAreaAttribute textarea = attributes.FirstOrDefault(x => x is TextAreaAttribute) as TextAreaAttribute;
 
             if (range != null && fieldType == typeof(float))
                 newValue = DrawRange(name, (float)value, range.min, range.max);
             else if (selectObjectPath != null && fieldType == typeof(string))
                 newValue = DrawSelectObj(name, (string)value, selectObjectPath.type);
+            else if (mutiline != null && fieldType == typeof(string))
+                newValue = DrawMutiLine(name, (string)value, mutiline.lines);
+            else if (textarea != null && fieldType == typeof(string))
+                newValue = DrawTextArea(name, (string)value, field);
             else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(List<>))
             {
                 Type elementType = fieldType.GetGenericArguments()[0];

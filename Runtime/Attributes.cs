@@ -1,19 +1,48 @@
 ﻿using System;
+using System.Reflection;
 using UnityEngine;
 
 namespace ActionEditor
 {
 
+    [AttributeUsage(AttributeTargets.Field)]
+
+    public abstract class ValidCheckAttribute : Attribute
+    {
+        public abstract bool IsValid(FieldInfo field, object obj, out string err);
+    }
+    [AttributeUsage(AttributeTargets.Field)]
+    public class NotNullAttribute : ValidCheckAttribute
+    {
+        public override bool IsValid(FieldInfo field, object obj, out string err)
+        {
+
+            bool error = false;
+            if (field.FieldType == typeof(string))
+            {
+                if (string.IsNullOrEmpty((string)obj))
+                {
+                    error = true;
+                }
+            }
+            else if (obj == null)
+            {
+                error = true;
+            }
+            err = error ? "Can not be NULL" : string.Empty;
+            return !error;
+        }
+    }
 
     /// <summary>
     /// 选择对象路径
     /// </summary>
     [AttributeUsage(AttributeTargets.Field)]
-    public class SelectObjectPathAttribute : Attribute
+    public class ObjectPathAttribute : Attribute
     {
         public Type type;
 
-        public SelectObjectPathAttribute(Type type)
+        public ObjectPathAttribute(Type type)
         {
             this.type = type;
         }
