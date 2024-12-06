@@ -123,7 +123,7 @@ namespace ActionEditor
     [Serializable]
     public abstract class ClipSignal : Clip
     {
-        public sealed override float Length
+        public override float Length
         {
             get => 0;
             //set => TimeCache();
