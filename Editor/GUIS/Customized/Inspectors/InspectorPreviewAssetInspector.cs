@@ -74,7 +74,10 @@ namespace ActionEditor
             GUI.color = Color.white;
             var title = string.Format(Lan.ins.InsBaseInfo, Prefs.GetAssetTypeName(assetData.GetType()));
             GUILayout.Label(
-                $"<b><size=18>{(_optionsAssetFold ? "▼" : "▶")} {title}</size></b>");
+                $"<b><size=18>{(_optionsAssetFold ? "▼" : "▶")} {title}</size></b>", new GUIStyle(EditorStyles.label)
+                {
+                    richText = true,
+                });
             GUILayout.EndHorizontal();
 
             var lastRect = GUILayoutUtility.GetLastRect();

@@ -16,7 +16,7 @@ namespace ActionEditor
 
         private TimelineTrackItemRightView _rightView;
 
-        protected GUIStyle NameStyle;
+        protected static GUIStyle NameStyle;
 
         public void SetData(IDirectable asset)
         {
@@ -27,8 +27,7 @@ namespace ActionEditor
 
         public override void OnDraw()
         {
-            GUI.color = App.IsSelect(Data) ? Color.blue : Color.gray;
-            GUI.Box(Position, "");
+            GUI.Box(Position, "", App.IsSelect(Data) ? EditorStyles.selectionRect : "box");
 
             _leftRect = new Rect(Position.x, Position.y, Styles.TimelineLeftWidth, Position.height);
             DrawLeft(_leftRect);
@@ -53,59 +52,53 @@ namespace ActionEditor
 
         private void DrawLockedAndActive()
         {
-            if (NameStyle == null)
+            if (!Data.IsActive || Data.IsLocked)
             {
-                NameStyle = new GUIStyle(GUI.skin.label)
+                if (NameStyle == null)
                 {
-                    fontStyle = FontStyle.Bold
-                };
-            }
-
-
-            if (!Data.IsActive)
-            {
+                    NameStyle = new GUIStyle(GUI.skin.label)
+                    {
+                        fontStyle = FontStyle.Bold
+                    };
+                }
                 GUI.color = Color.black.WithAlpha(0.2f);
-                GUI.DrawTexture(Position, Styles.WhiteTexture);
-                GUI.DrawTextureWithTexCoords(Position, Styles.Stripes,
-                    new Rect(0, 0, (Position.width / 5), (Position.height / 5)));
-                GUI.color = Color.white;
-            }
-
-            if (Data.IsLocked)
-            {
-                GUI.color = Color.black.WithAlpha(0.15f);
-                GUI.DrawTextureWithTexCoords(Position, Styles.Stripes,
-                    new Rect(0, 0, Position.width / 20, Position.height / 20));
-                GUI.color = Color.white;
-            }
-
-            string overlayLabel = null;
-            if (!Data.IsActive && Data.IsLocked)
-            {
-                overlayLabel = $"{Lan.ins.Locked} & {Lan.ins.Disable}";
-            }
-            else
-            {
                 if (!Data.IsActive)
                 {
-                    overlayLabel = Lan.ins.Disable;
+                    GUI.DrawTexture(Position, Styles.WhiteTexture);
                 }
+                GUI.DrawTextureWithTexCoords(Position, Styles.Stripes,
+                new Rect(0, 0, Position.width / 20, Position.height / 20));
+                GUI.color = Color.white;
 
-                if (Data.IsLocked)
+                string overlayLabel = null;
+                if (!Data.IsActive && Data.IsLocked)
                 {
-                    overlayLabel =Lan.ins.Locked ;
+                    overlayLabel = $"{Lan.ins.Locked} & {Lan.ins.Disable}";
                 }
+                else
+                {
+                    if (!Data.IsActive)
+                    {
+                        overlayLabel = Lan.ins.Disable;
+                    }
+
+                    if (Data.IsLocked)
+                    {
+                        overlayLabel = Lan.ins.Locked;
+                    }
+                }
+                var size = NameStyle.CalcSize(new GUIContent(overlayLabel));
+                var showY = Position.y + (Position.height - Styles.ClipBottomRectHeight) * 0.5f - size.y * 0.5f;
+                var showX = Position.x + Styles.TimelineLeftTotalWidth + Styles.TimelineRightWidth * 0.5f -
+                            size.x * 0.5f;
+
+                var stampRect = new Rect(showX, showY, size.x, size.y);
+                GUI.Box(stampRect, overlayLabel, NameStyle);
             }
 
-            if (string.IsNullOrEmpty(overlayLabel)) return;
 
-            var size = NameStyle.CalcSize(new GUIContent(overlayLabel));
-            var showY = Position.y + (Position.height - Styles.ClipBottomRectHeight) * 0.5f - size.y * 0.5f;
-            var showX = Position.x + Styles.TimelineLeftTotalWidth + Styles.TimelineRightWidth * 0.5f -
-                        size.x * 0.5f;
 
-            var stampRect = new Rect(showX, showY, size.x, size.y);
-            GUI.Box(stampRect, overlayLabel, NameStyle);
+
         }
 
         #endregion
@@ -123,9 +116,9 @@ namespace ActionEditor
                 GUI.color = Color.white.WithAlpha(0.5f);
 
                 var collapseAllRect = NBLayout.GetHRect(16, 16);
-                if (GUI.Button(collapseAllRect, "", EditorStyles.foldout))
+                var temp = !EditorGUI.Foldout(collapseAllRect, !Data.IsCollapsed, "");
+                if (temp != Data.IsCollapsed)
                 {
-                    Debug.Log("click Expanded");
                     group.IsCollapsed = !Data.IsCollapsed;
                     App.Refresh();
                     Event.current.Use();
@@ -152,7 +145,7 @@ namespace ActionEditor
             NBLayout.BeginHorizontal(rect, true);
             if (!isTrack)
             {
-                if (GUI.Button(NBLayout.GetHRect(16, 16), EditorGUIUtility.TrIconContent("VerticalLayoutGroup Icon"), GUIStyle.none))
+                if (GUI.Button(NBLayout.GetHRect(16, 16), "", EditorStyles.foldoutHeaderIcon))
                 {
                     OnGroupContextMenu();
                     Event.current.Use();
@@ -404,7 +397,7 @@ namespace ActionEditor
     {
         public IDirectable Data;
 
-        public static Rect TrackRightRect {  get; private set; }
+        public static Rect TrackRightRect { get; private set; }
 
         public void SetData(IDirectable asset)
         {
@@ -413,7 +406,7 @@ namespace ActionEditor
 
         public override void OnGUI(Rect rect)
         {
-            
+
             TrackRightRect = rect;
             var localRect = new Rect(0, 0, rect.width, rect.height);
             base.OnGUI(localRect);
@@ -553,7 +546,7 @@ namespace ActionEditor
             var attachableTypeInfos = new List<EditorTools.TypeMetaInfo>();
 
             var existing = track.Clips.FirstOrDefault();
-     
+
 
             var time = track.Root.PosToTime(ev.MousePosition.x - Position.x, Position.width);
             var cursorTime = track.Root.SnapTime(time);
