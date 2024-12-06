@@ -150,7 +150,7 @@ namespace ActionEditor
             object methodResult = method.Invoke(null, parameters);
             scroll = (Vector2)(parameters[2]);
             scrolls[field] = scroll;
-            return methodResult.ToString();
+            return methodResult?.ToString();
         }
 
         private IList DrawArr(ref bool fold, string name, IList arr, Type ele)
