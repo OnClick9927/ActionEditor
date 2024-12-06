@@ -14,7 +14,7 @@ namespace ActionEditor
         [SerializeField] [HideInInspector] private float blendIn = 0.25f;
         [SerializeField] [HideInInspector] private float blendOut = 0.25f;
 
-        [Name("播放音频")] [SelectObjectPath(typeof(AudioClip))]
+        [Name("播放音频")] [ObjectPath(typeof(AudioClip))]
         public string resPath = "";
 
         private AudioClip _audioClip;

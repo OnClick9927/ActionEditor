@@ -1,5 +1,4 @@
-﻿using ActionEditor;
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using UnityEditor;
 #endif
 using UnityEngine;
@@ -11,10 +10,17 @@ namespace ActionEditor
     [Attachable(typeof(EffectTrack))]
     public class PlayParticle : Clip
     {
-        [Name("特效对象")] [SelectObjectPath(typeof(GameObject))]
+        [Space(20)]
+        [HeaderAttribute("hhhh")]
+        [NotNull]
+        [Name("特效对象")]
+        [ObjectPath(typeof(GameObject))]
         public string resPath = "";
 
         [Name("是否变形")] public bool scale;
+
+        [TextArea(1,4)]
+        public string test;
 
         private GameObject _effectObject;
 
@@ -42,8 +48,6 @@ namespace ActionEditor
 
         public override bool IsValid => audioClip != null;
 
-        //public override string Info => IsValid ? audioClip.name : base.Info;
 
-        public AudioTrack Track => (AudioTrack)Parent;
     }
 }
