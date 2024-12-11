@@ -647,9 +647,9 @@ namespace ActionEditor
             {
                 menu.AddSeparator("");
                 menu.AddItem(new GUIContent(Lan.ins.MatchPreviousLoop), false,
-                    clip.TryMatchPreviousSubClipLoop);
-                menu.AddItem(new GUIContent(Lan.ins.MatchClipLength), false, clip.TryMatchSubClipLength);
-                menu.AddItem(new GUIContent(Lan.ins.MatchNextLoop), false, clip.TryMatchNexSubClipLoop);
+                    subContainable.TryMatchPreviousSubClipLoop);
+                menu.AddItem(new GUIContent(Lan.ins.MatchClipLength), false, subContainable.TryMatchSubClipLength);
+                menu.AddItem(new GUIContent(Lan.ins.MatchNextLoop), false, subContainable.TryMatchNexSubClipLoop);
             }
 
             menu.AddSeparator("/");
