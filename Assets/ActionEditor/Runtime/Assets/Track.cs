@@ -108,8 +108,12 @@ namespace ActionEditor
         {
             clips = this.Temps.ConvertAll(x =>
             {
-                return JsonUtility.FromJson(x.json, Asset.GetType(x.type)) as Clip;
+                var type = Asset.GetType(x.type);
+                if (type != null)
+                    return JsonUtility.FromJson(x.json, type) as Clip;
+                return null;
             });
+            clips.RemoveAll(x => x == null);
         }
         protected override void OnBeforeSerialize()
         {

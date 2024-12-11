@@ -176,8 +176,13 @@ namespace ActionEditor
         {
             groups = this.Temps.ConvertAll(x =>
             {
-                return JsonUtility.FromJson(x.json, Asset.GetType(x.type)) as Group;
+                var type = Asset.GetType(x.type);
+                if (type != null)
+                    return JsonUtility.FromJson(x.json, type) as Group;
+                return null;
             });
+            groups.RemoveAll(x => x == null);
+
             for (int i = 0; i < groups.Count; i++)
                 (groups[i] as IDirectable).AfterDeserialize();
             OnAfterDeserialize();
