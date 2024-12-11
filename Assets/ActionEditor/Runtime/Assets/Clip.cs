@@ -95,28 +95,6 @@ namespace ActionEditor
         public float GetClipWeight(float time, float blendInOut) => GetClipWeight(time, blendInOut, blendInOut);
 
         public float GetClipWeight(float time, float blendIn, float blendOut) => this.GetWeight(time, blendIn, blendOut);
-
-
-        public void TryMatchSubClipLength()
-        {
-            if (this is ISubClipContainable)
-                Length = ((ISubClipContainable)this).SubClipLength / ((ISubClipContainable)this).SubClipSpeed;
-        }
-
-        public void TryMatchPreviousSubClipLoop()
-        {
-            if (this is ISubClipContainable) Length = (this as ISubClipContainable).GetPreviousLoopLocalTime();
-        }
-
-        public void TryMatchNexSubClipLoop()
-        {
-            if (this is ISubClipContainable)
-            {
-                var targetLength = (this as ISubClipContainable).GetNextLoopLocalTime();
-                var nextClip = GetNextClip();
-                if (nextClip == null || StartTime + targetLength <= nextClip.StartTime) Length = targetLength;
-            }
-        }
     }
 
 

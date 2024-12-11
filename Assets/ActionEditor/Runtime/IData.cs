@@ -30,6 +30,7 @@ namespace ActionEditor
 
     public interface IClip : IDirectable
     {
+        float Length {  get; set; }
         float BlendIn { get; set; }
         float BlendOut { get; set; }
         bool CanCrossBlend { get; }
@@ -52,7 +53,7 @@ namespace ActionEditor
 
     }
 
-    public interface ISubClipContainable : IDirectable
+    public interface ISubClipContainable : IClip
     {
         float SubClipOffset { get; set; }
 

@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace ActionEditor
 {
@@ -334,5 +335,23 @@ namespace ActionEditor
         }
 
         #endregion
+
+
+        public static void TryMatchSubClipLength(this ISubClipContainable subClipContainable)
+        {
+            subClipContainable.Length = subClipContainable.SubClipLength / (subClipContainable).SubClipSpeed;
+        }
+
+        public static void TryMatchPreviousSubClipLoop(this ISubClipContainable subClipContainable)
+        {
+            subClipContainable.Length = subClipContainable.GetPreviousLoopLocalTime();
+        }
+
+        public static void TryMatchNexSubClipLoop(this ISubClipContainable subClipContainable)
+        {
+            var targetLength = subClipContainable.GetNextLoopLocalTime();
+            var nextClip = subClipContainable.GetNextSibling();
+            if (nextClip == null || subClipContainable.StartTime + targetLength <= nextClip.StartTime) subClipContainable.Length = targetLength;
+        }
     }
 }
