@@ -6,7 +6,7 @@
 
         //**********  Welcome *********
         public string Title => "Action Editor";
-        public string CreateAsset => "Create Asset";
+        public string CreateAsset => "New";
         public string SelectAsset => "Select Asset";
         public string Seeting => "Preferences";
 

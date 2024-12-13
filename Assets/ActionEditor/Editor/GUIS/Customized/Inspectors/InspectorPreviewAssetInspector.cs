@@ -72,7 +72,7 @@ namespace ActionEditor
             GUI.color = new Color(0, 0, 0, 0.2f);
             GUILayout.BeginHorizontal();
             GUI.color = Color.white;
-            var title = string.Format(Lan.ins.InsBaseInfo, Prefs.GetAssetTypeName(assetData.GetType()));
+            var title = EditorEX.GetAssetTypeName(assetData.GetType());
             GUILayout.Label(
                 $"<b><size=18>{(_optionsAssetFold ? "▼" : "▶")} {title}</size></b>", new GUIStyle(EditorStyles.label)
                 {
@@ -139,7 +139,7 @@ namespace ActionEditor
                 _currentDirectableEditor = newEditor;
             }
 
-            EditorTools.BoldSeparator();
+            EditorEX.BoldSeparator();
             GUILayout.Space(4);
             ShowPreliminaryInspector();
 
@@ -156,9 +156,7 @@ namespace ActionEditor
             var nameAtt = type.GetCustomAttributes(typeof(NameAttribute), false).FirstOrDefault() as NameAttribute;
             var name = nameAtt != null ? nameAtt.name : type.Name;
 
-            GUI.color = new Color(0, 0, 0, 0.2f);
             GUILayout.BeginHorizontal();
-            GUI.color = Color.white;
 
             GUILayout.Label($"<b><size=18>{name}</size></b>", new GUIStyle(EditorStyles.label)
             {

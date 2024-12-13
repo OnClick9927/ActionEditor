@@ -28,7 +28,7 @@ namespace ActionEditor
             });
             GUILayout.Space(2);
 
-            var lan = EditorTools.CleanPopup<string>("Language", Lan.Language,
+            var lan = EditorEX.CleanPopup<string>("Language", Lan.Language,
                 Lan.AllLanguages.Keys.ToList());
             if (lan != Lan.Language)
             {
@@ -40,12 +40,12 @@ namespace ActionEditor
                 (Prefs.TimeStepMode)EditorGUILayout.EnumPopup(Lan.ins.PreferencesTimeStepMode, Prefs.timeStepMode);
             if (Prefs.timeStepMode == Prefs.TimeStepMode.Seconds)
             {
-                Prefs.SnapInterval = EditorTools.CleanPopup<float>(Lan.ins.PreferencesSnapInterval, Prefs.SnapInterval,
+                Prefs.SnapInterval = EditorEX.CleanPopup<float>(Lan.ins.PreferencesSnapInterval, Prefs.SnapInterval,
                     Prefs.snapIntervals.ToList());
             }
             else
             {
-                Prefs.FrameRate = EditorTools.CleanPopup<int>(Lan.ins.PreferencesFrameRate, Prefs.FrameRate,
+                Prefs.FrameRate = EditorEX.CleanPopup<int>(Lan.ins.PreferencesFrameRate, Prefs.FrameRate,
                     Prefs.frameRates.ToList());
             }
 

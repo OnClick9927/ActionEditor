@@ -1,5 +1,4 @@
-﻿using ActionEditor.Events;
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
@@ -196,7 +195,7 @@ namespace ActionEditor
             else
             {
                 var color = new Color(0.48f, 0.48f, 0.48f);
-                Tools.DrawDashedLine(x, Position.y, Position.y + Position.height, color);
+                EditorEX.DrawDashedLine(x, Position.y, Position.y + Position.height, color);
             }
 
             var text = time.ToString("0.00");

@@ -1,28 +1,53 @@
-﻿using System;
-using ActionEditor.Events;
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
 {
+
+    public interface IDragEndHandler { void OnDragEnd(PointerEventData eventData); }
+    public interface IPointerClickHandler { void OnPointerClick(PointerEventData ev); }
+    public interface IPointerDownHandler { void OnPointerDown(PointerEventData ev); }
+    public interface IPointerDragHandler { void OnPointerDrag(PointerEventData eventData); }
+    public interface IDragBeginHandler { void OnDragBegin(PointerEventData eventData); }
+    public interface IPointerUpHandler { void OnPointerUp(PointerEventData ev); }
+    public class PointerEventData
+    {
+        public Event _event;
+
+
+        public Vector2 MousePosition => _event != null ? _event.mousePosition : Vector2.zero;
+
+        public PointerEventData()
+        {
+        }
+
+        public PointerEventData(Event ev)
+        {
+            SetEvent(ev);
+        }
+
+        public void SetEvent(Event ev) => _event = ev;
+        public void StopPropagation() => _event.Use();
+
+        public bool IsRight() => _event.button == 1;
+
+        public bool IsMiddle() => _event.button == 2;
+
+        public bool IsLeft() => _event.button == 0;
+    }
+
+
     public abstract class ViewBase
     {
-        protected EditorWindow Window;
+        protected ActionEditorWindow Window;
 
         public Rect Position;
 
-        private bool _visible;
 
-        public bool Visible
-        {
-            get => _visible;
-            set { _visible = value; }
-        }
 
-        public void Init(EditorWindow window)
+        public void Init(ActionEditorWindow window)
         {
             Window = window;
-            _visible = true;
             OnInit();
         }
 

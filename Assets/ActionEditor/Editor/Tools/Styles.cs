@@ -62,13 +62,6 @@ namespace ActionEditor
 
         public static Vector2 TimelineScrollPos;
 
-
-        public static float ScreenWidth => Screen.width / EditorGUIUtility.pixelsPerPoint;
-
-        public static float ScreenHeight => Screen.height / EditorGUIUtility.pixelsPerPoint;
-
-
-
     }
 }
 

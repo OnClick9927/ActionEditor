@@ -32,7 +32,7 @@ namespace ActionEditor
 
             //先获取有绑定关系的所有对象和面板对象映射
             Type type = typeof(HeaderBase);
-            var childs = EditorTools.GetTypeMetaDerivedFrom(type);
+            var childs = EditorEX.GetTypeMetaDerivedFrom(type);
             foreach (var t in childs)
             {
                 var arrs = t.type.GetCustomAttributes(typeof(CustomHeader), true);
@@ -97,7 +97,7 @@ namespace ActionEditor
 
             //先获取有绑定关系的所有对象和面板对象映射
             Type type = typeof(InspectorsBase);
-            var childs = EditorTools.GetTypeMetaDerivedFrom(type);
+            var childs = EditorEX.GetTypeMetaDerivedFrom(type);
             foreach (var t in childs)
             {
                 var arrs = t.type.GetCustomAttributes(typeof(CustomInspectors), true);

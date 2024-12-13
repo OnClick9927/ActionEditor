@@ -6,7 +6,7 @@
 
         //**********  Welcome *********
         public string Title => "行为时间轴编辑器";
-        public string CreateAsset => "创建时间轴";
+        public string CreateAsset => "新建";
         public string SelectAsset => "选择时间轴";
         public string Seeting => "编辑器配置";
 
