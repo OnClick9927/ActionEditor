@@ -43,7 +43,7 @@ namespace ActionEditor
                 return t;
             }
 
-            EditorTools.GetTypeLastSubclass(type, _customizedTypeDic);
+            EditorEX.GetTypeLastSubclass(type, _customizedTypeDic);
             if (_customizedTypeDic.TryGetValue(type, out t))
             {
                 return t;

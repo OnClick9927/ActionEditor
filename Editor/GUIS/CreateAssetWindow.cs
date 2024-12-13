@@ -23,15 +23,15 @@ namespace ActionEditor
             });
             GUILayout.Space(2);
 
-            if (Prefs.AssetNames.Count == 0)
+            if (EditorEX.AssetNames.Count == 0)
             {
                 EditorGUILayout.HelpBox(Lan.ins.NoAssetExtendType, MessageType.Error);
             }
             else
             {
                 if (string.IsNullOrEmpty(_selectType))
-                    _selectType = Prefs.AssetNames.FirstOrDefault();
-                _selectType = EditorTools.CleanPopup(Lan.ins.CrateAssetType, _selectType, Prefs.AssetNames);
+                    _selectType = EditorEX.AssetNames.FirstOrDefault();
+                _selectType = EditorEX.CleanPopup(Lan.ins.CrateAssetType, _selectType, EditorEX.AssetNames);
                 _createName = EditorGUILayout.TextField(new GUIContent(Lan.ins.CrateAssetName, Lan.ins.CreateAssetFileName),
                     _createName);
                 if (GUILayout.Button(new GUIContent(Lan.ins.CreateAssetConfirm)))
@@ -71,7 +71,7 @@ namespace ActionEditor
             else
             {
 
-                var t = Prefs.AssetTypes[_selectType];
+                var t = EditorEX.AssetTypes[_selectType];
                 var inst = Activator.CreateInstance(t) as Asset;
                 if (inst != null)
                 {

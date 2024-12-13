@@ -5,13 +5,7 @@ using UnityEngine;
 
 namespace ActionEditor
 {
-    public enum EditorPlaybackState
-    {
-        Stoped,
-        PlayingForwards,
-        PlayingBackwards
-    }
-    
+
     public class AssetPlayer
     {
         private static AssetPlayer _inst;
@@ -36,8 +30,7 @@ namespace ActionEditor
         /// </summary>
         private List<IDirectableTimePointer> unsortedStartTimePointers;
 
-        private float playTimeMin;
-        private float playTimeMax;
+    
         private float currentTime;
 
         public float previousTime { get; private set; }
@@ -141,7 +134,7 @@ namespace ActionEditor
             unsortedStartTimePointers = new List<IDirectableTimePointer>();
 
             Dictionary<Type, Type> typeDic = new Dictionary<Type, Type>();
-            var childs = EditorTools.GetTypeMetaDerivedFrom(typeof(PreviewBase));
+            var childs = EditorEX.GetTypeMetaDerivedFrom(typeof(PreviewBase));
             foreach (var t in childs)
             {
                 var arrs = t.type.GetCustomAttributes(typeof(CustomPreviewAttribute), true);

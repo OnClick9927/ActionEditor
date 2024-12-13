@@ -111,12 +111,6 @@ namespace ActionEditor
     {
         public readonly string iconPath;
         public readonly Type fromType;
-        public readonly Texture2D texture;
-
-        public TrackIconAttribute(Texture2D texture)
-        {
-            this.texture = texture;
-        }
 
         public TrackIconAttribute(string iconPath)
         {

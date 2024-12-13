@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using ActionEditor.Events;
 using UnityEditor;
 using UnityEngine;
 
@@ -10,7 +9,7 @@ namespace ActionEditor
     {
         public static IDirectable MoveToItem;
 
-        private Rect _leftRect;
+        private Rect _leftRect, rightRect;
 
         public IDirectable Data;
 
@@ -27,28 +26,26 @@ namespace ActionEditor
 
         public override void OnDraw()
         {
-            GUI.Box(Position, "", App.IsSelect(Data) ? EditorStyles.selectionRect : "box");
+            GUI.color = Color.white;
+            GUI.Box(Position, "", App.IsSelect(Data) ? EditorStyles.selectionRect : GUI.skin.box);
+
 
             _leftRect = new Rect(Position.x, Position.y, Styles.TimelineLeftWidth, Position.height);
             DrawLeft(_leftRect);
-            var rightRect = new Rect(Position.x + Styles.TimelineLeftTotalWidth, Position.y,
-                Position.width - Styles.TimelineLeftTotalWidth, Position.height);
+            rightRect = new Rect(Position.x + Styles.TimelineLeftTotalWidth, Position.y,
+               Position.width - Styles.TimelineLeftTotalWidth, Position.height);
 
             GUI.BeginClip(rightRect);
             _rightView.OnGUI(rightRect);
             GUI.EndClip();
-
             if (Data == MoveToItem)
             {
-                GUI.color = Color.white.WithAlpha(0.5f);
                 GUI.DrawTexture(new Rect(Position.x, Position.y + Position.height - 2, Styles.TimelineLeftWidth, 2),
                     Styles.WhiteTexture);
-                GUI.color = Color.white;
             }
             DrawLockedAndActive();
         }
 
-        #region Lock & Active
 
         private void DrawLockedAndActive()
         {
@@ -58,41 +55,31 @@ namespace ActionEditor
                 {
                     NameStyle = new GUIStyle(GUI.skin.label)
                     {
-                        fontStyle = FontStyle.Bold
+                        fontStyle = FontStyle.Bold,
+                        alignment = TextAnchor.MiddleCenter
                     };
                 }
-                GUI.color = Color.black.WithAlpha(0.2f);
+                GUI.color = Color.black.WithAlpha(!Data.IsActive ? 0.2f : 0.1f);
                 if (!Data.IsActive)
-                {
                     GUI.DrawTexture(Position, Styles.WhiteTexture);
-                }
+
                 GUI.DrawTextureWithTexCoords(Position, Styles.Stripes,
                 new Rect(0, 0, Position.width / 20, Position.height / 20));
                 GUI.color = Color.white;
 
                 string overlayLabel = null;
-                if (!Data.IsActive && Data.IsLocked)
-                {
-                    overlayLabel = $"{Lan.ins.Locked} & {Lan.ins.Disable}";
-                }
-                else
-                {
-                    if (!Data.IsActive)
-                    {
-                        overlayLabel = Lan.ins.Disable;
-                    }
 
-                    if (Data.IsLocked)
-                    {
-                        overlayLabel = Lan.ins.Locked;
-                    }
-                }
-                var size = NameStyle.CalcSize(new GUIContent(overlayLabel));
-                var showY = Position.y + (Position.height - Styles.ClipBottomRectHeight) * 0.5f - size.y * 0.5f;
-                var showX = Position.x + Styles.TimelineLeftTotalWidth + Styles.TimelineRightWidth * 0.5f -
-                            size.x * 0.5f;
+                if (!Data.IsActive)
+                    overlayLabel = Lan.ins.Disable;
+                if (Data.IsLocked)
+                    if (string.IsNullOrEmpty(overlayLabel))
+                        overlayLabel += Lan.ins.Locked;
+                    else
+                        overlayLabel += $" & {Lan.ins.Locked}";
 
-                var stampRect = new Rect(showX, showY, size.x, size.y);
+
+                var stampRect = new Rect(rightRect.center.x, rightRect.y, 200, rightRect.height);
+                stampRect.center = rightRect.center;
                 GUI.Box(stampRect, overlayLabel, NameStyle);
             }
 
@@ -101,87 +88,79 @@ namespace ActionEditor
 
         }
 
-        #endregion
-
-        #region Left
 
         private void DrawLeft(Rect rect)
         {
-            NBLayout.BeginHorizontal(rect, GUILayout.Height(Styles.LineHeight));
-
-            NBLayout.Space(4);
-            bool isTrack = false;
-            if (Data is Group group)
+            GUILayout.BeginArea(rect);
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(4);
             {
-                GUI.color = Color.white.WithAlpha(0.5f);
-
-                var collapseAllRect = NBLayout.GetHRect(16, 16);
-                var temp = !EditorGUI.Foldout(collapseAllRect, !Data.IsCollapsed, "");
-                if (temp != Data.IsCollapsed)
+                bool isTrack = false;
+                if (Data is Group group)
                 {
-                    group.IsCollapsed = !Data.IsCollapsed;
-                    App.Refresh();
-                    Event.current.Use();
+                    var collapseAllRect = EditorGUILayout.GetControlRect(GUILayout.Width(15), GUILayout.Height(16));
+                    var temp = !EditorGUI.Foldout(collapseAllRect, !Data.IsCollapsed, "");
+                    if (temp != Data.IsCollapsed)
+                    {
+                        group.IsCollapsed = !Data.IsCollapsed;
+                        App.Refresh();
+                        Event.current.Use();
+                    }
                 }
-            }
-            else if (Data is Track track)
-            {
-                isTrack = true;
-                NBLayout.Space(18);
-                GUI.color = track.GetColor();
-                GUI.DrawTexture(NBLayout.GetHRect(4, 20), Styles.WhiteTexture);
-                GUI.color = Color.white;
-
-                NBLayout.Space(2);
-
-                GUI.DrawTexture(NBLayout.GetHRect(20, 20), track.GetIcon()); // 绘制图标
-            }
-
-
-            GUI.Label(NBLayout.GetHRect(rect.width - 60, 16), Data.Name); // 绘制标题
-
-            GUI.color = Color.white.WithAlpha(0.5f);
-
-            NBLayout.BeginHorizontal(rect, true);
-            if (!isTrack)
-            {
-                if (GUI.Button(NBLayout.GetHRect(16, 16), "", EditorStyles.foldoutHeaderIcon))
+                else if (Data is Track track)
                 {
-                    OnGroupContextMenu();
-                    Event.current.Use();
-                }
-            }
+                    isTrack = true;
+                    GUILayout.Space(18);
+                    GUI.color = track.GetColor();
 
-            if (Data.IsLocked)
-            {
-                NBLayout.Space(2);
-                if (GUI.Button(NBLayout.GetHRect(16, 16), EditorGUIUtility.TrIconContent("InspectorLock"), GUIStyle.none))
+                    GUI.DrawTexture(EditorGUILayout.GetControlRect(GUILayout.Width(4), GUILayout.Height(20)), Styles.WhiteTexture);
+                    GUI.color = Color.white;
+
+                    GUILayout.Space(2);
+
+                    GUI.DrawTexture(EditorGUILayout.GetControlRect(GUILayout.Width(20), GUILayout.Height(20)), track.GetIcon()); // 绘制图标
+                }
+
+
+                GUILayout.Label(Data.Name,GUILayout.Height(20)); 
+
+
+                if (Data.IsLocked)
                 {
-                    Data.IsLocked = !Data.IsLocked;
-                    Event.current.Use();
+                    GUILayout.Space(2);
+                    if (GUI.Button(EditorGUILayout.GetControlRect(GUILayout.Width(16)), EditorGUIUtility.TrIconContent("InspectorLock"), GUIStyle.none))
+                    {
+                        Data.IsLocked = !Data.IsLocked;
+                        Event.current.Use();
+                    }
                 }
-            }
 
-            if (!Data.IsActive)
-            {
-                NBLayout.Space(2);
-                if (GUI.Button(NBLayout.GetHRect(16, 16), EditorGUIUtility.TrIconContent("animationvisibilitytoggleoff"), GUIStyle.none))
+                if (!Data.IsActive)
                 {
-                    Data.IsActive = !Data.IsActive;
-                    Event.current.Use();
+                    GUILayout.Space(2);
+                    if (GUI.Button(EditorGUILayout.GetControlRect(GUILayout.Width(16)), EditorGUIUtility.TrIconContent("animationvisibilitytoggleoff"), GUIStyle.none))
+                    {
+                        Data.IsActive = !Data.IsActive;
+                        Event.current.Use();
+                    }
                 }
+                if (!isTrack)
+                {
+                    if (GUI.Button(EditorGUILayout.GetControlRect(GUILayout.Width(16), GUILayout.Height(20)), "", EditorStyles.foldoutHeaderIcon))
+                    {
+                        OnGroupContextMenu();
+                        Event.current.Use();
+                    }
+                }
+
+
             }
 
-            NBLayout.EndHorizontal();
-            GUI.color = Color.white;
-
-
-            NBLayout.EndHorizontal();
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
         }
 
-        #endregion
 
-        #region Event
 
         public void OnPointerClick(PointerEventData ev)
         {
@@ -213,9 +192,6 @@ namespace ActionEditor
             }
         }
 
-        #endregion
-
-        #region ContextMenu
 
         public void OnGroupContextMenu()
         {
@@ -231,15 +207,11 @@ namespace ActionEditor
             }
         }
 
-
-
-
-
         private void OnGroupContextMenu(Group group)
         {
             var genericMenu = new GenericMenu();
 
-            var trackTypes = EditorTools.GetTypeMetaDerivedFrom(typeof(Track));
+            var trackTypes = EditorEX.GetTypeMetaDerivedFrom(typeof(Track));
             foreach (var metaInfo in trackTypes)
             {
                 var info = metaInfo;
@@ -359,10 +331,6 @@ namespace ActionEditor
             App.Refresh();
         }
 
-        protected void RenameContextMenuCmd()
-        {
-        }
-
         private void DeleteContextMenu()
         {
             if (Data is Group group)
@@ -388,9 +356,6 @@ namespace ActionEditor
             App.Refresh();
         }
 
-
-
-        #endregion
     }
 
     public class TimelineTrackItemRightView : ViewBase, IPointerClickHandler, IPointerDownHandler
@@ -414,30 +379,13 @@ namespace ActionEditor
 
         public override void OnDraw()
         {
-            //if (Data is Group group)
-            //{
-            //    //DrawClips(group);
-            //}
             if (Data is Track track)
             {
                 DrawClips(track);
             }
-            //GUI.enabled = true;
 
         }
 
-
-        //private void DrawClips(Group group)
-        //{
-        //    if (!group.IsCollapsed) return;
-        //    foreach (var track in group.Tracks)
-        //    {
-        //        foreach (var clip in track.Clips)
-        //        {
-        //            // ClipDrawer.Draw(Position, clip, false, typeof(SimpleClipDraw));
-        //        }
-        //    }
-        //}
         private void DrawClips(Track track)
         {
 
@@ -488,7 +436,6 @@ namespace ActionEditor
             }
         }
 
-        #region Event
 
         public void OnPointerClick(PointerEventData ev)
         {
@@ -533,17 +480,15 @@ namespace ActionEditor
             }
         }
 
-        #endregion
 
         private void ClickClip(Clip clip)
         {
             App.Select(clip);
         }
 
-        #region ContextMenu
         private void OnTrackRightContextMenu(Track track, PointerEventData ev)
         {
-            var attachableTypeInfos = new List<EditorTools.TypeMetaInfo>();
+            var attachableTypeInfos = new List<EditorEX.TypeMetaInfo>();
 
             var existing = track.Clips.FirstOrDefault();
 
@@ -551,7 +496,7 @@ namespace ActionEditor
             var time = track.Root.PosToTime(ev.MousePosition.x - Position.x, Position.width);
             var cursorTime = track.Root.SnapTime(time);
 
-            foreach (var clip in EditorTools.GetTypeMetaDerivedFrom(typeof(Clip)))
+            foreach (var clip in EditorEX.GetTypeMetaDerivedFrom(typeof(Clip)))
             {
                 if (clip.attachableTypes != null && !clip.attachableTypes.Contains(track.GetType()))
                 {
@@ -599,27 +544,6 @@ namespace ActionEditor
             if (clip.IsLocked) return;
 
             var menu = new GenericMenu();
-            // if (multiSelection != null && multiSelection.FindIndex(a => a.action == action) != -1)
-            // {
-            //     menu.AddItem(new GUIContent(Lan.ClipDelete), false, () =>
-            //     {
-            //         SafeDoAction(() =>
-            //         {
-            //             foreach (var act in multiSelection.Select(b => b.action).ToArray())
-            //             {
-            //                 if (act.Parent != null) act.Parent.DeleteAction(act);
-            //             }
-            //
-            //             InitClipWrappers();
-            //             multiSelection = null;
-            //         });
-            //     });
-            //
-            //     menu.ShowAsContext();
-            //     e.Use();
-            //     return;
-            // }
-
             if (App.CopyAsset == clip)
             {
                 menu.AddItem(new GUIContent(Lan.ins.ClearCopy), false, () =>
@@ -640,9 +564,6 @@ namespace ActionEditor
                     App.SetCopyAsset(clip, true);
                 });
             }
-
-
-
             if (clip is ISubClipContainable subContainable && subContainable.SubClipLength > 0)
             {
                 menu.AddSeparator("");
@@ -651,9 +572,6 @@ namespace ActionEditor
                 menu.AddItem(new GUIContent(Lan.ins.MatchClipLength), false, subContainable.TryMatchSubClipLength);
                 menu.AddItem(new GUIContent(Lan.ins.MatchNextLoop), false, subContainable.TryMatchNexSubClipLoop);
             }
-
-            menu.AddSeparator("/");
-
             menu.AddItem(new GUIContent(Lan.ins.ClipDelete), false, () =>
             {
                 if (clip.Parent is Track track) track.DeleteAction(clip);
@@ -663,6 +581,5 @@ namespace ActionEditor
             menu.ShowAsContext();
         }
 
-        #endregion
     }
 }

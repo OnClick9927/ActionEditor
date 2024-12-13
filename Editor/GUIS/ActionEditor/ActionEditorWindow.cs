@@ -1,4 +1,5 @@
-﻿using UnityEditor;
+﻿using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
@@ -19,11 +20,11 @@ namespace ActionEditor
         {
             Lan.Load();
             App.Window = this;
-  
+
 
             titleContent = new GUIContent(Lan.ins.Title);
             minSize = new Vector2(500, 250);
-            Prefs.InitializeAssetTypes();
+            EditorEX.InitializeAssetTypes();
             App.OnInitialize?.Invoke();
             _timelineView = this.CreateView<TimelineView>();
         }
@@ -35,11 +36,9 @@ namespace ActionEditor
         }
         private void Update()
         {
-            this.UpdateViews();
+            UpdateViews();
             if (App.NeedForceRefresh)
-            {
                 this.Repaint();
-            }
             App.OnUpdate();
         }
 
@@ -53,6 +52,27 @@ namespace ActionEditor
             {
                 this.Repaint();
             }
+        }
+
+
+
+        private List<ViewBase> _views =
+            new List<ViewBase>();
+
+
+        public T CreateView<T>() where T : ViewBase, new()
+        {
+            var cls = new T();
+            cls.Init(this);
+            if (!_views.Contains(cls))
+                _views.Add(cls);
+            return cls;
+        }
+
+        private void UpdateViews()
+        {
+            foreach (var view in _views)
+                view.Update();
         }
     }
 }

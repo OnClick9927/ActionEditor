@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using ActionEditor.Events;
 using UnityEngine;
 
 namespace ActionEditor

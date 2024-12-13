@@ -58,7 +58,7 @@ namespace ActionEditor
             EditorGUI.BeginChangeCheck();
 
             if (App.IsPlay)
-                GUI.backgroundColor = Tools.WithAlpha(Color.blue + Color.cyan, 0.8f);
+                GUI.backgroundColor = Color.blue + Color.cyan;
             var isPlaying = DrawToggle(App.IsPlay, EditorGUIUtility.TrIconContent("d_Animation.Play").image,
                 App.IsPlay ? Lan.ins.StopTips : Lan.ins.PlayTips);
             GUI.backgroundColor = Color.white;
@@ -78,7 +78,7 @@ namespace ActionEditor
             }
             EditorGUI.BeginChangeCheck();
             if (App.IsPause)
-                GUI.backgroundColor = Tools.WithAlpha(Color.blue + Color.cyan, 0.8f);
+                GUI.backgroundColor = Color.blue + Color.cyan;
             var isPause = DrawToggle(App.IsPause, EditorGUIUtility.TrIconContent("d_PauseButton").image, Lan.ins.PauseTips);
             GUI.backgroundColor = Color.white;
 

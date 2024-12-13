@@ -178,34 +178,6 @@ namespace ActionEditor
         }
 
 
-        public static readonly Dictionary<string, Type> AssetTypes = new Dictionary<string, Type>();
-        public static readonly List<string> AssetNames = new List<string>();
-
-        public static void InitializeAssetTypes()
-        {
-            AssetTypes.Clear();
-            AssetNames.Clear();
-            var types = Tools.GetImplementationsOf(typeof(Asset));
-            foreach (var t in types)
-            {
-                var typeName = t.GetCustomAttributes(typeof(NameAttribute), false).FirstOrDefault() is NameAttribute nameAtt ? nameAtt.name : t.Name;
-                AssetTypes[typeName] = t;
-                AssetNames.Add(typeName);
-            }
-        }
-
-        public static string GetAssetTypeName(Type type)
-        {
-            foreach (var key in AssetTypes.Keys)
-            {
-                var v = AssetTypes[key];
-                if (v == type)
-                {
-                    return key;
-                }
-            }
-
-            return string.Empty;
-        }
+     
     }
 }

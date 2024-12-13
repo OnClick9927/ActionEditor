@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using ActionEditor.Events;
 using UnityEditor;
 using UnityEngine;
 
@@ -104,12 +103,13 @@ namespace ActionEditor
             for (int i = 0; i < _itemViews.Count; i++)
             {
                 var y = Styles.LineHeight * i + i * Styles.Space;
-                var itemRect = new Rect(0, y, width, Styles.LineHeight);
+                var itemRect = new Rect(0, y , width, Styles.LineHeight);
                 var item = _itemViews[i];
                 item.OnGUI(itemRect);
                 GUILayout.Space(Styles.Space);
             }
             GUI.color = Color.white;
+            GUILayout.Space(_itemViews.Count * Styles.LineHeight);
             emptyRect = EditorGUILayout.GetControlRect(GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
             EditorGUILayout.EndScrollView();
             DrawAddGroupButton(emptyRect);
@@ -133,9 +133,9 @@ namespace ActionEditor
             var width = Styles.TimelineLeftWidth - 30;
             if (GUI.Button(new Rect(15, rect.y, width, 24), Lan.ins.GroupAdd))
             {
-                List<EditorTools.TypeMetaInfo> list = new List<EditorTools.TypeMetaInfo>();
+                List<EditorEX.TypeMetaInfo> list = new List<EditorEX.TypeMetaInfo>();
 
-                var ts = EditorTools.GetTypeMetaDerivedFrom(typeof(Group));
+                var ts = EditorEX.GetTypeMetaDerivedFrom(typeof(Group));
                 foreach (var typeMetaInfo in ts)
                 {
                     var info = typeMetaInfo;

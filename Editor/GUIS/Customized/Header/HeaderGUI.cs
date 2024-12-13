@@ -9,13 +9,12 @@ namespace ActionEditor
         public void OnGUI()
         {
             GUILayout.BeginHorizontal(EditorStyles.toolbar);
-
-            var rect = EditorGUILayout.GetControlRect(GUILayout.Width(80));
-            if (GUI.Button(rect, Lan.ins.CreateAsset, EditorStyles.toolbarButton))
-                CreateAssetWindow.Show(rect);
-            GUILayout.Space(10);
-
-
+            {
+                var rect = EditorGUILayout.GetControlRect(GUILayout.Width(40));
+                if (GUI.Button(rect, Lan.ins.CreateAsset, EditorStyles.toolbarButton))
+                    CreateAssetWindow.Show(rect);
+            }
+            GUILayout.Space(2);
             DrawNowAssetName();
 
 
@@ -60,7 +59,9 @@ namespace ActionEditor
 
         protected virtual void DrawToolbarRight()
         {
+
             //显示保持状态
+
 
             if (App.AssetData != null)
             {
@@ -76,12 +77,13 @@ namespace ActionEditor
 
             }
 
-
-            var rect = EditorGUILayout.GetControlRect(GUILayout.Width(25));
-            if (GUI.Button(rect, EditorGUIUtility.TrIconContent("Settings", Lan.ins.OpenPreferencesTips),
-                    EditorStyles.toolbarButton))
             {
-                PreferencesWindow.Show(rect);
+                var rect = EditorGUILayout.GetControlRect(GUILayout.Width(25));
+                if (GUI.Button(rect, EditorGUIUtility.TrIconContent("Settings", Lan.ins.OpenPreferencesTips),
+                        EditorStyles.toolbarButton))
+                {
+                    PreferencesWindow.Show(rect);
+                }
             }
         }
     }
