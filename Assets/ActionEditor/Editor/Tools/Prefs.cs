@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
-using System.Linq;
 
 
 namespace ActionEditor
@@ -27,7 +25,8 @@ namespace ActionEditor
             public int FrameRate = 30;
 
             public int AutoSaveSeconds = 10;
-            //public string SavePath = "Assets/";
+            public string SavePath = "Assets";
+            public string Lan_key = string.Empty;
             //public bool ScrollWheelZooms = true;
 
             public bool MagnetSnapping = true;
@@ -77,6 +76,18 @@ namespace ActionEditor
         //        }
         //    }
         //}
+        public static string Lan_key
+        {
+            get => data.Lan_key;
+            set
+            {
+                if (data.Lan_key != value)
+                {
+                    data.Lan_key = value;
+                    Save();
+                }
+            }
+        }
 
         public static int autoSaveSeconds
         {
@@ -91,18 +102,18 @@ namespace ActionEditor
             }
         }
 
-        //public static string savePath
-        //{
-        //    get => data.SavePath;
-        //    set
-        //    {
-        //        if (data.SavePath != value)
-        //        {
-        //            data.SavePath = value;
-        //            Save();
-        //        }
-        //    }
-        //}
+        public static string savePath
+        {
+            get => data.SavePath;
+            set
+            {
+                if (data.SavePath != value)
+                {
+                    data.SavePath = value;
+                    Save();
+                }
+            }
+        }
 
 
         public static bool MagnetSnapping
@@ -178,6 +189,6 @@ namespace ActionEditor
         }
 
 
-     
+
     }
 }

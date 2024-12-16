@@ -14,7 +14,9 @@
         public string CrateAssetType => "Create Type";
         public string CrateAssetName => "Asset Name";
         public string CreateAssetFileName => "Asset File Name";
-        public string CreateAssetConfirm => "Create";
+        public string CreateAssetConfirm => "Create by default Path";
+        public string CreateAssetConfirmBySelectPath => "Create by select Path";
+
         public string CreateAssetReset => "Reset";
         public string CreateAssetTipsNameNull => "Name cannot be empty!";
         public string CreateAssetTipsRepetitive => "Duplicate name!";

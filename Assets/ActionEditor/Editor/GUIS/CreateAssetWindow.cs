@@ -34,31 +34,51 @@ namespace ActionEditor
                 _selectType = EditorEX.CleanPopup(Lan.ins.CrateAssetType, _selectType, EditorEX.AssetNames);
                 _createName = EditorGUILayout.TextField(new GUIContent(Lan.ins.CrateAssetName, Lan.ins.CreateAssetFileName),
                     _createName);
+                GUILayout.BeginHorizontal();
                 if (GUILayout.Button(new GUIContent(Lan.ins.CreateAssetConfirm)))
                 {
-                    CreateConfirm();
+                    CreateConfirm(false);
                 }
+                if (GUILayout.Button(new GUIContent(Lan.ins.CreateAssetConfirmBySelectPath)))
+                {
+                    CreateConfirm(true);
+                }
+                GUILayout.EndHorizontal();
             }
 
 
         }
 
-        void CreateConfirm()
+        public static string SelectSavePath()
         {
-            //var path = $"{Prefs.savePath}/{_createName}.json";
-            var defaut_ = EditorPrefs.GetString(GetType().FullName, "Assets");
+            var defaut_ = Prefs.savePath;
+
+
             var path = EditorUtility.SaveFolderPanel(Lan.ins.SelectFolder, defaut_, "");
 
-            if (string.IsNullOrEmpty(path)) return;
-            EditorPrefs.SetString(GetType().FullName, path);
-
-
-
-
-            path = Path.Combine(path, $"{_createName}.{Asset.FileEx}").Replace("\\", "/");
+            if (string.IsNullOrEmpty(path)) return string.Empty;
 
             var index = path.IndexOf("Assets");
-            path = path.Remove(0, index);
+            path = path.Remove(0, index).Replace("\\", "/");
+
+            Prefs.savePath = path;
+            return path;
+        }
+        void CreateConfirm(bool select)
+        {
+            //var path = $"{Prefs.savePath}/{_createName}.json";
+
+            var path = Path.Combine(Prefs.savePath, $"{_createName}.{Asset.FileEx}");
+
+            if (select)
+            {
+                var s = SelectSavePath();
+                if (string.IsNullOrEmpty(s))
+                    return;
+                path = Path.Combine(s, $"{_createName}.{Asset.FileEx}");
+            }
+
+
 
             if (string.IsNullOrEmpty(_createName))
             {
