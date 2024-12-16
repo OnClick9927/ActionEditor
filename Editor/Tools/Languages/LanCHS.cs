@@ -15,7 +15,9 @@
         public string CrateAssetType => "创建类型";
         public string CrateAssetName => "时间轴名称";
         public string CreateAssetFileName => "时间轴的文件名称";
-        public string CreateAssetConfirm => "创建";
+        public string CreateAssetConfirm => "默认路径创建";
+        public string CreateAssetConfirmBySelectPath => "选择路径创建";
+
         public string CreateAssetReset => "重置";
         public string CreateAssetTipsNameNull => "名称不能为空";
         public string CreateAssetTipsRepetitive => "已存在同名时间轴";
@@ -109,5 +111,6 @@
         public string EmptyRect => "空白区域\n点击清空选择";
 
         public string NoAssetExtendType => "没有 继承于 Asset 的 类型";
+
     }
 }

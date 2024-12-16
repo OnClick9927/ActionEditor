@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using UnityEditor;
 
 namespace ActionEditor
 {
@@ -13,7 +12,7 @@ namespace ActionEditor
         public static ILanguages ins;
         internal static void Load()
         {
-            var lan = EditorPrefs.GetString("ActionEditor_x", string.Empty);
+            var lan = Prefs.Lan_key;
             var types = EditorEX.GetImplementationsOf(typeof(ILanguages));
             //ins = new LanEN();
             foreach (var t in types)
@@ -41,7 +40,8 @@ namespace ActionEditor
             {
                 _lan = key;
                 ins = type;
-                EditorPrefs.SetString("ActionEditor_x", key);
+                Prefs.Lan_key = key;
+                //EditorPrefs.SetString("ActionEditor_x", key);
             }
         }
 

@@ -8,19 +8,19 @@ namespace ActionEditor
     {
         //private static Rect _myRect;
         //private bool firstPass = true;
-
+        private static Vector2 win_size = new Vector2(400, 160);
         public static void Show(Rect rect)
         {
-            rect.x = rect.x - 300 + rect.width;
+            rect.x = rect.x - win_size.x + rect.width;
             //_myRect = rect;
             PopupWindow.Show(rect, new PreferencesWindow());
         }
 
-        public override Vector2 GetWindowSize() => new Vector2(300, 150);
+        public override Vector2 GetWindowSize() => win_size;
 
         public override void OnGUI(Rect rect)
         {
-    
+
 
             GUILayout.Label($"<size=22><b>{Lan.ins.PreferencesTitle}</b></size>", new GUIStyle(EditorStyles.label)
             {
@@ -58,11 +58,22 @@ namespace ActionEditor
 
 
 
+
+
+
             Prefs.autoSaveSeconds = EditorGUILayout.IntSlider(
                 new GUIContent(Lan.ins.PreferencesAutoSaveTime, Lan.ins.PreferencesAutoSaveTimeTips), Prefs.autoSaveSeconds, 5,
                 120);
-
-
+            GUILayout.BeginHorizontal();
+            GUI.enabled = false;
+            EditorGUILayout.TextField(
+            new GUIContent(Lan.ins.PreferencesSavePath, Lan.ins.PreferencesSavePathTips), Prefs.savePath);
+            GUI.enabled = true;
+            if (GUILayout.Button(Lan.ins.Select, GUILayout.Width(50)))
+            {
+                CreateAssetWindow.SelectSavePath();
+            }
+            GUILayout.EndHorizontal();
 
 
 

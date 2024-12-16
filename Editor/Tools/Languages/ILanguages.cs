@@ -14,6 +14,8 @@
         string CrateAssetName { get; }
         string CreateAssetFileName { get; }
         string CreateAssetConfirm { get; }
+        string CreateAssetConfirmBySelectPath { get; }
+
         // string CreateAssetReset { get; }
         string CreateAssetTipsNameNull { get; }
         string CreateAssetTipsRepetitive { get; }

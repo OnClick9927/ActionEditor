@@ -85,6 +85,7 @@ namespace ActionEditor
         {
             if (AssetData == null) return;
             var path = AssetDatabase.GetAssetPath(TextAsset);
+            if (string.IsNullOrEmpty(path)) return;
             var json = AssetData.Serialize();
 
             System.IO.File.WriteAllText(path, json);
