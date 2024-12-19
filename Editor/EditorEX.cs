@@ -52,7 +52,7 @@ namespace ActionEditor
                 return color;
 
             var colorAttribute = track.GetType().GetCustomAttribute<ColorAttribute>();
-            _colorDictionary[type] = colorAttribute != null ? colorAttribute.Color : Color.gray;
+            _colorDictionary[type] = colorAttribute != null ? colorAttribute.Color : Color.white;
             return _colorDictionary[type];
         }
 
