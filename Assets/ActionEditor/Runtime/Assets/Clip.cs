@@ -12,7 +12,6 @@ namespace ActionEditor
         [SerializeField][HideInInspector] protected float length = 1f;
 
 
-        [Name("片段长度")]
         public virtual float Length
         {
             get => length;
@@ -27,7 +26,6 @@ namespace ActionEditor
         public sealed override IEnumerable<IDirectable> Children => null;
 
 
-        [Name("开始时间")]
         public sealed override float StartTime
         {
             get => startTime;
@@ -40,7 +38,6 @@ namespace ActionEditor
             }
         }
 
-        [Name("结束时间")]
         public sealed override float EndTime
         {
             get => StartTime + Length;

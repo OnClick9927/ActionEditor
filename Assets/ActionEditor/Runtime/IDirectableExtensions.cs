@@ -1,24 +1,11 @@
 ﻿using System;
 using System.Linq;
 using System.Reflection;
-using UnityEngine;
-using UnityEngine.UIElements;
 
 namespace ActionEditor
 {
     public static class IDirectableExtensions
     {
-
-        public static T DeepCopy<T>(this T directable) where T : class, IDirectable
-        {
-            directable.BeforeSerialize();
-            var copy = JsonUtility.FromJson(JsonUtility.ToJson(directable), directable.GetType()) as T;
-            copy.AfterDeserialize();
-            return copy;
-        }
-
-
-        #region 长度 and 时间转换
 
         public static float GetLength(this IDirectable directable)
         {
@@ -48,10 +35,6 @@ namespace ActionEditor
         {
             return time - directable.StartTime;
         }
-
-        #endregion
-
-        #region 操作判定
 
         /// <summary>
         /// 切片能否混合
@@ -170,15 +153,11 @@ namespace ActionEditor
             return true;
         }
 
-        #endregion
+        
 
         #region 切片获取
 
-        // parent.Children.Select()
-        // public static T[] GetCoincideSibling<T>(this IDirectable directable) where T : IDirectable
-        // {
-        //     return GetCoincideSibling(directable, directable.Parent) as T[];
-        // }
+ 
 
         public static IDirectable[] GetCoincideSibling(this IDirectable directable)
         {
@@ -337,21 +316,6 @@ namespace ActionEditor
         #endregion
 
 
-        public static void TryMatchSubClipLength(this ISubClipContainable subClipContainable)
-        {
-            subClipContainable.Length = subClipContainable.SubClipLength / (subClipContainable).SubClipSpeed;
-        }
-
-        public static void TryMatchPreviousSubClipLoop(this ISubClipContainable subClipContainable)
-        {
-            subClipContainable.Length = subClipContainable.GetPreviousLoopLocalTime();
-        }
-
-        public static void TryMatchNexSubClipLoop(this ISubClipContainable subClipContainable)
-        {
-            var targetLength = subClipContainable.GetNextLoopLocalTime();
-            var nextClip = subClipContainable.GetNextSibling();
-            if (nextClip == null || subClipContainable.StartTime + targetLength <= nextClip.StartTime) subClipContainable.Length = targetLength;
-        }
+  
     }
 }

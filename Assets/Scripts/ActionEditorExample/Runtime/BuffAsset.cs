@@ -7,6 +7,7 @@ namespace ActionEditor
     [Serializable]
     public class BuffAsset : Asset
     {
-
+        [Name("测试")]
+        public string test;
     }
 }

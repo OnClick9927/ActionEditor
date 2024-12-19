@@ -22,7 +22,6 @@ namespace ActionEditor
         {
             Init();
         }
-        public List<IDirectable> directables { get; private set; }
 
         public float Length
         {
@@ -75,18 +74,14 @@ namespace ActionEditor
 
         public void Validate()
         {
-            directables = new List<IDirectable>();
             foreach (IDirectable group in groups.AsEnumerable().Reverse())
             {
-                directables.Add(group);
                 group.Validate(this, null);
                 foreach (var track in group.Children.Reverse())
                 {
-                    directables.Add(track);
                     track.Validate(this, group);
                     foreach (var clip in track.Children)
                     {
-                        directables.Add(clip);
                         clip.Validate(this, track);
                     }
                 }
@@ -161,8 +156,8 @@ namespace ActionEditor
         public static Asset Deserialize(Type type, string serializedState)
         {
             var sps = serializedState.Split('\n');
-            var typename = sps[0];
 #if UNITY_EDITOR
+            var typename = sps[0].Trim();
             type = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes())
                 .FirstOrDefault(x => x.FullName == typename);
 #endif
