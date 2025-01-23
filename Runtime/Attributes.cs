@@ -66,7 +66,7 @@ namespace ActionEditor
     /// <summary>
     /// 指定显示的颜色
     /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Field)]
     public class ColorAttribute : Attribute
     {
         public readonly Color Color;
@@ -74,11 +74,6 @@ namespace ActionEditor
         public ColorAttribute(float r, float g, float b, float a = 1)
         {
             this.Color = new Color(r, g, b, a);
-        }
-
-        public ColorAttribute(Color color)
-        {
-            this.Color = color;
         }
     }
 
@@ -123,4 +118,9 @@ namespace ActionEditor
         }
     }
 
+    [AttributeUsage(AttributeTargets.Field)]
+    public class ReadOnlyAttribute : Attribute
+    {
+
+    }
 }

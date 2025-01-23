@@ -110,10 +110,13 @@ namespace ActionEditor
 
         protected virtual void DrawBlend()
         {
-            var blendInPosX = (_clip.BlendIn / _clip.Length) * ClipRect.width;
-            var blendOutPosX = ((_clip.Length - _clip.BlendOut) / _clip.Length) * ClipRect.width;
+            var _clip_blend = _clip.AsBlendAble();
+            if (_clip_blend == null) return;
 
-            if (_clip.BlendIn > 0)
+            var blendInPosX = (_clip_blend.BlendIn / _clip.Length) * ClipRect.width;
+            var blendOutPosX = ((_clip.Length - _clip_blend.BlendOut) / _clip.Length) * ClipRect.width;
+
+            if (_clip_blend.BlendIn > 0)
             {
                 Handles.color = Color.black.WithAlpha(0.5f);
                 Handles.DrawAAPolyLine(2, new Vector2(ClipRect.x, ClipRect.y + ClipRect.height),
@@ -124,7 +127,7 @@ namespace ActionEditor
                     new Vector3(ClipRect.x + blendInPosX, ClipRect.y));
             }
 
-            if (_clip.BlendOut > 0 && _overlapOut == 0)
+            if (_clip_blend.BlendOut > 0 && _overlapOut == 0)
             {
                 Handles.color = Color.black.WithAlpha(0.5f);
                 Handles.DrawAAPolyLine(2, new Vector2(ClipRect.x + blendOutPosX, ClipRect.y),
@@ -187,10 +190,11 @@ namespace ActionEditor
             var overlap = PreviousClip != null ? Mathf.Max(PreviousClip.EndTime - _clip.StartTime, 0) : 0;
             if (overlap > 0)
             {
-                _clip.BlendIn = overlap;
+
+                _clip.SetBlendIn(overlap);
                 if (PreviousClip != null)
                 {
-                    PreviousClip.BlendOut = overlap;
+                    PreviousClip.SetBlendOut(overlap);
                 }
             }
         }

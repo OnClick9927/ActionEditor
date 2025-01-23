@@ -90,22 +90,22 @@ namespace ActionEditor
 
         public static float WidthToTime(this IDirector asset, float pos, float width) => pos / width * asset.ViewTime;
 
-        public static void TryMatchSubClipLength(this ISubClipContainable subClipContainable)
+        public static void TryMatchSubClipLength(this ILengthMatchAble subClipContainable)
         {
-            subClipContainable.Length = subClipContainable.SubClipLength / (subClipContainable).SubClipSpeed;
+            subClipContainable.Length = subClipContainable.MatchAbleLength;
         }
 
-        public static void TryMatchPreviousSubClipLoop(this ISubClipContainable subClipContainable)
-        {
-            subClipContainable.Length = subClipContainable.GetPreviousLoopLocalTime();
-        }
+        //public static void TryMatchPreviousSubClipLoop(this ISubClipContainable subClipContainable)
+        //{
+        //    subClipContainable.Length = subClipContainable.GetPreviousLoopLocalTime();
+        //}
 
-        public static void TryMatchNextSubClipLoop(this ISubClipContainable subClipContainable)
-        {
-            var targetLength = subClipContainable.GetNextLoopLocalTime();
-            var nextClip = subClipContainable.GetNextSibling();
-            if (nextClip == null || subClipContainable.StartTime + targetLength <= nextClip.StartTime) subClipContainable.Length = targetLength;
-        }
+        //public static void TryMatchNextSubClipLoop(this ISubClipContainable subClipContainable)
+        //{
+        //    var targetLength = subClipContainable.GetNextLoopLocalTime();
+        //    var nextClip = subClipContainable.GetNextSibling();
+        //    if (nextClip == null || subClipContainable.StartTime + targetLength <= nextClip.StartTime) subClipContainable.Length = targetLength;
+        //}
         public static T DeepCopy<T>(this T directable) where T : class, IDirectable
         {
             directable.BeforeSerialize();

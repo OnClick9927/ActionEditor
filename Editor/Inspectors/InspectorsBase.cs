@@ -218,6 +218,13 @@ namespace ActionEditor
             {
                 GUILayout.Space(space.height);
             }
+            ReadOnlyAttribute readOnly = attributes.FirstOrDefault(x => x is ReadOnlyAttribute) as ReadOnlyAttribute;
+            if(readOnly != null)
+                GUI.enabled = false;
+            ColorAttribute color = attributes.FirstOrDefault(x => x is ColorAttribute) as ColorAttribute;
+            if (color != null)
+                GUI.contentColor = color.Color;
+
 
             ValidCheckAttribute notNull = attributes.FirstOrDefault(x => x is ValidCheckAttribute) as ValidCheckAttribute;
             if (notNull != null)
@@ -290,6 +297,9 @@ namespace ActionEditor
                 newValue = DrawBase(value, name, fieldType);
             if (value != newValue)
                 field.SetValue(obj, newValue);
+
+            GUI.contentColor = UnityEngine.Color.white;
+            GUI.enabled = true;
 
         }
 

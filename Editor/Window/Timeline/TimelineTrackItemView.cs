@@ -550,13 +550,13 @@ namespace ActionEditor
                 if (clip.Parent is Track track) track.DeleteAction(clip);
                 App.Refresh();
             });
-            if (clip is ISubClipContainable subContainable && subContainable.SubClipLength > 0)
+            if (clip is ILengthMatchAble subContainable && subContainable.MatchAbleLength > 0)
             {
-                menu.AddSeparator("");
-                menu.AddItem(new GUIContent(Lan.ins.MatchPreviousLoop), false,
-                    subContainable.TryMatchPreviousSubClipLoop);
+                //menu.AddSeparator("");
+                //menu.AddItem(new GUIContent(Lan.ins.MatchPreviousLoop), false,
+                //    subContainable.TryMatchPreviousSubClipLoop);
                 menu.AddItem(new GUIContent(Lan.ins.MatchClipLength), false, subContainable.TryMatchSubClipLength);
-                menu.AddItem(new GUIContent(Lan.ins.MatchNextLoop), false, subContainable.TryMatchNextSubClipLoop);
+                //menu.AddItem(new GUIContent(Lan.ins.MatchNextLoop), false, subContainable.TryMatchNextSubClipLoop);
             }
 
             menu.ShowAsContext();
