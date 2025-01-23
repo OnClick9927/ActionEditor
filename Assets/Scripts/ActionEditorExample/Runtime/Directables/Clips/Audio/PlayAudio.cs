@@ -9,12 +9,13 @@ namespace ActionEditor
     [Name("声音片段")]
     [Color(1f, 0.63f, 0f)]
     [Attachable(typeof(AudioTrack))]
-    public class PlayAudio : Clip, ISubClipContainable
+    public class PlayAudio : Clip, ILengthMatchAble, IBlendAble
     {
-        [SerializeField] [HideInInspector] private float blendIn = 0.25f;
-        [SerializeField] [HideInInspector] private float blendOut = 0.25f;
+        [SerializeField][HideInInspector] private float blendIn = 0.25f;
+        [SerializeField][HideInInspector] private float blendOut = 0.25f;
 
-        [Name("播放音频")] [ObjectPath(typeof(AudioClip))]
+        [Name("播放音频")]
+        [ObjectPath(typeof(AudioClip))]
         public string resPath = "";
 
         private AudioClip _audioClip;
@@ -50,28 +51,23 @@ namespace ActionEditor
             set => length = value;
         }
 
-        public override float BlendIn
+        public float BlendIn
         {
             get => blendIn;
             set => blendIn = value;
         }
 
-        public override float BlendOut
+        public float BlendOut
         {
             get => blendOut;
             set => blendOut = value;
         }
 
 
-        float ISubClipContainable.SubClipOffset
-        {
-            get => clipOffset;
-            set => clipOffset = value;
-        }
+ 
 
-        float ISubClipContainable.SubClipLength => audioClip != null ? audioClip.length : 0;
+        float ILengthMatchAble.MatchAbleLength => audioClip != null ? audioClip.length : 0;
 
-        float ISubClipContainable.SubClipSpeed => 1;
 
         public override bool IsValid => audioClip != null;
 
@@ -79,13 +75,13 @@ namespace ActionEditor
 
         public AudioTrack Track => (AudioTrack)Parent;
 
-        public override bool CanCrossBlend => true;
+        public bool CanCrossBlend => true;
 
         // #if UNITY_EDITOR
-//         protected override void OnClipGUI(Rect rect)
-//         {
-//             DrawTools.DrawLoopedAudioTexture(rect, audioClip, Length, clipOffset);
-//         }
-// #endif
+        //         protected override void OnClipGUI(Rect rect)
+        //         {
+        //             DrawTools.DrawLoopedAudioTexture(rect, audioClip, Length, clipOffset);
+        //         }
+        // #endif
     }
 }

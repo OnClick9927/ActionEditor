@@ -23,9 +23,15 @@ namespace ActionEditor
 
         public DragBeginInfo(Clip clip)
         {
+            BlendIn = BlendOut = 0;
             StartTime = clip.StartTime;
-            BlendIn = clip.BlendIn;
-            BlendOut = clip.BlendOut;
+            var action_blend = clip.AsBlendAble();
+            if (action_blend != null)
+            {
+
+                BlendIn = action_blend.BlendIn;
+                BlendOut = action_blend.BlendOut;
+            }
             Parent = clip.Parent as Track;
         }
     }
@@ -126,8 +132,10 @@ namespace ActionEditor
                     if (_dragBeginStartTime.TryGetValue(clip, out var dragBeginInfo))
                     {
                         clip.StartTime = dragBeginInfo.StartTime;
-                        clip.BlendIn = dragBeginInfo.BlendIn;
-                        clip.BlendOut = dragBeginInfo.BlendOut;
+                        clip.SetBlendIn(dragBeginInfo.BlendIn);
+                        clip.SetBlendOut(dragBeginInfo.BlendOut);
+
+                      
                         if (clip.Parent != dragBeginInfo.Parent)
                         {
                             dragBeginInfo.Parent.AddClip(clip);
@@ -743,20 +751,20 @@ namespace ActionEditor
             }
         }
 
-        private static void GetCoincideCrossBlends(Clip clip, List<Clip> list)
-        {
-            var pick = clip.GetCoincideSibling();
-            if (pick != null && pick.Length > 0)
-            {
-                foreach (var cDirectable in pick)
-                {
-                    if (cDirectable is Clip c)
-                    {
-                        list.Add(c);
-                    }
-                }
-            }
-        }
+        //private static void GetCoincideCrossBlends(Clip clip, List<Clip> list)
+        //{
+        //    var pick = clip.GetCoincideSibling();
+        //    if (pick != null && pick.Length > 0)
+        //    {
+        //        foreach (var cDirectable in pick)
+        //        {
+        //            if (cDirectable is Clip c)
+        //            {
+        //                list.Add(c);
+        //            }
+        //        }
+        //    }
+        //}
 
         #endregion
     }

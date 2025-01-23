@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Linq;
-using System.Reflection;
+using UnityEngine;
 
 namespace ActionEditor
 {
@@ -39,62 +39,71 @@ namespace ActionEditor
         /// <summary>
         /// 切片能否混合
         /// </summary>
-        /// <param name="directable"></param>
-        /// <param name="other"></param>
+        /// <param name="clip"></param>
+        /// <param name="next"></param>
         /// <returns></returns>
-        public static bool CanCrossBlend(this IClip directable, IClip other)
+        public static bool CanCrossBlend(this IClip clip, IClip next)
         {
-            if (directable == null || other == null) return false;
-
-            if ((directable.CanCrossBlend || other.CanCrossBlend) && directable.GetType() == other.GetType())
+            if (clip == null || next == null) return false;
+            if ((clip.AsBlendAble() != null || next.AsBlendAble() != null) && clip.GetType() == next.GetType())
                 return true;
-
             return false;
         }
 
-        public static bool CanBlendIn(this Clip directable)
+        public static IBlendAble AsBlendAble(this IClip clip)
         {
-            var blendInProp = directable.GetType().GetProperty(nameof(Clip.BlendIn), BindingFlags.Instance | BindingFlags.Public);
-            return blendInProp != null && blendInProp.CanWrite && Math.Abs(directable.BlendIn - -1) > 0.0001f &&
-                   blendInProp.DeclaringType != typeof(Clip);
+            return clip as IBlendAble;
+        }
+        public static void SetBlendIn(this IClip clip,float value)
+        {
+            var blend = clip.AsBlendAble();
+            if (blend == null) return;
+            blend.BlendIn = value;
+        }
+        public static void SetBlendOut(this IClip clip, float value)
+        {
+            var blend = clip.AsBlendAble();
+            if (blend == null) return;
+            blend.BlendOut = value;
+        }
+        public static void ValidBlend(this IBlendAble clip)
+        {
+            clip.SetBlendOut(Mathf.Clamp(clip.BlendOut, 0, clip.Length - clip.BlendIn));
+            clip.SetBlendIn(Mathf.Clamp(clip.BlendIn, 0, clip.Length - clip.BlendOut));
         }
 
-        public static bool CanBlendOut(this Clip directable)
+        public static bool CanScale(this IClip clip)
         {
-            var blendOutProp =
-                directable.GetType().GetProperty(nameof(Clip.BlendOut), BindingFlags.Instance | BindingFlags.Public);
-            return blendOutProp != null && blendOutProp.CanWrite && Math.Abs(directable.BlendOut - -1) > 0.0001f &&
-                   blendOutProp.DeclaringType != typeof(Clip);
+            return clip is IResizeAble;
+            //var lengthProp = clip.GetType().GetProperty(nameof(IClip.Length), BindingFlags.Instance | BindingFlags.Public);
+            //return lengthProp != null && lengthProp.CanWrite
+            //   && lengthProp.DeclaringType != typeof(Clip);
+
         }
 
-        public static bool CanScale(this Clip directable)
-        {
-            var lengthProp = directable.GetType().GetProperty(nameof(Clip.Length), BindingFlags.Instance | BindingFlags.Public);
-            return lengthProp != null && lengthProp.CanWrite && lengthProp.DeclaringType != typeof(Clip);
-        }
 
         /// <summary>
         /// 当前开始时间是否可用
         /// </summary>
-        /// <param name="directable"></param>
+        /// <param name="clip"></param>
         /// <returns></returns>
-        public static bool CanValidTime(this IClip directable)
+        public static bool CanValidTime(this IClip clip)
         {
-            return CanValidTime(directable, directable.StartTime, directable.EndTime);
+            return CanValidTime(clip, clip.StartTime, clip.EndTime);
         }
 
         /// <summary>
         /// 当前开始时间是否可用
         /// </summary>
-        /// <param name="directable"></param>
+        /// <param name="clip"></param>
         /// <param name="startTime"></param>
         /// <param name="endTime"></param>
         /// <returns></returns>
-        public static bool CanValidTime(this IClip directable, float startTime, float endTime)
+        public static bool CanValidTime(this IClip clip, float startTime, float endTime)
         {
-            if (directable.Parent != null)
+            if (clip.Parent != null)
             {
-                return CanValidTime(directable, directable.Parent, startTime, endTime);
+                return CanValidTime(clip, clip.Parent, startTime, endTime);
             }
 
             return true;
@@ -103,15 +112,15 @@ namespace ActionEditor
         /// <summary>
         /// 当前开始时间是否可用
         /// </summary>
-        /// <param name="directable"></param>
+        /// <param name="clip"></param>
         /// <param name="parent"></param>
         /// <param name="startTime"></param>
         /// <param name="endTime"></param>
         /// <returns></returns>
-        public static bool CanValidTime(this IClip directable, IDirectable parent, float startTime, float endTime)
+        public static bool CanValidTime(this IClip clip, IDirectable parent, float startTime, float endTime)
         {
-            var prevDirectable = directable.GetPreviousSibling(parent);
-            var nextDirectable = directable.GetNextSibling(parent);
+            var prevDirectable = clip.GetPreviousSibling(parent);
+            var nextDirectable = clip.GetNextSibling(parent);
 
             var limitStartTime = 0f;
             var limitEndTime = float.MaxValue;
@@ -119,7 +128,7 @@ namespace ActionEditor
             if (prevDirectable != null)
             {
                 limitStartTime = prevDirectable.EndTime;
-                if (directable.CanCrossBlend(prevDirectable))
+                if (prevDirectable.CanCrossBlend(clip))
                 {
                     limitStartTime = prevDirectable.StartTime;
 
@@ -134,7 +143,7 @@ namespace ActionEditor
             if (nextDirectable != null)
             {
                 limitEndTime = nextDirectable.StartTime;
-                if (directable.CanCrossBlend(nextDirectable))
+                if (clip.CanCrossBlend(nextDirectable))
                 {
                     limitEndTime = nextDirectable.EndTime;
                 }
@@ -153,45 +162,26 @@ namespace ActionEditor
             return true;
         }
 
-        
+
 
         #region 切片获取
 
- 
-
-        public static IDirectable[] GetCoincideSibling(this IDirectable directable)
+        public static T GetPreviousSibling<T>(this IClip clip) where T : IClip
         {
-            return GetCoincideSibling(directable, directable.Parent);
+            return (T)GetPreviousSibling(clip, clip.Parent);
         }
 
-        public static IDirectable[] GetCoincideSibling(this IDirectable directable, IDirectable parent)
+        public static IClip GetPreviousSibling(this IClip clip)
         {
-            if (parent != null)
-            {
-                return parent.Children.Where(child => child != directable).Where(child =>
-                        child.StartTime == directable.StartTime && child.EndTime == directable.EndTime)
-                    .ToArray();
-            }
-
-            return Array.Empty<IDirectable>();
+            return GetPreviousSibling(clip, clip.Parent);
         }
 
-        public static T GetPreviousSibling<T>(this IClip directable) where T : IClip
-        {
-            return (T)GetPreviousSibling(directable, directable.Parent);
-        }
-
-        public static IClip GetPreviousSibling(this IClip directable)
-        {
-            return GetPreviousSibling(directable, directable.Parent);
-        }
-
-        public static IClip GetPreviousSibling(this IClip directable, IDirectable parent)
+        public static IClip GetPreviousSibling(this IClip clip, IDirectable parent)
         {
             if (parent != null)
             {
                 return parent.Children.LastOrDefault(d =>
-                    d != directable && (d.StartTime < directable.StartTime)) as IClip;
+                    d != clip && (d.StartTime < clip.StartTime)) as IClip;
             }
 
             return null;
@@ -200,36 +190,36 @@ namespace ActionEditor
         /// <summary>
         /// 返回父对象的下个同级
         /// </summary>
-        /// <param name="directable"></param>
+        /// <param name="clip"></param>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
-        public static T GetNextSibling<T>(this IClip directable) where T : IClip
+        public static T GetNextSibling<T>(this IClip clip) where T : IClip
         {
-            return (T)GetNextSibling(directable, directable.Parent);
+            return (T)GetNextSibling(clip, clip.Parent);
         }
 
         /// <summary>
         /// 返回父对象的下个同级
         /// </summary>
-        /// <param name="directable"></param>
+        /// <param name="clip"></param>
         /// <returns></returns>
-        public static IClip GetNextSibling(this IClip directable)
+        public static IClip GetNextSibling(this IClip clip)
         {
-            return GetNextSibling(directable, directable.Parent);
+            return GetNextSibling(clip, clip.Parent);
         }
 
         /// <summary>
         /// 返回指定轨道的下个子对象
         /// </summary>
-        /// <param name="directable"></param>
+        /// <param name="clip"></param>
         /// <param name="parent"></param>
         /// <returns></returns>
-        public static IClip GetNextSibling(this IClip directable, IDirectable parent)
+        public static IClip GetNextSibling(this IClip clip, IDirectable parent)
         {
             if (parent != null)
             {
                 return parent.Children.FirstOrDefault(d =>
-                    d != directable && d.StartTime > directable.StartTime) as IClip;
+                    d != clip && d.StartTime > clip.StartTime) as IClip;
             }
 
             return null;
@@ -242,29 +232,29 @@ namespace ActionEditor
         /// <summary>
         /// 根据其混合特性在指定当地时间的权重。
         /// </summary>
-        /// <param name="directable"></param>
+        /// <param name="clip"></param>
         /// <param name="time"></param>
         /// <returns></returns>
-        public static float GetWeight(this IClip directable, float time)
+        public static float GetWeight(this IBlendAble clip, float time)
         {
-            return GetWeight(directable, time, directable.BlendIn, directable.BlendOut);
+            return GetWeight(clip, time, clip.BlendIn, clip.BlendOut);
         }
 
         /// <summary>
         /// 基于所提供的覆盖混合入/出属性在指定本地时间的权重
         /// </summary>
-        /// <param name="directable"></param>
+        /// <param name="clip"></param>
         /// <param name="time"></param>
         /// <param name="blendInOut"></param>
         /// <returns></returns>
-        public static float GetWeight(this IDirectable directable, float time, float blendInOut)
+        public static float GetWeight(this IClip clip, float time, float blendInOut)
         {
-            return GetWeight(directable, time, blendInOut, blendInOut);
+            return GetWeight(clip, time, blendInOut, blendInOut);
         }
 
-        public static float GetWeight(this IDirectable directable, float time, float blendIn, float blendOut)
+        public static float GetWeight(this IClip clip, float time, float blendIn, float blendOut)
         {
-            var length = GetLength(directable);
+            var length = GetLength(clip);
             if (time <= 0) return blendIn <= 0 ? 1 : 0;
 
             if (time >= length) return blendOut <= 0 ? 1 : 0;
@@ -285,37 +275,37 @@ namespace ActionEditor
         /// </summary>
         /// <param name="clip"></param>
         /// <returns></returns>
-        public static float GetPreviousLoopLocalTime(this ISubClipContainable clip)
-        {
-            var clipLength = clip.GetLength();
-            var loopLength = clip.SubClipLength / clip.SubClipSpeed;
-            if (clipLength > loopLength)
-            {
-                var mod = (clipLength - clip.SubClipOffset) % loopLength;
-                var aproxZero = Math.Abs(mod) < 0.01f;
-                return clipLength - (aproxZero ? loopLength : mod);
-            }
+        //public static float GetPreviousLoopLocalTime(this ISubClipContainable clip)
+        //{
+        //    var clipLength = clip.GetLength();
+        //    var loopLength = clip.SubClipLength / clip.SubClipSpeed;
+        //    if (clipLength > loopLength)
+        //    {
+        //        var mod = (clipLength - clip.SubClipOffset) % loopLength;
+        //        var aproxZero = Math.Abs(mod) < 0.01f;
+        //        return clipLength - (aproxZero ? loopLength : mod);
+        //    }
 
-            return clipLength;
-        }
+        //    return clipLength;
+        //}
 
         /// <summary>
         /// 返回剪辑的下一个循环长度
         /// </summary>
         /// <param name="clip"></param>
         /// <returns></returns>
-        public static float GetNextLoopLocalTime(this ISubClipContainable clip)
-        {
-            var clipLength = clip.GetLength();
-            var loopLength = clip.SubClipLength / clip.SubClipSpeed;
-            var mod = (clipLength - clip.SubClipOffset) % loopLength;
-            var aproxZero = Math.Abs(mod) < 0.01f || Math.Abs(loopLength - mod) < 0.01f;
-            return clipLength + (aproxZero ? loopLength : loopLength - mod);
-        }
+        //public static float GetNextLoopLocalTime(this ISubClipContainable clip)
+        //{
+        //    var clipLength = clip.GetLength();
+        //    var loopLength = clip.SubClipLength / clip.SubClipSpeed;
+        //    var mod = (clipLength - clip.SubClipOffset) % loopLength;
+        //    var aproxZero = Math.Abs(mod) < 0.01f || Math.Abs(loopLength - mod) < 0.01f;
+        //    return clipLength + (aproxZero ? loopLength : loopLength - mod);
+        //}
 
         #endregion
 
 
-  
+
     }
 }

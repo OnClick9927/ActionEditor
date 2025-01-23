@@ -8,7 +8,7 @@ namespace ActionEditor
     [Name("旋转角度")]
     [Color(70f / 255f, 1, 140f / 255f)]
     [Attachable(typeof(ActionTrack))]
-    public class RotateTo : Clip
+    public class RotateTo : Clip, IResizeAble
     {
 
         [Name("运动曲线")] public EaseType interpolation = EaseType.QuadInOut;

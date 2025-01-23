@@ -29,7 +29,7 @@ namespace ActionEditor
                 base.OnInspectorGUI();
             }
         }
-        
+
         void ShowErrors()
         {
             if (action.IsValid) return;
@@ -37,12 +37,12 @@ namespace ActionEditor
                 MessageType.Error);
             GUILayout.Space(5);
         }
-        
+
         void ShowInOutControls()
         {
             var previousClip = action.GetPreviousSibling();
             var previousTime = previousClip != null ? previousClip.EndTime : action.Parent.StartTime;
-            if (action.CanCrossBlend(previousClip))
+            if (previousClip.CanCrossBlend(action))
             {
                 previousTime -= Mathf.Min(action.Length / 2, (previousClip.EndTime - previousClip.StartTime) / 2);
             }
@@ -144,7 +144,7 @@ namespace ActionEditor
 
                 _in = Mathf.Clamp(_in, previousTime, _out);
                 _out = Mathf.Clamp(_out, _in, nextClip != null ? nextTime : float.PositiveInfinity);
-                
+
                 action.StartTime = _in;
                 action.EndTime = _out;
                 App.Repaint();
@@ -182,29 +182,30 @@ namespace ActionEditor
         /// </summary>
         void ShowBlendingControls()
         {
-            var canBlendIn = action.CanBlendIn();
-            var canBlendOut = action.CanBlendOut();
-            if ((canBlendIn || canBlendOut) && action.Length > 0)
+            var blend = action.AsBlendAble();
+            //var canBlendIn = action.CanBlend() != null;
+            //var canBlendOut = action.CanBlend() != null;
+            if (blend != null && action.Length > 0)
             {
                 GUILayout.BeginVertical("box");
                 GUILayout.BeginHorizontal();
-                if (canBlendIn)
                 {
                     GUILayout.BeginVertical();
                     GUILayout.Label("Blend In");
-                    var max = action.Length - action.BlendOut;
-                    action.BlendIn = EditorGUILayout.Slider(action.BlendIn, 0, max);
-                    action.BlendIn = Mathf.Clamp(action.BlendIn, 0, max);
+                    //var action_blend = action.AsBlendAble();
+                    var max = action.Length - blend.BlendOut;
+                    var value = EditorGUILayout.Slider(blend.BlendIn, 0, max);
+                    blend.SetBlendIn(Mathf.Clamp(value, 0, max));
                     GUILayout.EndVertical();
                 }
 
-                if (canBlendOut)
                 {
                     GUILayout.BeginVertical();
                     GUILayout.Label("Blend Out");
-                    var max = action.Length - action.BlendIn;
-                    action.BlendOut = EditorGUILayout.Slider(action.BlendOut, 0, max);
-                    action.BlendOut = Mathf.Clamp(action.BlendOut, 0, max);
+
+                    var max = action.Length - blend.BlendIn;
+                    var value = EditorGUILayout.Slider(blend.BlendOut, 0, max);
+                    blend.SetBlendOut(Mathf.Clamp(value, 0, max));
                     GUILayout.EndVertical();
                 }
 

@@ -31,10 +31,19 @@ namespace ActionEditor
     public interface IClip : IDirectable
     {
         float Length {  get; set; }
+ 
+    }
+    public interface IResizeAble : IClip { }
+    public interface IBlendAble : IClip
+    {
         float BlendIn { get; set; }
         float BlendOut { get; set; }
-        bool CanCrossBlend { get; }
     }
+    public interface ILengthMatchAble : IClip
+    {
+        float MatchAbleLength { get; }
+    }
+
     public interface IDirector : IData
     {
         float Length { get; }
@@ -53,13 +62,6 @@ namespace ActionEditor
 
     }
 
-    public interface ISubClipContainable : IClip
-    {
-        float SubClipOffset { get; set; }
 
-        float SubClipSpeed { get; }
-
-        float SubClipLength { get; }
-    }
 
 }

@@ -49,11 +49,13 @@ namespace ActionEditor
             App.OnGUIEnd();
             App.KeyBoardEvent(Event.current);
             if (App.CopyAsset != null)
-            {
                 this.Repaint();
-            }
         }
-
+        private void OnInspectorUpdate()
+        {
+            if (App.SelectCount > 0)
+                this.Repaint();
+        }
 
 
         private List<ViewBase> _views =

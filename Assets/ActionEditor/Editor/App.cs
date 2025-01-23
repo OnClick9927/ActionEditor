@@ -227,7 +227,8 @@ namespace ActionEditor
                     }
                 }
             }
-
+            if (objs != null && objs.Length > 0 && Selection.activeObject != CurrentInspectorPreviewAsset)
+                Selection.activeObject = CurrentInspectorPreviewAsset;
             if (!change) return;
             _selectList.Clear();
             if (objs != null)
@@ -237,9 +238,8 @@ namespace ActionEditor
                     _selectList.Add(obj);
                 }
 
-                Selection.activeObject = CurrentInspectorPreviewAsset;
-                EditorUtility.SetDirty(CurrentInspectorPreviewAsset);
-
+                //Selection.activeObject = CurrentInspectorPreviewAsset;
+                //EditorUtility.SetDirty(CurrentInspectorPreviewAsset);
                 // DirectorUtility.selectedObject = FistSelect;
             }
 

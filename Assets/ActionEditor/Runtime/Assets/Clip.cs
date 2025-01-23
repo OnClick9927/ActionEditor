@@ -46,8 +46,8 @@ namespace ActionEditor
                 if (Math.Abs(StartTime + Length - value) > 0.0001f)
                 {
                     Length = Mathf.Max(value - StartTime, 0);
-                    BlendOut = Mathf.Clamp(BlendOut, 0, Length - BlendIn);
-                    BlendIn = Mathf.Clamp(BlendIn, 0, Length - BlendOut);
+                    this.AsBlendAble()?.ValidBlend();
+
                 }
             }
         }
@@ -70,28 +70,23 @@ namespace ActionEditor
             set { }
         }
 
-        public virtual float BlendIn
-        {
-            get => 0;
-            set { }
-        }
+        //public virtual float BlendIn
+        //{
+        //    get => 0;
+        //    set { }
+        //}
 
-        public virtual float BlendOut
-        {
-            get => 0;
-            set { }
-        }
-    
-        public virtual bool CanCrossBlend => false;
+        //public virtual float BlendOut
+        //{
+        //    get => 0;
+        //    set { }
+        //}
+
+        //public virtual bool CanCrossBlend => false;
 
 
         public Clip GetNextClip() => this.GetNextSibling<Clip>();
 
-        public float GetClipWeight(float time) => GetClipWeight(time, BlendIn, BlendOut);
-
-        public float GetClipWeight(float time, float blendInOut) => GetClipWeight(time, blendInOut, blendInOut);
-
-        public float GetClipWeight(float time, float blendIn, float blendOut) => this.GetWeight(time, blendIn, blendOut);
     }
 
 
