@@ -7,7 +7,7 @@ using static ActionEditor.Group;
 namespace ActionEditor
 {
     [Serializable]
-    public abstract class Asset : IData
+    public abstract class Asset : IAction
     {
         public const string FileEx = "action.bytes";
 
@@ -39,9 +39,9 @@ namespace ActionEditor
             set => viewTimeMax = Mathf.Max(value, ViewTimeMin + 0.25f, 0);
         }
 
+        public float StartTime => 0;
 
-
-
+        public float EndTime => Length;
 
         public void DeleteGroup(Group group)
         {

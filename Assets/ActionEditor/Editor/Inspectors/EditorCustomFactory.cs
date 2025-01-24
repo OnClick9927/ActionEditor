@@ -67,7 +67,7 @@ namespace ActionEditor
 
         private static readonly Dictionary<Type, Type> _inspectorsDic = new Dictionary<Type, Type>();
 
-        public static InspectorsBase GetInspector(IData directable)
+        public static InspectorsBase GetInspector(IAction directable)
         {
             InitInspectorDic();
 

@@ -13,8 +13,8 @@ namespace ActionEditor
 
         //private static bool _willResample;
 
-        private static Dictionary<IData, InspectorsBase> directableEditors =
-            new Dictionary<IData, InspectorsBase>();
+        private static Dictionary<IAction, InspectorsBase> directableEditors =
+            new Dictionary<IAction, InspectorsBase>();
 
         private static InspectorsBase _currentDirectableEditor;
         private static InspectorsBase _currentAssetEditor;

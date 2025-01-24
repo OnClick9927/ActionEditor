@@ -2,9 +2,13 @@
 
 namespace ActionEditor
 {
-    public interface IData { }
+    public interface IAction {
+        float Length { get; set; }
+        float StartTime { get; }
+        float EndTime { get; }
+    }
 
-    public interface IDirectable : IData
+    public interface IDirectable : IAction
     {
         Asset Root { get; }
         IDirectable Parent { get; }
@@ -16,9 +20,7 @@ namespace ActionEditor
         bool IsCollapsed { get; set; }
         bool IsLocked { get; set; }
 
-        float StartTime { get; }
-        float EndTime { get; }
-        float Length { get; set; }
+  
 
         void Validate(Asset root, IDirectable parent);
         void AfterDeserialize();
@@ -26,10 +28,7 @@ namespace ActionEditor
         void BeforeSerialize();
     }
 
-    public interface IClip : IDirectable
-    {
- 
-    }
+    public interface IClip : IDirectable { }
     public interface IResizeAble : IClip { }
     public interface IBlendAble : IClip
     {
