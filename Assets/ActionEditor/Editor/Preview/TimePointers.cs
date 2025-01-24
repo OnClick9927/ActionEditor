@@ -88,7 +88,7 @@ namespace ActionEditor
                 if (!triggered)
                 {
                     triggered = true;
-                    target.Update(target.directable.GetLength(), target.directable.ToLocalTime(previousTime));
+                    target.Update(target.directable.Length, target.directable.ToLocalTime(previousTime));
                     target.Exit();
                 }
             }
@@ -110,7 +110,7 @@ namespace ActionEditor
                 {
                     triggered = false;
                     target.ReverseEnter();
-                    target.Update(target.directable.ToLocalTime(currentTime), target.directable.GetLength());
+                    target.Update(target.directable.ToLocalTime(currentTime), target.directable.Length);
                 }
             }
         }

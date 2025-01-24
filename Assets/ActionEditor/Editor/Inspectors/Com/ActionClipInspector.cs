@@ -187,29 +187,20 @@ namespace ActionEditor
             //var canBlendOut = action.CanBlend() != null;
             if (blend != null && action.Length > 0)
             {
-                GUILayout.BeginVertical("box");
-                GUILayout.BeginHorizontal();
-                {
-                    GUILayout.BeginVertical();
-                    GUILayout.Label("Blend In");
-                    //var action_blend = action.AsBlendAble();
-                    var max = action.Length - blend.BlendOut;
-                    var value = EditorGUILayout.Slider(blend.BlendIn, 0, max);
-                    blend.SetBlendIn(Mathf.Clamp(value, 0, max));
-                    GUILayout.EndVertical();
-                }
+                GUILayout.BeginVertical(EditorStyles.helpBox);
 
-                {
-                    GUILayout.BeginVertical();
-                    GUILayout.Label("Blend Out");
+                var left = blend.BlendIn;
+                var right = blend.Length - blend.BlendOut;
+                GUILayout.Label("Blend", EditorStyles.boldLabel);
+                GUI.enabled = false;
+                EditorGUILayout.MinMaxSlider(ref left, ref right, 0, blend.Length);
+                blend.SetBlendIn(left);
+                blend.SetBlendOut(blend.Length - right);
+                EditorGUILayout.FloatField(nameof(IBlendAble.BlendIn), blend.BlendIn);
+                EditorGUILayout.FloatField(nameof(IBlendAble.BlendOut), blend.BlendOut);
+                GUI.enabled = true;
 
-                    var max = action.Length - blend.BlendIn;
-                    var value = EditorGUILayout.Slider(blend.BlendOut, 0, max);
-                    blend.SetBlendOut(Mathf.Clamp(value, 0, max));
-                    GUILayout.EndVertical();
-                }
-
-                GUILayout.EndHorizontal();
+       
                 GUILayout.EndVertical();
             }
         }

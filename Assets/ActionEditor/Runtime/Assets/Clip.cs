@@ -12,7 +12,7 @@ namespace ActionEditor
         [SerializeField][HideInInspector] protected float length = 1f;
 
 
-        public virtual float Length
+        public override float Length
         {
             get => length;
             set

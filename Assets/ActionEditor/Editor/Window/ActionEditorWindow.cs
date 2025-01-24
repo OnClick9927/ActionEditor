@@ -42,12 +42,16 @@ namespace ActionEditor
             App.OnUpdate();
         }
 
+        private Event eve;
+        public PointerEventData _eventData = new PointerEventData();
 
         void OnGUI()
         {
+            eve = Event.current;
+            _eventData.SetEvent(eve);
             _timelineView.OnGUI(this.position);
             App.OnGUIEnd();
-            App.KeyBoardEvent(Event.current);
+            App.KeyBoardEvent(eve);
             if (App.CopyAsset != null)
                 this.Repaint();
         }

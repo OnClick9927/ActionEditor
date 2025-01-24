@@ -56,7 +56,7 @@ namespace ActionEditor
                 { 0.01f, 0.1f, 0.5f, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000, 250000, 500000 };
             for (var i = 0; i < modulos.Length; i++)
             {
-                var count = asset.ViewTime / modulos[i];
+                var count = asset.ViewTime() / modulos[i];
                 if (width / count > 50)
                 {
                     timeInfoInterval = modulos[i];
@@ -70,7 +70,7 @@ namespace ActionEditor
             var timeInfoEnd = Mathf.CeilToInt(asset.ViewTimeMax / timeInfoInterval) * timeInfoInterval;
 
             //时间步长间隔 time step interval
-            if (width / (asset.ViewTime / timeStep) > 6)
+            if (width / (asset.ViewTime() / timeStep) > 6)
             {
                 for (var i = timeInfoStart; i <= timeInfoEnd; i += timeStep)
                 {

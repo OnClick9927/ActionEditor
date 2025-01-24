@@ -33,6 +33,7 @@ namespace ActionEditor
             get => Parent != null && Parent.IsCollapsed;
             set { }
         }
+        public sealed override float Length { get => EndTime - StartTime; set { } }
 
 
         public sealed override float StartTime
@@ -59,7 +60,7 @@ namespace ActionEditor
 
             var newAction = Activator.CreateInstance(type) as Clip;
 
-            Debug.Log($"type={type} newAction={newAction}");
+            //Debug.Log($"type={type} newAction={newAction}");
 
             if (newAction != null)
             {

@@ -35,7 +35,7 @@ namespace ActionEditorExample
             {
                 if (particles != null)
                 {
-                    em.enabled = time < clip.GetLength();
+                    em.enabled = time < clip.Length;
                     particles.Simulate(time);
                 }
             }

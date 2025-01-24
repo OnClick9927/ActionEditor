@@ -7,10 +7,10 @@ namespace ActionEditor
     public static class IDirectableExtensions
     {
 
-        public static float GetLength(this IDirectable directable)
-        {
-            return directable.EndTime - directable.StartTime;
-        }
+        //public static float GetLength(this IDirectable directable)
+        //{
+        //    return directable.EndTime - directable.StartTime;
+        //}
 
         private static float Clamp(float value, float min, float max)
         {
@@ -27,7 +27,7 @@ namespace ActionEditor
         }
         public static float ToLocalTime(this IDirectable directable, float time)
         {
-            return Clamp(time - directable.StartTime, 0, directable.GetLength());
+            return Clamp(time - directable.StartTime, 0, directable.Length);
         }
 
 
@@ -54,7 +54,7 @@ namespace ActionEditor
         {
             return clip as IBlendAble;
         }
-        public static void SetBlendIn(this IClip clip,float value)
+        public static void SetBlendIn(this IClip clip, float value)
         {
             var blend = clip.AsBlendAble();
             if (blend == null) return;
@@ -254,15 +254,12 @@ namespace ActionEditor
 
         public static float GetWeight(this IClip clip, float time, float blendIn, float blendOut)
         {
-            var length = GetLength(clip);
-            if (time <= 0) return blendIn <= 0 ? 1 : 0;
-
-            if (time >= length) return blendOut <= 0 ? 1 : 0;
-
+            var length = clip.Length;
+            time = clip.ToLocalTime(time);
+            if (time < 0) return 0;
+            if (time > length) return 0;
             if (time < blendIn) return time / blendIn;
-
             if (time > length - blendOut) return (length - time) / blendOut;
-
             return 1;
         }
 

@@ -58,7 +58,7 @@ namespace ActionEditor
         public float BlendOut
         {
             get => blendOut;
-            set { }
+            set { blendOut = value; }
 
         }
         public bool CanCrossBlend => true;

@@ -2,14 +2,11 @@
 
 namespace ActionEditor
 {
-    public interface IData
-    {
-
-    }
+    public interface IData { }
 
     public interface IDirectable : IData
     {
-        IDirector Root { get; }
+        Asset Root { get; }
         IDirectable Parent { get; }
         IEnumerable<IDirectable> Children { get; }
 
@@ -21,8 +18,9 @@ namespace ActionEditor
 
         float StartTime { get; }
         float EndTime { get; }
+        float Length { get; set; }
 
-        void Validate(IDirector root, IDirectable parent);
+        void Validate(Asset root, IDirectable parent);
         void AfterDeserialize();
 
         void BeforeSerialize();
@@ -30,7 +28,6 @@ namespace ActionEditor
 
     public interface IClip : IDirectable
     {
-        float Length {  get; set; }
  
     }
     public interface IResizeAble : IClip { }
@@ -43,25 +40,4 @@ namespace ActionEditor
     {
         float MatchAbleLength { get; }
     }
-
-    public interface IDirector : IData
-    {
-        float Length { get; }
-
-        float ViewTimeMin { get; set; }
-        float ViewTimeMax { get; set; }
-
-        float ViewTime { get; }
-
-
-        void DeleteGroup(Group group);
-
-        void UpdateMaxTime();
-        void Validate();
-
-
-    }
-
-
-
 }

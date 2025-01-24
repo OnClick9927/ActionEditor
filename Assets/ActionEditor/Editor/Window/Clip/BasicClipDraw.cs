@@ -187,15 +187,19 @@ namespace ActionEditor
 
         private void CheckBlendInAndOut()
         {
+            _clip.SetBlendIn(0);
+            _clip.SetBlendOut(0);
+
+
             var overlap = PreviousClip != null ? Mathf.Max(PreviousClip.EndTime - _clip.StartTime, 0) : 0;
             if (overlap > 0)
             {
-
                 _clip.SetBlendIn(overlap);
-                if (PreviousClip != null)
-                {
-                    PreviousClip.SetBlendOut(overlap);
-                }
+            }
+            var overlap_next = NextClip != null ? Mathf.Max(_clip.EndTime - NextClip.StartTime, 0) : 0;
+            if (overlap_next > 0)
+            {
+                _clip.SetBlendOut(overlap_next);
             }
         }
 
