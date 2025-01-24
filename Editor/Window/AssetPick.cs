@@ -16,10 +16,10 @@ namespace ActionEditor
             this.paths = paths;
             this.itemSelectedCallback = itemSelectedCallback;
         }
-        public static void ShowObjectPicker(Rect rect, string floder, string filter, Action<UnityEngine.Object> itemSelectedCallback,
+        public static void ShowObjectPicker(Rect rect, string folder, string filter, Action<UnityEngine.Object> itemSelectedCallback,
         Func<string, bool> fit = null)
         {
-            var paths = AssetDatabase.FindAssets(filter, new string[] { floder })
+            var paths = AssetDatabase.FindAssets(filter, new string[] { folder })
                 .Select(x => AssetDatabase.GUIDToAssetPath(x)).Where(x =>
                 {
                     if (fit != null)
