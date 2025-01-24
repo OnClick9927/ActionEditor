@@ -81,14 +81,15 @@ namespace ActionEditor
             return true;
         }
 
+        public static float ViewTime(this Asset asset) => asset.ViewTimeMax - asset.ViewTimeMin;
 
-        public static float SnapTime(this IDirector asset, float time) => Mathf.Round(time / Prefs.SnapInterval) * Prefs.SnapInterval;
+        public static float SnapTime(this Asset asset, float time) => Mathf.Round(time / Prefs.SnapInterval) * Prefs.SnapInterval;
 
-        public static float TimeToPos(this IDirector asset, float time, float width) => (time - asset.ViewTimeMin) / asset.ViewTime * width;
+        public static float TimeToPos(this Asset asset, float time, float width) => (time - asset.ViewTimeMin) / asset.ViewTime() * width;
 
-        public static float PosToTime(this IDirector asset, float pos, float width) => pos / width * asset.ViewTime + asset.ViewTimeMin;
+        public static float PosToTime(this Asset asset, float pos, float width) => pos / width * asset.ViewTime() + asset.ViewTimeMin;
 
-        public static float WidthToTime(this IDirector asset, float pos, float width) => pos / width * asset.ViewTime;
+        public static float WidthToTime(this Asset asset, float pos, float width) => pos / width * asset.ViewTime();
 
         public static void TryMatchSubClipLength(this ILengthMatchAble subClipContainable)
         {

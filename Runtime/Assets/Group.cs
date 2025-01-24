@@ -48,7 +48,7 @@ namespace ActionEditor
         public override bool IsCollapsed { get => isCollapsed; set => isCollapsed = value; }
         public override float StartTime { get => 0; set { } }
         public override float EndTime { get => Root.Length; set { } }
-
+        public sealed override float Length { get => EndTime - StartTime; set { } }
         public bool ExistSameTypeTrack(Type type) => Tracks.FirstOrDefault(t => t.GetType() == type) != null;
 
         public T AddTrack<T>(T track) where T : Track
@@ -81,7 +81,6 @@ namespace ActionEditor
                 track.Name = type.Name;
                 Tracks.Add(track);
 
-                Debug.Log("tracks.count=" + Tracks.Count);
                 Root?.Validate();
 
                 return track;

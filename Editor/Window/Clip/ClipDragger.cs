@@ -65,8 +65,6 @@ namespace ActionEditor
         #region Tracks
 
         private static readonly List<IDirectable> _tracks = new List<IDirectable>();
-        private static Vector2 _lastSize;
-        private static float _lastScrollbarValue;
 
         public static void TryResetTracks()
         {
@@ -203,7 +201,7 @@ namespace ActionEditor
             }
             else
             {
-                Debug.LogError($"dragType={dragType}");
+                //Debug.LogError($"dragType={dragType}");
                 OnBeginDragLength(eventData, stretchClip, dragType == ItemDragType.StretchStart);
             }
         }
@@ -304,7 +302,6 @@ namespace ActionEditor
             {
                 var newTime = asset.SnapTime(clipItem.StartTime + max);
                 clipItem.StartTime = newTime;
-                CheckBlendInOut(clipItem);
             }
 
             eventData.StopPropagation();
@@ -553,7 +550,7 @@ namespace ActionEditor
                 }
             }
 
-            magnetSnapInterval = App.AssetData.ViewTime * 0.01f;
+            magnetSnapInterval = App.AssetData.ViewTime() * 0.01f;
             magnetSnapTimesCache = result.Distinct().ToArray();
             // Debug.LogError($"缓存磁吸结果={magnetSnapTimesCache.Length}");
         }
@@ -626,146 +623,6 @@ namespace ActionEditor
 
         #endregion
 
-        #region 融合检测
 
-        public static void CheckBlendInOut(Clip clip)
-        {
-            // if (!clip.CanCrossBlend) return;
-
-            //获取Clip前后相交的所有clip，并计算混合
-            // List<Clip> linkClips = new List<Clip>();
-            // GetPreviousCrossBlends(clip, linkClips);
-            // GetNextCrossBlends(clip, linkClips);
-            // GetCoincideCrossBlends(clip, linkClips);
-            // linkClips.Add(clip);
-            //
-            //
-            // linkClips.Sort((a, b) => a.StartTime - b.StartTime > 0 ? 1 : -1);
-            // Debug.LogError($"连接的cli个数==={linkClips.Count}");
-            //
-            // foreach (var item in linkClips)
-            // {
-            //     item.SetCrossBlendIn(0);
-            //     item.SetCrossBlendOut(0);
-            // }
-            //
-            // for (int i = 0; i < linkClips.Count; i++)
-            // {
-            //     var item = linkClips[i];
-            //     if (i == 0)
-            //     {
-            //         item.SetCrossBlendIn(0);
-            //     }
-            //     else if (i == linkClips.Count - 1)
-            //     {
-            //         item.SetCrossBlendOut(0);
-            //     }
-            //
-            //
-            //     if (i > 0)
-            //     {
-            //         var prev = linkClips[i - 1];
-            //         var overlap = Mathf.Max(prev.EndTime - item.StartTime, 0);
-            //         item.SetCrossBlendIn(overlap);
-            //         prev.SetCrossBlendOut(overlap);
-            //
-            //         if (i < linkClips.Count - 1)
-            //         {
-            //             var next = linkClips[i + 1];
-            //             // var overlap2 = Mathf.Max(prev.EndTime - clip.StartTime, 0);
-            //             var overlap2 = Mathf.Max(item.EndTime - next.StartTime, 0);
-            //             next.SetCrossBlendIn(overlap2);
-            //             item.SetCrossBlendOut(overlap2);
-            //         }
-            //     }
-            // }
-            //
-            //
-            // var nextSibling = clip.GetNextSibling<Clip>();
-            // if (nextSibling != null && !linkClips.Contains(nextSibling))
-            // {
-            //     nextSibling.SetCrossBlendIn(0);
-            // }
-            //
-            // var previousSibling = clip.GetPreviousSibling<Clip>();
-            // if (previousSibling != null && !linkClips.Contains(previousSibling))
-            // {
-            //     previousSibling.SetCrossBlendOut(0);
-            // }
-
-            // if (_trackDic.TryGetValue(clip.Parent, out var parentViewItem))
-            // {
-            //     foreach (var item in linkClips)
-            //     {
-            //         var clipItem = parentViewItem.GetClipItem(item);
-            //         if (clipItem != null)
-            //         {
-            //             clipItem.OnTryUpdateMesh();
-            //         }
-            //     }
-            //
-            //     if (nextSibling != null)
-            //     {
-            //         var clipItem = parentViewItem.GetClipItem(nextSibling);
-            //         if (clipItem != null)
-            //         {
-            //             clipItem.OnTryUpdateMesh();
-            //         }
-            //     }
-            //
-            //     if (previousSibling != null)
-            //     {
-            //         var clipItem = parentViewItem.GetClipItem(previousSibling);
-            //         if (clipItem != null)
-            //         {
-            //             clipItem.OnTryUpdateMesh();
-            //         }
-            //     }
-            // }
-        }
-
-        private static void GetPreviousCrossBlends(Clip clip, List<Clip> list)
-        {
-            var previous = clip.GetPreviousSibling<Clip>();
-            if (previous == null)
-            {
-                Debug.LogError("没有更前的Clip");
-                return;
-            }
-
-            if (previous.StartTime <= clip.StartTime && previous.EndTime > clip.StartTime)
-            {
-                list.Add(previous);
-                GetPreviousCrossBlends(previous, list);
-            }
-        }
-
-        private static void GetNextCrossBlends(Clip clip, List<Clip> list)
-        {
-            var nextSibling = clip.GetNextSibling<Clip>();
-            if (nextSibling == null) return;
-            if (nextSibling.StartTime > clip.StartTime && nextSibling.StartTime < clip.EndTime)
-            {
-                list.Add(nextSibling);
-                GetNextCrossBlends(nextSibling, list);
-            }
-        }
-
-        //private static void GetCoincideCrossBlends(Clip clip, List<Clip> list)
-        //{
-        //    var pick = clip.GetCoincideSibling();
-        //    if (pick != null && pick.Length > 0)
-        //    {
-        //        foreach (var cDirectable in pick)
-        //        {
-        //            if (cDirectable is Clip c)
-        //            {
-        //                list.Add(c);
-        //            }
-        //        }
-        //    }
-        //}
-
-        #endregion
     }
 }

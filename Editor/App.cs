@@ -50,7 +50,7 @@ namespace ActionEditor
                     {
                         var asset = Asset.Deserialize(typeof(Asset), _textAsset.text);
                         AssetData = asset;
-                        asset.Init();
+                        asset.Validate();
                     }
                     catch (Exception)
                     {
@@ -206,13 +206,12 @@ namespace ActionEditor
         public static void Select(params IDirectable[] objs)
         {
             var change = false;
-            if (objs == null)
-            {
-                if (_selectList.Count > 0) change = true;
-            }
+            if ((objs == null || objs.Length == 0) && _selectList.Count != 0)
+                change = true;
             else
             {
-                if (objs.Length != _selectList.Count) change = true;
+                if (objs.Length != _selectList.Count)
+                    change = true;
                 else
                 {
                     var pickCount = 0;
@@ -227,29 +226,26 @@ namespace ActionEditor
                     }
                 }
             }
-            if (objs != null && objs.Length > 0 && Selection.activeObject != CurrentInspectorPreviewAsset)
+       
+
+            if (change)
+            {
+
+                _selectList.Clear();
+                if (objs != null)
+                    _selectList.AddRange(objs);
+
+
+                if (_selectList.Count == 1 && (_selectList[0] as Clip) == null)
+                    CanMultipleSelect = true;
+                else
+                    CanMultipleSelect = false;
+
+            }
+            if (objs != null && objs.Length > 0)
+            {
+                EditorUtility.SetDirty(CurrentInspectorPreviewAsset);
                 Selection.activeObject = CurrentInspectorPreviewAsset;
-            if (!change) return;
-            _selectList.Clear();
-            if (objs != null)
-            {
-                foreach (var obj in objs)
-                {
-                    _selectList.Add(obj);
-                }
-
-                //Selection.activeObject = CurrentInspectorPreviewAsset;
-                //EditorUtility.SetDirty(CurrentInspectorPreviewAsset);
-                // DirectorUtility.selectedObject = FistSelect;
-            }
-
-            if (_selectList.Count == 1 && (_selectList[0] as Clip) == null)
-            {
-                CanMultipleSelect = true;
-            }
-            else
-            {
-                CanMultipleSelect = false;
             }
         }
 

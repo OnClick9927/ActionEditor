@@ -31,7 +31,7 @@ namespace ActionEditor
         public override void OnDraw()
         {
             if (asset != null)
-                asset.UpdateMaxTime();
+                asset.Validate();
 
 
             var headRect = new Rect(0, 0, Position.width, Styles.PlayControlHeight);
@@ -132,7 +132,7 @@ namespace ActionEditor
                     delta = -3;
                 }
 
-                var t = Mathf.Abs(delta * 25) / Position.width * asset.ViewTime;
+                var t = Mathf.Abs(delta * 25) / Position.width * asset.ViewTime();
 
                 var maxAdd = delta > 0 ? t : -t;
 
@@ -159,7 +159,7 @@ namespace ActionEditor
                 if (e.type == EventType.MouseDrag || e.type == EventType.MouseDown || e.type == EventType.MouseUp)
                 {
                     var offset = e.mousePosition.x - _lastZoomX;
-                    var t = Mathf.Abs(offset) / App.Width * asset.ViewTime;
+                    var t = Mathf.Abs(offset) / App.Width * asset.ViewTime();
 
                     var min = asset.ViewTimeMin + (offset > 0 ? -t : t);
                     var max = asset.ViewTimeMax + (offset > 0 ? -t : t);

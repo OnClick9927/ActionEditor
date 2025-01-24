@@ -10,6 +10,8 @@ namespace ActionEditor
         [SerializeField][HideInInspector] protected bool isLocked;
         [SerializeField][HideInInspector] protected bool active = true;
 
+        public abstract float Length { get; set; }
+
         public virtual bool IsLocked
         {
             get => Parent != null && (Parent.IsLocked || isLocked);
@@ -33,10 +35,10 @@ namespace ActionEditor
             set => name = value;
         }
 
-        private IDirector root;
+        private Asset root;
         private IDirectable parent;
 
-        public IDirector Root => root;
+        public Asset Root => root;
 
         public IDirectable Parent => parent;
 
@@ -45,7 +47,7 @@ namespace ActionEditor
 
         void IDirectable.BeforeSerialize() => OnBeforeSerialize();
 
-        public virtual void Validate(IDirector root, IDirectable parent)
+        public virtual void Validate(Asset root, IDirectable parent)
         {
             this.root = root;
             this.parent = parent;

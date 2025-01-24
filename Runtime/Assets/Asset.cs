@@ -7,7 +7,7 @@ using static ActionEditor.Group;
 namespace ActionEditor
 {
     [Serializable]
-    public abstract class Asset : IDirector
+    public abstract class Asset : IData
     {
         public const string FileEx = "action.bytes";
 
@@ -17,11 +17,6 @@ namespace ActionEditor
         [SerializeField] private float length = 5f;
         [SerializeField] private float viewTimeMin;
         [SerializeField] private float viewTimeMax = 5f;
-
-        public Asset()
-        {
-            Init();
-        }
 
         public float Length
         {
@@ -45,26 +40,8 @@ namespace ActionEditor
         }
 
 
-        public float ViewTime => ViewTimeMax - ViewTimeMin;
 
 
-        public void UpdateMaxTime()
-        {
-            var t = 0f;
-            foreach (var group in groups)
-            {
-                if (!group.IsActive) continue;
-                foreach (var track in group.Tracks)
-                {
-                    if (!track.IsActive) continue;
-                    foreach (var clip in track.Clips)
-                        if (clip.EndTime > t)
-                            t = clip.EndTime;
-                }
-            }
-
-            Length = t;
-        }
 
         public void DeleteGroup(Group group)
         {
@@ -74,20 +51,26 @@ namespace ActionEditor
 
         public void Validate()
         {
-            foreach (IDirectable group in groups.AsEnumerable().Reverse())
+            var t = 0f;
+
+            foreach (IDirectable group in groups)
             {
                 group.Validate(this, null);
-                foreach (var track in group.Children.Reverse())
+                foreach (var track in group.Children)
                 {
                     track.Validate(this, group);
                     foreach (var clip in track.Children)
                     {
                         clip.Validate(this, track);
+                        if (group.IsActive && track.IsActive && clip.IsActive && clip.EndTime > t)
+                            t = clip.EndTime;
                     }
                 }
             }
-            UpdateMaxTime();
+            Length = t;
+
         }
+
 
         public Group AddGroup(Type type)
         {
@@ -118,10 +101,7 @@ namespace ActionEditor
         }
 
 
-        public void Init()
-        {
-            Validate();
-        }
+
         public string Serialize()
         {
             this.BeforeSerialize();
@@ -181,6 +161,7 @@ namespace ActionEditor
             for (int i = 0; i < groups.Count; i++)
                 (groups[i] as IDirectable).AfterDeserialize();
             OnAfterDeserialize();
+            Validate();
         }
 
         private void BeforeSerialize()

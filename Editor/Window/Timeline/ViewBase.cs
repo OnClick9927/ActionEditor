@@ -79,15 +79,12 @@ namespace ActionEditor
 
         private bool _havePointerDown;
         private bool _isDragging;
-        private bool _isPointerOver;
-        private static PointerEventData _eventData = new PointerEventData();
         private const float DragThreshold = 1f;
         private Vector2 _dragStartPos;
 
         protected void CheckPointerEvent()
         {
-            var ev = Event.current;
-            _eventData.SetEvent(ev);
+            var _eventData = Window._eventData;
             // Debug.Log("CheckPointerEvent");
             var hasRect = Position.Contains(_eventData._event.mousePosition);
 
@@ -98,7 +95,6 @@ namespace ActionEditor
                     _havePointerDown = true;
                     if (this is IPointerDownHandler pointerDownHandler)
                     {
-
                         pointerDownHandler.OnPointerDown(_eventData);
                     }
                 }
@@ -106,6 +102,7 @@ namespace ActionEditor
                 {
                     _havePointerDown = false;
                 }
+
             }
             else if (_eventData._event.type == EventType.MouseUp)
             {
@@ -117,9 +114,9 @@ namespace ActionEditor
 
                 if (_isDragging && this is IDragEndHandler dragEndHandler)
                 {
-                    _isDragging = false;
                     dragEndHandler.OnDragEnd(_eventData);
                 }
+                _isDragging = false;
 
                 if (hasRect)
                 {
@@ -134,11 +131,13 @@ namespace ActionEditor
                 {
                     _havePointerDown = false;
                 }
+
             }
             else if (_eventData._event.type == EventType.MouseDrag)
             {
                 if (hasRect)
                 {
+
                     if (!_isDragging && Vector2.Distance(_dragStartPos, _eventData._event.mousePosition) > DragThreshold)
                     {
                         _isDragging = true; // 达到阈值，开始拖动 When the threshold is reached, drag begins
@@ -152,7 +151,11 @@ namespace ActionEditor
                     {
                         dragHandler.OnPointerDrag(_eventData);
                     }
+
+
+
                 }
+
             }
 
             // if (ev.type == EventType.MouseMove)
