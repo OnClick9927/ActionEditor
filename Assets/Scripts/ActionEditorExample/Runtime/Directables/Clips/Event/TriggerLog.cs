@@ -7,7 +7,10 @@ namespace ActionEditor
     [Attachable(typeof(SignalTrack))]
     public class TriggerLog : ClipSignal
     {
-        [Color(1, 1, 0)][Name("打印内容")] public string log;
+        [Color("#F0F")][Name("打印内容")] public string log;
+
+
+
         [ReadOnly] public string test;
         //public override string Info => "打印\n" + log;
         public override bool IsValid => !string.IsNullOrEmpty(log);
