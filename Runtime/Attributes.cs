@@ -70,7 +70,10 @@ namespace ActionEditor
     public class ColorAttribute : Attribute
     {
         public readonly Color Color;
-
+        public ColorAttribute(string hex)
+        {
+            ColorUtility.TryParseHtmlString(hex, out Color);
+        }
         public ColorAttribute(float r, float g, float b, float a = 1)
         {
             this.Color = new Color(r, g, b, a);
