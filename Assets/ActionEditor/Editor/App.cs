@@ -14,6 +14,7 @@ namespace ActionEditor
     {
         static App()
         {
+            Prefs.Valid();
             string key = "ActionEditor.APP";
             string path = EditorPrefs.GetString(key);
             OnObjectPickerConfig(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path));

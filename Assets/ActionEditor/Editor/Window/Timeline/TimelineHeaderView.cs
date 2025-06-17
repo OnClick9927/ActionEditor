@@ -45,12 +45,12 @@ namespace ActionEditor
             //    // return;
             //}
 
-            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.FirstKey").image, Lan.ins.FirstFrame))
+            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.FirstKey")))
             {
                 AssetPlayer.Inst.CurrentTime = 0;
             }
 
-            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.PrevKey").image, Lan.ins.StepBackwardTips))
+            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.PrevKey")))
             {
                 App.StepBackward();
             }
@@ -59,8 +59,7 @@ namespace ActionEditor
 
             if (App.IsPlay)
                 GUI.backgroundColor = Color.blue + Color.cyan;
-            var isPlaying = DrawToggle(App.IsPlay, EditorGUIUtility.TrIconContent("d_Animation.Play").image,
-                App.IsPlay ? Lan.ins.StopTips : Lan.ins.PlayTips);
+            var isPlaying = DrawToggle(App.IsPlay, EditorGUIUtility.TrIconContent("d_Animation.Play"));
             GUI.backgroundColor = Color.white;
 
 
@@ -79,7 +78,7 @@ namespace ActionEditor
             EditorGUI.BeginChangeCheck();
             if (App.IsPause)
                 GUI.backgroundColor = Color.blue + Color.cyan;
-            var isPause = DrawToggle(App.IsPause, EditorGUIUtility.TrIconContent("d_PauseButton").image, Lan.ins.PauseTips);
+            var isPause = DrawToggle(App.IsPause, EditorGUIUtility.TrIconContent("d_PauseButton"));
             GUI.backgroundColor = Color.white;
 
             if (EditorGUI.EndChangeCheck())
@@ -87,12 +86,12 @@ namespace ActionEditor
                 App.Pause(isPause);
             }
 
-            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.NextKey").image, Lan.ins.StepForwardTips))
+            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.NextKey")))
             {
                 App.StepForward();
             }
 
-            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.LastKey").image, Lan.ins.PlayForwardTips))
+            if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.LastKey")))
             {
                 AssetPlayer.Inst.CurrentTime = AssetPlayer.Inst.Length;
             }
@@ -103,15 +102,15 @@ namespace ActionEditor
             GUILayout.EndArea();
         }
 
-        private bool DrawButton(Texture image, string tooltip)
+        private bool DrawButton(GUIContent content)
         {
-            return GUILayout.Button(new GUIContent(image, tooltip),
+            return GUILayout.Button(content,
                 _customToolbarButtonStyle, GUILayout.Width(_buttonWidth));
         }
 
-        private bool DrawToggle(bool value, Texture image, string tooltip)
+        private bool DrawToggle(bool value, GUIContent content)
         {
-            return GUILayout.Toggle(value, new GUIContent(image, tooltip), _customToolbarButtonStyle,
+            return GUILayout.Toggle(value, content, _customToolbarButtonStyle,
                 GUILayout.Width(_buttonWidth));
         }
 
@@ -143,7 +142,7 @@ namespace ActionEditor
             GUILayout.BeginHorizontal(EditorStyles.toolbar);
             {
                 var rect = EditorGUILayout.GetControlRect(GUILayout.Width(25));
-                if (GUI.Button(rect, EditorGUIUtility.TrIconContent("Toolbar Plus", Lan.ins.CreateAsset), EditorStyles.toolbarButton))
+                if (GUI.Button(rect, EditorGUIUtility.TrIconContent("Toolbar Plus"), EditorStyles.toolbarButton))
                     CreateAssetWindow.Show(rect);
             }
             {
@@ -195,7 +194,7 @@ namespace ActionEditor
                 GUILayout.Label(
 string.Format(Lan.ins.HeaderLastSaveTime, App.LastSaveTime.ToString("HH:mm:ss")));
 
-                if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("SaveActive").image, Lan.ins.Save), EditorStyles.toolbarButton,
+                if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("SaveActive")), EditorStyles.toolbarButton,
                         GUILayout.Width(26)))
                 {
                     App.AutoSave(); //先保存当前的
@@ -204,7 +203,7 @@ string.Format(Lan.ins.HeaderLastSaveTime, App.LastSaveTime.ToString("HH:mm:ss"))
             }
             {
                 var rect = EditorGUILayout.GetControlRect(GUILayout.Width(25));
-                if (GUI.Button(rect, EditorGUIUtility.TrIconContent("Settings", Lan.ins.OpenPreferencesTips),
+                if (GUI.Button(rect, EditorGUIUtility.TrIconContent("Settings"),
                         EditorStyles.toolbarButton))
                 {
                     PreferencesWindow.Show(rect);

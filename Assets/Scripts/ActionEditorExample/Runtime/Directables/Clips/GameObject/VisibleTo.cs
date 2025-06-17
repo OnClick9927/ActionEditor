@@ -5,7 +5,6 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Name("显示隐藏")]
-    [Color(1, 90f / 255f, 90f / 255f)]
     [Attachable(typeof(ActionTrack))]
     public class VisibleTo : Clip
     {

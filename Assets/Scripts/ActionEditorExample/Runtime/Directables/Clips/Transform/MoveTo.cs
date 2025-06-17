@@ -4,7 +4,6 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Name("移动至")]
-    [Color(70f / 255f, 1, 140f / 255f)]
     [Attachable(typeof(ActionTrack))]
     public class MoveTo : Clip
     {

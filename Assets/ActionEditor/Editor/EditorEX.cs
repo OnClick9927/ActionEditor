@@ -10,7 +10,7 @@ namespace ActionEditor
     static class EditorEX
     {
         private static readonly Dictionary<Type, Texture2D> _iconDictionary = new Dictionary<Type, Texture2D>();
-        private static readonly Dictionary<Type, Color> _colorDictionary = new Dictionary<Type, Color>();
+        //private static readonly Dictionary<Type, Color> _colorDictionary = new Dictionary<Type, Color>();
         private static readonly Dictionary<Type, string> _nameDictionary = new Dictionary<Type, string>();
 
         public static Texture2D GetIcon(this IDirectable track)
@@ -47,24 +47,28 @@ namespace ActionEditor
 
         public static Color GetColor(this IDirectable track)
         {
-            var type = track.GetType();
-            if (_colorDictionary.TryGetValue(type, out var color))
-                return color;
+            if (track is Clip)
+            {
 
-            var colorAttribute = track.GetType().GetCustomAttribute<ColorAttribute>();
-            _colorDictionary[type] = colorAttribute != null ? colorAttribute.Color : Color.white;
-            return _colorDictionary[type];
+                return Prefs.data.clips.First(x => x.type == track.GetType().FullName).color;
+            }
+            else if (track is Track)
+            {
+                return Prefs.data.tracks.First(x => x.type == track.GetType().FullName).color;
+
+            }
+            return Color.white;
         }
-
-        public static string GetName(this IDirectable track)
+        public static string GetName(Type clipType)
         {
-            var type = track.GetType();
-            if (_nameDictionary.TryGetValue(type, out var name))
+
+            if (_nameDictionary.TryGetValue(clipType, out var name))
                 return name;
-            var nameAttribute = track.GetType().GetCustomAttribute<NameAttribute>();
-            _nameDictionary[type] = nameAttribute != null ? nameAttribute.name : track.GetType().Name;
-            return _nameDictionary[type];
+            var nameAttribute = clipType.GetCustomAttribute<NameAttribute>();
+            _nameDictionary[clipType] = nameAttribute != null ? nameAttribute.name : clipType.Name;
+            return _nameDictionary[clipType];
         }
+        public static string GetName(this IDirectable track) => GetName(track.GetType());
 
         public static bool CanAddTrack(this Group group, Track track)
         {
@@ -150,7 +154,7 @@ namespace ActionEditor
             return color;
         }
 
-        private static IEnumerable<Type> GetAllTypes()
+        public static IEnumerable<Type> GetAllTypes()
         {
             return AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes());
 
@@ -271,24 +275,12 @@ namespace ActionEditor
             var types = EditorEX.GetImplementationsOf(typeof(Asset));
             foreach (var t in types)
             {
-                var typeName = t.GetCustomAttributes(typeof(NameAttribute), false).FirstOrDefault() is NameAttribute nameAtt ? nameAtt.name : t.Name;
+                var typeName = GetName(t);
                 AssetTypes[typeName] = t;
                 AssetNames.Add(typeName);
             }
         }
 
-        public static string GetAssetTypeName(Type type)
-        {
-            foreach (var key in AssetTypes.Keys)
-            {
-                var v = AssetTypes[key];
-                if (v == type)
-                {
-                    return key;
-                }
-            }
 
-            return string.Empty;
-        }
     }
 }

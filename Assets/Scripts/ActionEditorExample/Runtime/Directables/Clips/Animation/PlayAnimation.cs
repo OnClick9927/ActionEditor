@@ -5,7 +5,6 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Name("动画片段")]
-    [Color(0.48f, 0.71f, 0.84f)]
     [Attachable(typeof(AnimationTrack))]
     public class PlayAnimation : Clip, ILengthMatchAble,IBlendAble,IResizeAble
     {

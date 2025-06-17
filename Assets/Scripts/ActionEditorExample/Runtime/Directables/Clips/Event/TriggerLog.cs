@@ -3,11 +3,10 @@
 namespace ActionEditor
 {
     [Name("打印日志")]
-    [Color(1, 0, 0)]
     [Attachable(typeof(SignalTrack))]
     public class TriggerLog : ClipSignal
     {
-        [Color("#F0F")][Name("打印内容")] public string log;
+        [Name("打印内容")] public string log;
 
 
 

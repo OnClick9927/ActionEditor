@@ -250,7 +250,7 @@ namespace ActionEditor
             {
                 if (group.CanAddTrack(copyTrack))
                 {
-                    genericMenu.AddItem(new GUIContent(Lan.ins.MenuPasteTrack), false, () =>
+                    genericMenu.AddItem(new GUIContent(string.Format(Lan.ins.Paste,copyTrack.Name)), false, () =>
                     {
                         if (group.CanAddTrack(copyTrack))
                         {
@@ -261,22 +261,22 @@ namespace ActionEditor
                 }
                 else
                 {
-                    genericMenu.AddDisabledItem(new GUIContent(Lan.ins.MenuPasteTrack));
+                    genericMenu.AddDisabledItem(new GUIContent(Lan.ins.Paste));
                 }
             }
 
-            genericMenu.AddItem(new GUIContent(Lan.ins.GroupDisable), !group.IsActive, ActiveContextMenuCmd);
-            genericMenu.AddItem(new GUIContent(Lan.ins.GroupLocked), group.IsLocked, LockedContextMenuCmd);
+            genericMenu.AddItem(new GUIContent(Lan.ins.Disable), !group.IsActive, ActiveContextMenuCmd);
+            genericMenu.AddItem(new GUIContent(Lan.ins.Locked), group.IsLocked, LockedContextMenuCmd);
             //genericMenu.AddItem(new GUIContent(Lan.ins.Rename), false, RenameContextMenuCmd);
             genericMenu.AddSeparator("");
 
             if (group.IsLocked)
             {
-                genericMenu.AddDisabledItem(new GUIContent(Lan.ins.GroupDelete));
+                genericMenu.AddDisabledItem(new GUIContent(Lan.ins.Delete));
             }
             else
             {
-                genericMenu.AddItem(new GUIContent(Lan.ins.GroupDelete), false, DeleteContextMenu);
+                genericMenu.AddItem(new GUIContent(Lan.ins.Delete), false, DeleteContextMenu);
             }
 
             genericMenu.ShowAsContext();
@@ -285,14 +285,14 @@ namespace ActionEditor
         private void OnTrackLeftContextMenu(Track track)
         {
             var menu = new GenericMenu();
-            menu.AddItem(new GUIContent(Lan.ins.TrackDisable), !track.IsActive, ActiveContextMenuCmd);
-            menu.AddItem(new GUIContent(Lan.ins.TrackLocked), track.IsLocked, LockedContextMenuCmd);
+            menu.AddItem(new GUIContent(Lan.ins.Disable), !track.IsActive, ActiveContextMenuCmd);
+            menu.AddItem(new GUIContent(Lan.ins.Locked), track.IsLocked, LockedContextMenuCmd);
 
             //menu.AddSeparator("");
 
 
-            menu.AddItem(new GUIContent(Lan.ins.TrackCopy), false, () => { App.SetCopyAsset(track, false); });
-            menu.AddItem(new GUIContent(Lan.ins.TrackCut), false, () =>
+            menu.AddItem(new GUIContent(Lan.ins.Copy), false, () => { App.SetCopyAsset(track, false); });
+            menu.AddItem(new GUIContent(Lan.ins.Cut), false, () =>
                {
                    App.SetCopyAsset(track, true);
                });
@@ -301,11 +301,11 @@ namespace ActionEditor
             //menu.AddSeparator("/");
             if (track.IsLocked)
             {
-                menu.AddDisabledItem(new GUIContent(Lan.ins.TrackDelete));
+                menu.AddDisabledItem(new GUIContent(Lan.ins.Delete));
             }
             else
             {
-                menu.AddItem(new GUIContent(Lan.ins.TrackDelete), false, DeleteContextMenu);
+                menu.AddItem(new GUIContent(Lan.ins.Delete), false, DeleteContextMenu);
             }
 
             menu.ShowAsContext();
@@ -328,22 +328,22 @@ namespace ActionEditor
         {
             if (Data is Group group)
             {
-                if (EditorUtility.DisplayDialog(Lan.ins.GroupDelete, Lan.ins.GroupDeleteTips, Lan.ins.TipsConfirm,
-                        Lan.ins.TipsCancel))
-                {
+                //if (EditorUtility.DisplayDialog(Lan.ins.Delete, Lan.ins.GroupDeleteTips, Lan.ins.TipsConfirm,
+                //        Lan.ins.TipsCancel))
+                //{
+                //}
                     group.Root.DeleteGroup(group);
-                }
             }
             else if (Data is Track track)
             {
-                if (EditorUtility.DisplayDialog(Lan.ins.TrackDelete, Lan.ins.TrackDeleteTips, Lan.ins.TipsConfirm,
-                        Lan.ins.TipsCancel))
-                {
+                //if (EditorUtility.DisplayDialog(Lan.ins.Delete, Lan.ins.TrackDeleteTips, Lan.ins.TipsConfirm,
+                //        Lan.ins.TipsCancel))
+                //{
+                //}
                     if (track.Parent is Group g)
                     {
                         g.DeleteTrack(track);
                     }
-                }
             }
 
             App.Refresh();
@@ -517,7 +517,7 @@ namespace ActionEditor
                     if (attachableTypeInfos.Select(i => i.type).Contains(copyType))
                     {
                         menu.AddSeparator("/");
-                        menu.AddItem(new GUIContent(string.Format(Lan.ins.ClipPaste, copyType.Name)), false,
+                        menu.AddItem(new GUIContent(string.Format(Lan.ins.Paste, copyType.Name)), false,
                             () =>
                             {
                                 App.AddCopyClipToTrack(track);
@@ -537,15 +537,15 @@ namespace ActionEditor
             if (clip.IsLocked) return;
 
             var menu = new GenericMenu();
-            menu.AddItem(new GUIContent(Lan.ins.ClipCopy), false, () =>
+            menu.AddItem(new GUIContent(Lan.ins.Copy), false, () =>
             {
                 App.SetCopyAsset(clip, false);
             });
-            menu.AddItem(new GUIContent(Lan.ins.ClipCut), false, () =>
+            menu.AddItem(new GUIContent(Lan.ins.Cut), false, () =>
             {
                 App.SetCopyAsset(clip, true);
             });
-            menu.AddItem(new GUIContent(Lan.ins.ClipDelete), false, () =>
+            menu.AddItem(new GUIContent(Lan.ins.Delete), false, () =>
             {
                 if (clip.Parent is Track track) track.DeleteAction(clip);
                 App.Refresh();

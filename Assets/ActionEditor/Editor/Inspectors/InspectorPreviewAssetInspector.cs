@@ -70,7 +70,7 @@ namespace ActionEditor
             if (App.AssetData == null) return;
             var assetData = App.AssetData;
 
-            var title = EditorEX.GetAssetTypeName(assetData.GetType());
+            var title = EditorEX.GetName(assetData.GetType());
             if (_style == null)
             {
                 _style = new GUIStyle(EditorStyles.foldout)

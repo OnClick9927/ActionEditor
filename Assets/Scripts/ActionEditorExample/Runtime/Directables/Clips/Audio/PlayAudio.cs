@@ -7,7 +7,6 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Name("声音片段")]
-    [Color(1f, 0.63f, 0f)]
     [Attachable(typeof(AudioTrack))]
     public class PlayAudio : Clip, ILengthMatchAble, IBlendAble
     {

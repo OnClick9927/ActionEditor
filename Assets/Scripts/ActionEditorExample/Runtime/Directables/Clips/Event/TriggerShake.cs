@@ -3,7 +3,6 @@
 namespace ActionEditor
 {
     [Name("触发震动")]
-    [Color(1, 0, 0)]
     [Attachable(typeof(SignalTrack))]
     public class TriggerShake : ClipSignal
     {

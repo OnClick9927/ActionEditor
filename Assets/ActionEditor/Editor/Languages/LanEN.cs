@@ -5,112 +5,79 @@
     {
 
         //**********  Welcome *********
-        public string Title => "Action Editor";
-        public string CreateAsset => "New";
-        public string SelectAsset => "Select Asset";
-        public string Seeting => "Preferences";
+        string ILanguages.Title => "Action Editor";
+        string ILanguages.CreateAsset => "New";
 
         //**********  Crate Window *********
-        public string CrateAssetType => "Create Type";
-        public string CrateAssetName => "Asset Name";
-        public string CreateAssetFileName => "Asset File Name";
-        public string CreateAssetConfirm => "Create by default Path";
-        public string CreateAssetConfirmBySelectPath => "Create by select Path";
+        string ILanguages.CrateAssetType => "Create Type";
+        string ILanguages.CrateAssetName => "Asset Name";
+        string ILanguages.CreateAssetFileName => "Asset File Name";
+        string ILanguages.CreateAssetConfirm => "Create by default Path";
+        string ILanguages.CreateAssetConfirmBySelectPath => "Create by select Path";
 
         public string CreateAssetReset => "Reset";
-        public string CreateAssetTipsNameNull => "Name cannot be empty!";
-        public string CreateAssetTipsRepetitive => "Duplicate name!";
+        string ILanguages.CreateAssetTipsNameNull => "Name cannot be empty!";
+        string ILanguages.CreateAssetTipsRepetitive => "Duplicate name!";
 
         //**********  Preferences Window *********
-        public string PreferencesTitle => "Editor Preferences";
-        public string PreferencesTimeStepMode => "Time Step Mode";
-        public string PreferencesSnapInterval => "Snap Interval";
-        public string PreferencesFrameRate => "Frame Rate";
-        public string PreferencesMagnetSnapping => "Magnet Snapping";
+        string ILanguages.PreferencesTitle => "Editor Preferences";
+        string ILanguages.PreferencesTimeStepMode => "Time Step Mode";
+        string ILanguages.PreferencesSnapInterval => "Snap Interval";
+        string ILanguages.PreferencesFrameRate => "Frame Rate";
+        string ILanguages.PreferencesMagnetSnapping => "Magnet Snapping";
 
-        public string PreferencesMagnetSnappingTips =>
+        string ILanguages.PreferencesMagnetSnappingTips =>
             "Turn on other clips before and after the clip is automatically attached";
 
         public string PreferencesScrollWheelZooms => "Scroll Wheel Zooms";
-        public string PreferencesScrollWheelZoomsTips => "Turn on the scroll wheel to zoom the timeline area";
-        public string PreferencesSavePath => "Asset save path";
-        public string PreferencesSavePathTips => "Default path on creation and selection";
-        public string PreferencesAutoSaveTime => "auto save time";
-        public string PreferencesAutoSaveTimeTips => "Auto save interval";
+        //public string PreferencesScrollWheelZoomsTips => "Turn on the scroll wheel to zoom the timeline area";
+        string ILanguages.PreferencesSavePath => "Asset save path";
+        string ILanguages.PreferencesSavePathTips => "Default path on creation and selection";
+        string ILanguages.PreferencesAutoSaveTime => "auto save time";
+        string ILanguages.PreferencesAutoSaveTimeTips => "Auto save interval";
         public string PreferencesHelpDoc => "Help doc";
 
 
         //**********  Commom *********
-        public string Select => "Select";
-        public string SelectFile => "Select File";
-        public string SelectFolder => "Select Folder";
-        public string TipsTitle => "Tips";
-        public string TipsConfirm => "Confirm";
-        public string TipsCancel => "Cancel";
-        public string CompilingTips => "Compiling\n... please wait...";
-        public string Disable => "Disable";
-        public string Locked => "Locked";
-        public string Save => "Save";
-        public string Rename => "Rename";
+        string ILanguages.Select => "Select";
+        //public string SelectFile => "Select File";
+        string ILanguages.SelectFolder => "Select Folder";
+        string ILanguages.TipsTitle => "Tips";
+        string ILanguages.TipsConfirm => "Confirm";
+
+        string ILanguages.Disable => "Disable";
+        string ILanguages.Locked => "Locked";
+        string ILanguages.Save => "Save";
 
         //**********  Header *********
-        public string HeaderLastSaveTime => "Last save time：{0}";
-        public string HeaderSelectAsset => "Select：[{0}]";
-        public string OpenPreferencesTips => "Open Preferences";
-        public string SelectAssetTips => "Select Asset";
-        public string OpenMagnetSnappingTips => "Open Magnet Snapping";
-        public string NewAssetTips => "New Asset";
-        public string BackMenuTips => "Back menu";
-        public string PlayLoopTips => "Loop Play";
-        public string PlayForwardTips => "Jump to the end";
-        public string StepForwardTips => "Jump to next frame";
-        public string PauseTips => "Pause";
-        public string PlayTips => "Play";
-        public string StopTips => "Stop";
-        public string StepBackwardTips => "Jump to previous frame";
+        string ILanguages.HeaderLastSaveTime => "Last save time：{0}";
 
         //**********  Group Menu *********
-        public string MenuAddTrack => "Add Track";
-        public string MenuPasteTrack => "Paste Track";
-        public string GroupAdd => "Add Group";
-        public string GroupDisable => "Disable Group";
-        public string GroupLocked => "Locked Group";
-        public string GroupReplica => "Replica Group";
-        public string GroupDelete => "Delete Group";
-        public string GroupDeleteTips => "confirm delete group?";
+        string ILanguages.MenuAddTrack => "Add Track";
+        string ILanguages.GroupAdd => "Add Group";
 
-        //**********  Track Menu *********
-        public string TrackDisable => "Disable Track";
-        public string TrackLocked => "Locked Track";
-        public string TrackCopy => "Copy Track";
-        public string TrackCut => "Cut Track";
-        public string TrackDelete => "Delete Track";
-        public string TrackDeleteTips => "confirm delete track?";
-        public string FirstFrame => "jump to FirstFrame";
-
-
-        //**********  Clip Menu *********
-        public string ClipCopy => "Copy";
-        public string ClipCut => "Cut";
-        public string ClipDelete => "Delete";
-        public string MatchClipLength => "Match Clip Length";
-        public string MatchPreviousLoop => "Match Previous Loop";
-        public string MatchNextLoop => "Match Next Loop";
-        public string ClipPaste => "Paste ({0})";
+        string ILanguages.Copy => "Copy";
+        string ILanguages.Cut => "Cut";
+        string ILanguages.Delete => "Delete";
+        string ILanguages.MatchClipLength => "Match Clip Length";
+        string ILanguages.Paste => "Paste ({0})";
 
         //**********  Inspector *********
-        public string NotSelectAsset => "not selected asset。";
-        public string InsBaseInfo => "{0} base info";
-        public string OverflowInvalid => "Clip is outside of playable range";
-        public string EndTimeOverflowInvalid => "Clip end time is outside of playable range";
-        public string StartTimeOverflowInvalid => "Clip start time is outside of playable range";
+        string ILanguages.NotSelectAsset => "not selected asset。";
+        string ILanguages.OverflowInvalid => "Clip is outside of playable range";
+        string ILanguages.EndTimeOverflowInvalid => "Clip end time is outside of playable range";
+        string ILanguages.StartTimeOverflowInvalid => "Clip start time is outside of playable range";
 
-        public string ClipInvalid => "Clip  Invalid,check params";
+        string ILanguages.ClipInvalid => "Clip  Invalid,check params";
 
-        public string ClearCopy => "Clear Copy/Cut";
+        string ILanguages.ClearCopy => "Clear Copy/Cut";
 
-        public string ClearSelect => "select none";
+        string ILanguages.ClearSelect => "select none";
 
-        public string NoAssetExtendType => "None Type Sub Class of Asset";
+        string ILanguages.NoAssetExtendType => "None Type Sub Class of Asset";
+
+        string ILanguages.Clip => "Clip";
+
+        string ILanguages.Track => "Track";
     }
 }

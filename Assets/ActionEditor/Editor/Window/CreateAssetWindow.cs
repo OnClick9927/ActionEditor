@@ -24,7 +24,7 @@ namespace ActionEditor
             });
             GUILayout.Space(2);
 
-            if (EditorEX.AssetNames.Count == 0)
+            if (EditorEX.AssetTypes.Count == 0)
             {
                 EditorGUILayout.HelpBox(Lan.ins.NoAssetExtendType, MessageType.Error);
             }
