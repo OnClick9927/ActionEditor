@@ -221,9 +221,7 @@ namespace ActionEditor
             ReadOnlyAttribute readOnly = attributes.FirstOrDefault(x => x is ReadOnlyAttribute) as ReadOnlyAttribute;
             if(readOnly != null)
                 GUI.enabled = false;
-            ColorAttribute color = attributes.FirstOrDefault(x => x is ColorAttribute) as ColorAttribute;
-            if (color != null)
-                GUI.contentColor = color.Color;
+
 
 
             ValidCheckAttribute notNull = attributes.FirstOrDefault(x => x is ValidCheckAttribute) as ValidCheckAttribute;

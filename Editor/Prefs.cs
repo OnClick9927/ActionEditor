@@ -1,6 +1,8 @@
 ﻿using System;
 using UnityEngine;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 
 
 namespace ActionEditor
@@ -18,7 +20,7 @@ namespace ActionEditor
         }
 
         [Serializable]
-        class SerializedData
+        public class SerializedData
         {
             public TimeStepMode TimeStepMode = TimeStepMode.Seconds;
             public float SnapInterval = 0.1f;
@@ -31,12 +33,60 @@ namespace ActionEditor
 
             public bool MagnetSnapping = true;
             public float TrackListLeftMargin = 180f;
-        }
 
+ 
+            [System.Serializable]
+            public class ColorPref
+            {
+                public string type;
+                public Color color;
+                Type _type;
+                public Type GetRealType()
+                {
+                    if (_type == null)
+                        _type = EditorEX.GetAllTypes().First(x => x.FullName == type);
+                    return _type;
+                }
+            }
+
+            public List<ColorPref> clips = new List<ColorPref>();
+            public List<ColorPref> tracks = new List<ColorPref>();
+
+
+            public void valid()
+            {
+                var types = EditorEX.GetImplementationsOf(typeof(Clip));
+                foreach (var type in types)
+                {
+                    if (clips.Any(x => x.type == type.FullName)) continue;
+                    clips.Add(new ColorPref
+                    {
+                        type = type.FullName,
+                        color = Color.white,
+                    });
+                }
+                types = EditorEX.GetImplementationsOf(typeof(Track));
+                foreach (var type in types)
+                {
+                    if (tracks.Any(x => x.type == type.FullName)) continue;
+                    tracks.Add(new ColorPref
+                    {
+                        type = type.FullName,
+                        color = Color.white,
+                    });
+                }
+            }
+
+        }
+        public static void Valid()
+        {
+            data.valid();
+            Save();
+        }
 
         private static SerializedData _data;
 
-        private static SerializedData data
+        public static SerializedData data
         {
             get
             {
@@ -84,7 +134,7 @@ namespace ActionEditor
                 if (data.Lan_key != value)
                 {
                     data.Lan_key = value;
-                    Save();
+                    //Save();
                 }
             }
         }
@@ -97,7 +147,7 @@ namespace ActionEditor
                 if (data.AutoSaveSeconds != value)
                 {
                     data.AutoSaveSeconds = value;
-                    Save();
+                    //Save();
                 }
             }
         }
@@ -110,7 +160,7 @@ namespace ActionEditor
                 if (data.SavePath != value)
                 {
                     data.SavePath = value;
-                    Save();
+                    //Save();
                 }
             }
         }
@@ -124,7 +174,7 @@ namespace ActionEditor
                 if (data.MagnetSnapping != value)
                 {
                     data.MagnetSnapping = value;
-                    Save();
+                    //Save();
                 }
             }
         }
@@ -137,7 +187,7 @@ namespace ActionEditor
                 if (Math.Abs(data.TrackListLeftMargin - value) > 0.001f)
                 {
                     data.TrackListLeftMargin = value;
-                    Save();
+                    //Save();
                 }
             }
         }
@@ -151,7 +201,7 @@ namespace ActionEditor
                 {
                     data.TimeStepMode = value;
                     FrameRate = value == TimeStepMode.Frames ? 30 : 10;
-                    Save();
+                    //Save();
                 }
             }
         }
@@ -165,7 +215,7 @@ namespace ActionEditor
                 {
                     data.FrameRate = value;
                     SnapInterval = 1f / value;
-                    Save();
+                    //Save();
                 }
             }
         }
@@ -178,12 +228,12 @@ namespace ActionEditor
                 if (Math.Abs(data.SnapInterval - value) > 0.001f)
                 {
                     data.SnapInterval = Mathf.Max(value, 0.001f);
-                    Save();
+                    //Save();
                 }
             }
         }
 
-        static void Save()
+        public static void Save()
         {
             System.IO.File.WriteAllText(CONFIG_PATH, JsonUtility.ToJson(data));
         }

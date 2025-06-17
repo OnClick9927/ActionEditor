@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Reflection;
-using UnityEngine;
 
 namespace ActionEditor
 {
@@ -63,22 +62,6 @@ namespace ActionEditor
         }
     }
 
-    /// <summary>
-    /// 指定显示的颜色
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Field)]
-    public class ColorAttribute : Attribute
-    {
-        public readonly Color Color;
-        public ColorAttribute(string hex)
-        {
-            ColorUtility.TryParseHtmlString(hex, out Color);
-        }
-        public ColorAttribute(float r, float g, float b, float a = 1)
-        {
-            this.Color = new Color(r, g, b, a);
-        }
-    }
 
     /// <summary>
     /// 指定附加类型
