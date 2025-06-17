@@ -14,11 +14,9 @@ namespace ActionEditor
         {
             var lan = Prefs.Lan_key;
             var types = EditorEX.GetImplementationsOf(typeof(ILanguages));
-            //ins = new LanEN();
             foreach (var t in types)
             {
-                var nameAtt = (NameAttribute)t.GetCustomAttributes(typeof(NameAttribute), false).FirstOrDefault();
-                var name = nameAtt != null ? nameAtt.name : t.Name;
+                var name = EditorEX.GetTypeName(t);
                 AllLanguages[name] = System.Activator.CreateInstance(t) as ILanguages;
                 if (lan == name)
                 {

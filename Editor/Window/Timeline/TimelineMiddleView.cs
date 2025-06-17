@@ -152,7 +152,7 @@ namespace ActionEditor
                     list.Add(typeMetaInfo);
                 }
 
-                if (list.Count > 1)
+                if (list.Count > 0)
                 {
                     var menu = new GenericMenu();
                     foreach (var typeMetaInfo in list)
@@ -170,7 +170,7 @@ namespace ActionEditor
                 }
                 else
                 {
-                    asset.AddGroup<Group>();
+                    //asset.AddGroup<Group>();
                     App.Refresh();
                 }
             }

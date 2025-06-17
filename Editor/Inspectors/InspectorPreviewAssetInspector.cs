@@ -70,7 +70,7 @@ namespace ActionEditor
             if (App.AssetData == null) return;
             var assetData = App.AssetData;
 
-            var title = EditorEX.GetName(assetData.GetType());
+            var title = EditorEX.GetTypeName(assetData.GetType());
             if (_style == null)
             {
                 _style = new GUIStyle(EditorStyles.foldout)
@@ -147,8 +147,7 @@ namespace ActionEditor
         {
             if (App.AssetData == null) return;
             var type = App.FistSelect.GetType();
-            var nameAtt = type.GetCustomAttributes(typeof(NameAttribute), false).FirstOrDefault() as NameAttribute;
-            var name = nameAtt != null ? nameAtt.name : type.Name;
+            var name =EditorEX.GetTypeName(type);
 
             GUILayout.BeginHorizontal();
             if (_style2 == null)

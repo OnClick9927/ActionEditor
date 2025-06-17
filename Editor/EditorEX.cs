@@ -10,7 +10,6 @@ namespace ActionEditor
     static class EditorEX
     {
         private static readonly Dictionary<Type, Texture2D> _iconDictionary = new Dictionary<Type, Texture2D>();
-        //private static readonly Dictionary<Type, Color> _colorDictionary = new Dictionary<Type, Color>();
         private static readonly Dictionary<Type, string> _nameDictionary = new Dictionary<Type, string>();
 
         public static Texture2D GetIcon(this IDirectable track)
@@ -59,16 +58,16 @@ namespace ActionEditor
             }
             return Color.white;
         }
-        public static string GetName(Type clipType)
+        public static string GetTypeName(Type type)
         {
 
-            if (_nameDictionary.TryGetValue(clipType, out var name))
+            if (_nameDictionary.TryGetValue(type, out var name))
                 return name;
-            var nameAttribute = clipType.GetCustomAttribute<NameAttribute>();
-            _nameDictionary[clipType] = nameAttribute != null ? nameAttribute.name : clipType.Name;
-            return _nameDictionary[clipType];
+            var nameAttribute = type.GetCustomAttribute<NameAttribute>();
+            _nameDictionary[type] = nameAttribute != null ? nameAttribute.name : type.Name;
+            return _nameDictionary[type];
         }
-        public static string GetName(this IDirectable track) => GetName(track.GetType());
+        public static string GetTypeName(this object track) => GetTypeName(track.GetType());
 
         public static bool CanAddTrack(this Group group, Track track)
         {
@@ -240,10 +239,7 @@ namespace ActionEditor
                 var info = new TypeMetaInfo
                 {
                     type = type,
-                    name =
-                        type.GetCustomAttributes(typeof(NameAttribute), true).FirstOrDefault() is NameAttribute nameAtt
-                            ? nameAtt.name
-                            : type.Name
+                    name =GetTypeName(type),
                 };
 
 
@@ -268,14 +264,17 @@ namespace ActionEditor
         public static readonly Dictionary<string, Type> AssetTypes = new Dictionary<string, Type>();
         public static readonly List<string> AssetNames = new List<string>();
 
+
         public static void InitializeAssetTypes()
         {
             AssetTypes.Clear();
+
+
             AssetNames.Clear();
             var types = EditorEX.GetImplementationsOf(typeof(Asset));
             foreach (var t in types)
             {
-                var typeName = GetName(t);
+                var typeName = GetTypeName(t);
                 AssetTypes[typeName] = t;
                 AssetNames.Add(typeName);
             }
