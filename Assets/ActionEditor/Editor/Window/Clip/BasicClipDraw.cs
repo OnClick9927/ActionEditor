@@ -160,7 +160,7 @@ namespace ActionEditor
         protected virtual void DrawName()
         {
             GUI.color = Color.white;
-            var text = _clip.GetName();
+            var text = _clip.GetTypeName();
             var size = GUI.skin.label.CalcSize(new GUIContent(text));
             if (ClipRect.width > size.x)
             {

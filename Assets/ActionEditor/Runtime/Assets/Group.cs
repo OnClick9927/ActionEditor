@@ -6,9 +6,9 @@ using UnityEngine;
 
 namespace ActionEditor
 {
-    [Name("Default Group")]
+    //[Name("Default Group")]
     [Serializable]
-    public class Group : DirectableBase
+    public abstract class Group : DirectableBase
     {
 
         [System.Serializable]

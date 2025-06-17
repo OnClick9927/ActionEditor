@@ -6,6 +6,7 @@ namespace ActionEditor
 {
     [Name("行为轨道")]
     [TrackIcon(typeof(Transform))]
+    [Attachable(typeof(TestGroup))]
     public class ActionTrack : Track
     {
         [Name("测试1")] public int Test1;
@@ -13,5 +14,13 @@ namespace ActionEditor
         [Name("测试2")] public float Test2;
 
         [Name("测试3")] public string Test3;
+    }
+
+    [Name("测试")]
+    [Attachable(typeof(SkillAsset),typeof(BuffAsset))]
+
+    public class TestGroup:Group
+    {
+
     }
 }

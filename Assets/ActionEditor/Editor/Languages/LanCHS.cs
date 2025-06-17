@@ -3,9 +3,7 @@
     [Name("简体中文")]
      class LanCHS : ILanguages
     {
-        string ILanguages.Clip => "片段";
 
-        string ILanguages.Track => "轨道";
 
         //**********  Welcome *********
         string ILanguages.Title => "行为时间轴编辑器";
@@ -24,16 +22,13 @@
 
 
         //**********  Preferences Window *********
-        string ILanguages.PreferencesTitle => "编辑器首选项";
-        string ILanguages.PreferencesTimeStepMode => "时间步长模式";
-        string ILanguages.PreferencesSnapInterval => "时间步长";
-        string ILanguages.PreferencesFrameRate => "帧率";
-        string ILanguages.PreferencesMagnetSnapping => "剪辑吸附";
-        string ILanguages.PreferencesMagnetSnappingTips => "是否开启剪辑自动吸附前后其他剪辑";
-        string ILanguages.PreferencesSavePath => "配置保存地址";
-        string ILanguages.PreferencesSavePathTips => "创建和选择时的默认地址";
-        string ILanguages.PreferencesAutoSaveTime => "自动保存时间";
-        string ILanguages.PreferencesAutoSaveTimeTips => "定时自动保存操作的间隔时间";
+        string ILanguages.Preferences => "偏好设置";
+        string ILanguages.StepMode => "时间步长模式";
+        string ILanguages.SnapInterval => "时间步长";
+        string ILanguages.FrameRate => "帧率";
+        string ILanguages.MagnetSnapping => "剪辑吸附";
+        string ILanguages.SavePath => "资源保存地址";
+        string ILanguages.AutoSaveTime => "自动保存间隔";
 
 
         //**********  Commom *********

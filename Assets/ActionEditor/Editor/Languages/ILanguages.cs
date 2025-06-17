@@ -21,17 +21,14 @@
 
 
         //**********  Preferences Window *********
-        string PreferencesTitle { get; }
-        string PreferencesTimeStepMode { get; }
-        string PreferencesSnapInterval { get; }
-        string PreferencesFrameRate { get; }
-        string PreferencesMagnetSnapping { get; }
-        string PreferencesMagnetSnappingTips { get; }
+        string Preferences { get; }
+        string StepMode { get; }
+        string SnapInterval { get; }
+        string FrameRate { get; }
+        string MagnetSnapping { get; }
 
-        string PreferencesSavePath { get; }
-        string PreferencesSavePathTips { get; }
-        string PreferencesAutoSaveTime { get; }
-        string PreferencesAutoSaveTimeTips { get; }
+        string SavePath { get; }
+        string AutoSaveTime { get; }
 
 
         //**********  Commom *********
@@ -72,7 +69,7 @@
         string ClearSelect { get; }
         string NoAssetExtendType { get; }
 
-        string Clip {  get; }
-        string Track { get; }
+        //string Clip {  get; }
+        //string Track { get; }
     }
 }

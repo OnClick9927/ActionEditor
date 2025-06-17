@@ -15,27 +15,20 @@
         string ILanguages.CreateAssetConfirm => "Create by default Path";
         string ILanguages.CreateAssetConfirmBySelectPath => "Create by select Path";
 
-        public string CreateAssetReset => "Reset";
         string ILanguages.CreateAssetTipsNameNull => "Name cannot be empty!";
         string ILanguages.CreateAssetTipsRepetitive => "Duplicate name!";
 
         //**********  Preferences Window *********
-        string ILanguages.PreferencesTitle => "Editor Preferences";
-        string ILanguages.PreferencesTimeStepMode => "Time Step Mode";
-        string ILanguages.PreferencesSnapInterval => "Snap Interval";
-        string ILanguages.PreferencesFrameRate => "Frame Rate";
-        string ILanguages.PreferencesMagnetSnapping => "Magnet Snapping";
+        string ILanguages.Preferences => "Preferences";
+        string ILanguages.StepMode => "Time Step Mode";
+        string ILanguages.SnapInterval => "Snap Interval";
+        string ILanguages.FrameRate => "Frame Rate";
+        string ILanguages.MagnetSnapping => "Magnet Snapping";
 
-        string ILanguages.PreferencesMagnetSnappingTips =>
-            "Turn on other clips before and after the clip is automatically attached";
 
-        public string PreferencesScrollWheelZooms => "Scroll Wheel Zooms";
         //public string PreferencesScrollWheelZoomsTips => "Turn on the scroll wheel to zoom the timeline area";
-        string ILanguages.PreferencesSavePath => "Asset save path";
-        string ILanguages.PreferencesSavePathTips => "Default path on creation and selection";
-        string ILanguages.PreferencesAutoSaveTime => "auto save time";
-        string ILanguages.PreferencesAutoSaveTimeTips => "Auto save interval";
-        public string PreferencesHelpDoc => "Help doc";
+        string ILanguages.SavePath => "Asset save path";
+        string ILanguages.AutoSaveTime => "auto save time";
 
 
         //**********  Commom *********
@@ -76,8 +69,6 @@
 
         string ILanguages.NoAssetExtendType => "None Type Sub Class of Asset";
 
-        string ILanguages.Clip => "Clip";
 
-        string ILanguages.Track => "Track";
     }
 }

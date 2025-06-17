@@ -34,12 +34,14 @@ namespace ActionEditor
             public bool MagnetSnapping = true;
             public float TrackListLeftMargin = 180f;
 
- 
+
             [System.Serializable]
             public class ColorPref
             {
                 public string type;
                 public Color color;
+                public List<string> attach;
+                public List<string> asset;
                 Type _type;
                 public Type GetRealType()
                 {
@@ -52,30 +54,67 @@ namespace ActionEditor
             public List<ColorPref> clips = new List<ColorPref>();
             public List<ColorPref> tracks = new List<ColorPref>();
 
-
             public void valid()
             {
-                var types = EditorEX.GetImplementationsOf(typeof(Clip));
-                foreach (var type in types)
+                var metas = EditorEX.GetTypeMetaDerivedFrom(typeof(Clip));
+
+                foreach (var meta in metas)
                 {
-                    if (clips.Any(x => x.type == type.FullName)) continue;
-                    clips.Add(new ColorPref
+                    var find = clips.Find(x => x.type == meta.type.FullName);
+                    if (find == null)
                     {
-                        type = type.FullName,
-                        color = Color.white,
-                    });
+                        find = new ColorPref
+                        {
+                            type = meta.type.FullName,
+                            color = Color.white,
+                        };
+                        clips.Add(find);
+
+                    }
+                    find.attach = meta.attachableTypes?.Select(x => x.FullName).ToList();
+
+
+
                 }
-                types = EditorEX.GetImplementationsOf(typeof(Track));
-                foreach (var type in types)
+                metas = EditorEX.GetTypeMetaDerivedFrom(typeof(Track));
+                var metas_group = EditorEX.GetTypeMetaDerivedFrom(typeof(Group));
+                var metas_asset = EditorEX.GetTypeMetaDerivedFrom(typeof(Asset));
+
+
+                foreach (var meta in metas)
                 {
-                    if (tracks.Any(x => x.type == type.FullName)) continue;
-                    tracks.Add(new ColorPref
+                    var find = tracks.Find(x => x.type == meta.type.FullName);
+                    if (find == null)
                     {
-                        type = type.FullName,
-                        color = Color.white,
-                    });
+                        find = new ColorPref
+                        {
+                            type = meta.type.FullName,
+                            color = Color.white,
+                        };
+                        tracks.Add(find);
+                    }
+
+                    find.attach = meta.attachableTypes?.Select(x => x.FullName)?.ToList();
+
+
+                    if (find.attach == null || find.attach.Count == 0)
+                    {
+                        find.asset = null;
+                    }
+                    else
+                    {
+                        var _groups = find.attach.Select(x => metas_group.Find(y => y.type.FullName == x)).ToList();
+
+
+                        find.asset = _groups.SelectMany(x => x.attachableTypes)
+                            .Select(x => metas_asset.First(y => y.type == x))
+                            .Select(x => x.type.FullName).ToList();
+                            
+                        Console.WriteLine();
+                    }
                 }
             }
+
 
         }
         public static void Valid()
@@ -160,7 +199,7 @@ namespace ActionEditor
                 if (data.SavePath != value)
                 {
                     data.SavePath = value;
-                    //Save();
+                    Save();
                 }
             }
         }
