@@ -77,10 +77,10 @@ namespace ActionEditor
                 new GUIContent(Lan.ins.AutoSaveTime), Prefs.autoSaveSeconds, 5,
                 120);
             GUILayout.BeginHorizontal();
-            GUI.enabled = false;
-            EditorGUILayout.TextField(
+            using (new EditorGUI.DisabledScope(true))
+
+                EditorGUILayout.TextField(
             Lan.ins.SavePath, Prefs.savePath);
-            GUI.enabled = true;
             if (GUILayout.Button(Lan.ins.Select, GUILayout.Width(50)))
             {
                 CreateAssetWindow.SelectSavePath();

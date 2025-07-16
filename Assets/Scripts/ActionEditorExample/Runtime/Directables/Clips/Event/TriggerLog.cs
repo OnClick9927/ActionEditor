@@ -10,7 +10,8 @@ namespace ActionEditor
 
 
 
-        [ReadOnly] public string test;
+        [ReadOnly] public string test_readonly;
+        public string hh;
         //public override string Info => "打印\n" + log;
         public override bool IsValid => !string.IsNullOrEmpty(log);
     }

@@ -6,7 +6,6 @@ namespace ActionEditor
 {
     public abstract class DirectableBase : IDirectable
     {
-        [SerializeField][HideInInspector] private string name;
         [SerializeField][HideInInspector] protected bool isLocked;
         [SerializeField][HideInInspector] protected bool active = true;
 
@@ -29,11 +28,7 @@ namespace ActionEditor
                 }
             }
         }
-        public string Name
-        {
-            get => name;
-            set => name = value;
-        }
+
 
         private Asset root;
         private IDirectable parent;

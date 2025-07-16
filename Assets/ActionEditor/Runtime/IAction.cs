@@ -14,7 +14,7 @@ namespace ActionEditor
         IDirectable Parent { get; }
         IEnumerable<IDirectable> Children { get; }
 
-        string Name { get; }
+        //string Name { get; set; }
 
         bool IsActive { get; set; }
         bool IsCollapsed { get; set; }

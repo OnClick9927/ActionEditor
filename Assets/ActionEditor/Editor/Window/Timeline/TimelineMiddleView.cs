@@ -128,55 +128,57 @@ namespace ActionEditor
 
         private void DrawAddGroupButton(Rect rect)
         {
-            GUI.enabled = asset != null;
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(15);
-            var width = Styles.TimelineLeftWidth - 30;
-            if (GUI.Button(new Rect(15, rect.y, width, 24), Lan.ins.GroupAdd))
+            using (new EditorGUI.DisabledScope(asset == null))
             {
-                List<EditorEX.TypeMetaInfo> list = new List<EditorEX.TypeMetaInfo>();
 
-                var ts = EditorEX.GetTypeMetaDerivedFrom(typeof(Group));
-                foreach (var typeMetaInfo in ts)
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(15);
+                var width = Styles.TimelineLeftWidth - 30;
+                if (GUI.Button(new Rect(15, rect.y, width, 24), Lan.ins.GroupAdd))
                 {
-                    var info = typeMetaInfo;
-                    if (info.type.IsAbstract) continue;
-                    if (info.attachableTypes != null)
-                    {
-                        if (!info.attachableTypes.Contains(asset.GetType()))
-                        {
-                            continue;
-                        }
-                    }
+                    List<EditorEX.TypeMetaInfo> list = new List<EditorEX.TypeMetaInfo>();
 
-                    list.Add(typeMetaInfo);
-                }
-
-                if (list.Count > 0)
-                {
-                    var menu = new GenericMenu();
-                    foreach (var typeMetaInfo in list)
+                    var ts = EditorEX.GetTypeMetaDerivedFrom(typeof(Group));
+                    foreach (var typeMetaInfo in ts)
                     {
                         var info = typeMetaInfo;
-                        menu.AddItem(new GUIContent(info.name), false,
-                            () =>
+                        if (info.type.IsAbstract) continue;
+                        if (info.attachableTypes != null)
+                        {
+                            if (!info.attachableTypes.Contains(asset.GetType()))
                             {
-                                asset.AddGroup(typeMetaInfo.type);
-                                App.Refresh();
-                            });
+                                continue;
+                            }
+                        }
+
+                        list.Add(typeMetaInfo);
                     }
 
-                    menu.ShowAsContext();
-                }
-                else
-                {
-                    //asset.AddGroup<Group>();
-                    App.Refresh();
-                }
-            }
+                    if (list.Count > 0)
+                    {
+                        var menu = new GenericMenu();
+                        foreach (var typeMetaInfo in list)
+                        {
+                            var info = typeMetaInfo;
+                            menu.AddItem(new GUIContent(info.name), false,
+                                () =>
+                                {
+                                    asset.AddGroup(typeMetaInfo.type,EditorEX.GetTypeName(typeMetaInfo.type));
+                                    App.Refresh();
+                                });
+                        }
 
-            GUILayout.EndHorizontal();
-            GUI.enabled = true;
+                        menu.ShowAsContext();
+                    }
+                    else
+                    {
+                        //asset.AddGroup<Group>();
+                        App.Refresh();
+                    }
+                }
+
+                GUILayout.EndHorizontal();
+            }
         }
 
         #endregion

@@ -106,6 +106,8 @@ namespace ActionEditor
                         App.Refresh();
                         Event.current.Use();
                     }
+                    GUILayout.Label(group.name, GUILayout.Height(20));
+
                 }
                 else if (Data is Track track)
                 {
@@ -119,10 +121,11 @@ namespace ActionEditor
                     GUILayout.Space(2);
 
                     GUI.DrawTexture(EditorGUILayout.GetControlRect(GUILayout.Width(20), GUILayout.Height(20)), track.GetIcon()); // 绘制图标
+                    GUILayout.Label(EditorEX.GetTypeName(Data.GetType()), GUILayout.Height(20));
+
                 }
 
 
-                GUILayout.Label(Data.Name, GUILayout.Height(20));
 
 
                 if (Data.IsLocked)
@@ -167,7 +170,7 @@ namespace ActionEditor
             if (Data.IsLocked) return;
             if (ev.IsRight())
             {
-                Debug.Log($"OnPointerClick 右键点击=== Asset={Data.Name}");
+                //Debug.Log($"OnPointerClick 右键点击=== Asset={Data.Name}");
                 if (_leftRect.Contains(ev.MousePosition))
                 {
                     OnGroupContextMenu();
@@ -250,7 +253,7 @@ namespace ActionEditor
             {
                 if (group.CanAddTrack(copyTrack))
                 {
-                    genericMenu.AddItem(new GUIContent(string.Format(Lan.ins.Paste,copyTrack.Name)), false, () =>
+                    genericMenu.AddItem(new GUIContent(string.Format(Lan.ins.Paste, EditorEX.GetTypeName(copyTrack))), false, () =>
                     {
                         if (group.CanAddTrack(copyTrack))
                         {
@@ -332,7 +335,7 @@ namespace ActionEditor
                 //        Lan.ins.TipsCancel))
                 //{
                 //}
-                    group.Root.DeleteGroup(group);
+                group.Root.DeleteGroup(group);
             }
             else if (Data is Track track)
             {
@@ -340,10 +343,10 @@ namespace ActionEditor
                 //        Lan.ins.TipsCancel))
                 //{
                 //}
-                    if (track.Parent is Group g)
-                    {
-                        g.DeleteTrack(track);
-                    }
+                if (track.Parent is Group g)
+                {
+                    g.DeleteTrack(track);
+                }
             }
 
             App.Refresh();
@@ -517,7 +520,7 @@ namespace ActionEditor
                     if (attachableTypeInfos.Select(i => i.type).Contains(copyType))
                     {
                         menu.AddSeparator("/");
-                        menu.AddItem(new GUIContent(string.Format(Lan.ins.Paste, copyType.Name)), false,
+                        menu.AddItem(new GUIContent(string.Format(Lan.ins.Paste, EditorEX.GetTypeName(copyType))), false,
                             () =>
                             {
                                 App.AddCopyClipToTrack(track);
