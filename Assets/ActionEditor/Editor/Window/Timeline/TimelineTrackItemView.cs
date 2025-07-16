@@ -27,7 +27,7 @@ namespace ActionEditor
         public override void OnDraw()
         {
             GUI.color = Color.white;
-            GUI.Box(Position, "", App.IsSelect(Data) ? EditorStyles.selectionRect : GUI.skin.box);
+            GUI.Box(Position, "", AppInternal.IsSelect(Data) ? EditorStyles.selectionRect : GUI.skin.box);
 
 
             _leftRect = new Rect(Position.x, Position.y, Styles.TimelineLeftWidth, Position.height);
@@ -103,7 +103,7 @@ namespace ActionEditor
                     if (temp != Data.IsCollapsed)
                     {
                         group.IsCollapsed = !Data.IsCollapsed;
-                        App.Refresh();
+                        AppInternal.Refresh();
                         Event.current.Use();
                     }
                     GUILayout.Label(group.name, GUILayout.Height(20));
@@ -187,11 +187,11 @@ namespace ActionEditor
 
         public void OnPointerDown(PointerEventData ev)
         {
-            if (App.SelectCount > 1) return;
+            if (AppInternal.SelectCount > 1) return;
             if (ev.IsLeft())
             {
-                App.Select(Data);
-                App.Repaint();
+                AppInternal.Select(Data);
+                AppInternal.Repaint();
             }
         }
 
@@ -236,8 +236,8 @@ namespace ActionEditor
                     genericMenu.AddItem(new GUIContent(path), false, () =>
                     {
                         var track = group.AddTrack(info.type);
-                        App.Select(track);
-                        App.Refresh();
+                        AppInternal.Select(track);
+                        AppInternal.Refresh();
                     });
                 }
                 else
@@ -249,7 +249,7 @@ namespace ActionEditor
             genericMenu.AddSeparator("");
 
 
-            if (App.CopyAsset is Track copyTrack)
+            if (AppInternal.CopyAsset is Track copyTrack)
             {
                 if (group.CanAddTrack(copyTrack))
                 {
@@ -257,8 +257,8 @@ namespace ActionEditor
                     {
                         if (group.CanAddTrack(copyTrack))
                         {
-                            App.AddCopyTrackToGroup(group);
-                            App.Refresh();
+                            AppInternal.AddCopyTrackToGroup(group);
+                            AppInternal.Refresh();
                         }
                     });
                 }
@@ -294,10 +294,10 @@ namespace ActionEditor
             //menu.AddSeparator("");
 
 
-            menu.AddItem(new GUIContent(Lan.ins.Copy), false, () => { App.SetCopyAsset(track, false); });
+            menu.AddItem(new GUIContent(Lan.ins.Copy), false, () => { AppInternal.SetCopyAsset(track, false); });
             menu.AddItem(new GUIContent(Lan.ins.Cut), false, () =>
                {
-                   App.SetCopyAsset(track, true);
+                   AppInternal.SetCopyAsset(track, true);
                });
 
 
@@ -318,13 +318,13 @@ namespace ActionEditor
         private void LockedContextMenuCmd()
         {
             Data.IsLocked = !Data.IsLocked;
-            App.Refresh();
+            AppInternal.Refresh();
         }
 
         private void ActiveContextMenuCmd()
         {
             Data.IsActive = !Data.IsActive;
-            App.Refresh();
+            AppInternal.Refresh();
         }
 
         private void DeleteContextMenu()
@@ -349,7 +349,7 @@ namespace ActionEditor
                 }
             }
 
-            App.Refresh();
+            AppInternal.Refresh();
         }
 
     }
@@ -397,10 +397,10 @@ namespace ActionEditor
                 {
                     draw.PreviousClip = previousClip;
                     draw.NextClip = nextClip;
-                    draw.Draw(Window, Position, TrackRightRect, clip, App.IsSelect(clip), App.CopyAsset == clip);
+                    draw.Draw(Window, Position, TrackRightRect, clip, AppInternal.IsSelect(clip), AppInternal.CopyAsset == clip);
                 }
             }
-            if (App.CopyAsset == track)
+            if (AppInternal.CopyAsset == track)
             {
                 if ((EditorApplication.timeSinceStartup) % 0.5 > 0.25)
                 {
@@ -464,14 +464,14 @@ namespace ActionEditor
                 var clip = ClipDrawer.GetClipByTrackPosition(Data, ev.MousePosition);
                 if (clip != null)
                 {
-                    if (App.SelectCount > 1)
+                    if (AppInternal.SelectCount > 1)
                     {
-                        if (App.SelectItems.Contains(clip)) return;
+                        if (AppInternal.SelectItems.Contains(clip)) return;
                     }
 
                     ClickClip(clip);
                     ev.StopPropagation();
-                    App.Repaint();
+                    AppInternal.Repaint();
                 }
             }
         }
@@ -479,7 +479,7 @@ namespace ActionEditor
 
         private void ClickClip(Clip clip)
         {
-            App.Select(clip);
+            AppInternal.Select(clip);
         }
 
         private void OnTrackRightContextMenu(Track track, PointerEventData ev)
@@ -514,7 +514,7 @@ namespace ActionEditor
                         () => { track.AddClip(info.type, cursorTime); });
                 }
 
-                if (App.CopyAsset != null && App.CopyAsset is Clip copyClip)
+                if (AppInternal.CopyAsset != null && AppInternal.CopyAsset is Clip copyClip)
                 {
                     var copyType = copyClip.GetType();
                     if (attachableTypeInfos.Select(i => i.type).Contains(copyType))
@@ -523,8 +523,8 @@ namespace ActionEditor
                         menu.AddItem(new GUIContent(string.Format(Lan.ins.Paste, EditorEX.GetTypeName(copyType))), false,
                             () =>
                             {
-                                App.AddCopyClipToTrack(track);
-                                App.Refresh();
+                                AppInternal.AddCopyClipToTrack(track);
+                                AppInternal.Refresh();
                                 //track.PasteClip(DirectorUtility.CopyClip, cursorTime);
                             });
                     }
@@ -542,16 +542,16 @@ namespace ActionEditor
             var menu = new GenericMenu();
             menu.AddItem(new GUIContent(Lan.ins.Copy), false, () =>
             {
-                App.SetCopyAsset(clip, false);
+                AppInternal.SetCopyAsset(clip, false);
             });
             menu.AddItem(new GUIContent(Lan.ins.Cut), false, () =>
             {
-                App.SetCopyAsset(clip, true);
+                AppInternal.SetCopyAsset(clip, true);
             });
             menu.AddItem(new GUIContent(Lan.ins.Delete), false, () =>
             {
                 if (clip.Parent is Track track) track.DeleteAction(clip);
-                App.Refresh();
+                AppInternal.Refresh();
             });
             if (clip is ILengthMatchAble subContainable && subContainable.MatchAbleLength > 0)
             {

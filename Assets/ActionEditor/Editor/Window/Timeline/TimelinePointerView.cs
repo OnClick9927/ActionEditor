@@ -14,7 +14,7 @@ namespace ActionEditor
      class TimelinePointerView : ViewBase, IPointerClickHandler,
         IPointerDragHandler, IDragBeginHandler, IDragEndHandler
     {
-        public Asset asset => App.AssetData;
+        public Asset asset => AppInternal.AssetData;
 
         private Rect _playPointerHandler;
         private Rect _pointerTextRect;
@@ -41,7 +41,7 @@ namespace ActionEditor
         private void DrawTimeStep()
         {
             if (asset == null) return;
-            var width = App.Width;
+            var width = AppInternal.Width;
 
             var x = asset.TimeToPos(asset.Length, width);
             var stepRect = new Rect(Position.x, Position.y + (Styles.HeaderHeight - 4), x, 4);
@@ -101,7 +101,7 @@ namespace ActionEditor
 
         private void DrawPointer()
         {
-            var width = App.Width;
+            var width = AppInternal.Width;
             var height = Styles.PlayControlHeight - Styles.HeaderHeight;
             var x = asset.TimeToPos(asset.Length, width);
             GUI.color = Styles.EndPointerColor;
@@ -149,7 +149,7 @@ namespace ActionEditor
 
         private void DrawDragLine()
         {
-            if (App.CanMultipleSelect) return;
+            if (AppInternal.CanMultipleSelect) return;
             if (ItemDragger.DragType > ItemDragType.None)
             {
                 var items = ItemDragger.DragItems;
@@ -186,7 +186,7 @@ namespace ActionEditor
 
         private void DrawDragLine(float time)
         {
-            var x = asset.TimeToPos(time, App.Width);
+            var x = asset.TimeToPos(time, AppInternal.Width);
             var magnet = ItemDragger.HasMagnetSnapTime(time);
             if (magnet)
             {
@@ -218,7 +218,7 @@ namespace ActionEditor
 
         private void CheckDrag()
         {
-            asset.PosToTime(0, App.Width);
+            asset.PosToTime(0, AppInternal.Width);
         }
 
         public void OnPointerClick(PointerEventData eventData)
@@ -234,7 +234,7 @@ namespace ActionEditor
             if (eventData.IsLeft() && _playPointerHandler.Contains(eventData.MousePosition))
             {
                 Debug.Log("拖动当前播放指针");
-                App.Select();
+                AppInternal.Select();
                 _dragType = PointerDragType.Play;
             }
             else
@@ -262,12 +262,12 @@ namespace ActionEditor
 
         private void ChangeCurrentTime(Vector2 mousePosition)
         {
-            var time = asset.PosToTime(mousePosition.x, App.Width);
+            var time = asset.PosToTime(mousePosition.x, AppInternal.Width);
             AssetPlayer.Inst.CurrentTime = asset.SnapTime(time);
             AssetPlayer.Inst.CurrentTime =
                 Mathf.Clamp(AssetPlayer.Inst.CurrentTime, 0 + float.Epsilon, asset.Length - float.Epsilon);
-            App.Play();
-            App.Pause();
+            AppInternal.Play();
+            AppInternal.Pause();
             Window.Repaint();
         }
 

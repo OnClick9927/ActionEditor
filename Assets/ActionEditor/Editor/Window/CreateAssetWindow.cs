@@ -102,7 +102,7 @@ namespace ActionEditor
                     var textAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
                     if (textAsset != null)
                     {
-                        App.OnObjectPickerConfig(textAsset);
+                        AppInternal.OnObjectPickerConfig(textAsset);
                     }
                     editorWindow.Close();
                 }

@@ -37,7 +37,7 @@ namespace ActionEditor
 
         private bool preInitialized;
 
-        public Asset Asset => App.AssetData;
+        public Asset Asset => AppInternal.AssetData;
 
         /// <summary>
         /// 当前时间
