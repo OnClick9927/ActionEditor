@@ -1,4 +1,6 @@
 ﻿using ActionEditor;
+using System;
+using UnityEngine;
 
 namespace ActionEditor
 {
@@ -7,11 +9,15 @@ namespace ActionEditor
     public class TriggerLog : ClipSignal
     {
         [Name("打印内容")] public string log;
-
-
-
-        [ReadOnly] public string test_readonly;
-        public string hh;
+        [Serializable]
+        public class Test
+        {
+            [ReadOnly] public string test_readonly;
+            [TextArea] public string a;
+            public int[] array;
+        }
+        public Test test;
+        //public string hh;
         //public override string Info => "打印\n" + log;
         public override bool IsValid => !string.IsNullOrEmpty(log);
     }

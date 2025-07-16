@@ -77,24 +77,30 @@ namespace ActionEditor
                     needShowField.Add(field);
                 }
             }
+            GUILayout.BeginVertical();
             foreach (var field in needShowField)
             {
                 FieldDefaultInspector(field, obj);
             }
+            GUILayout.EndVertical();
             return obj;
         }
 
         static List<Type> _base = new List<Type>()
+            {
+                typeof(int),typeof(float),typeof(double),typeof(bool),typeof(long),typeof(string),
+                typeof(Color),typeof(Vector2),typeof(Vector3),typeof(Vector4),typeof(Vector2Int),typeof(Vector3Int),
+                typeof(Rect),typeof(RectInt),typeof(Bounds),typeof(UnityEngine.Object),typeof(AnimationCurve),
+            };
+        private bool IsBaseType(Type type)
         {
-            typeof(int),typeof(float),typeof(double),typeof(bool),typeof(long),typeof(string),
-            typeof(Color),typeof(Vector2),typeof(Vector3),typeof(Vector4),typeof(Vector2Int),typeof(Vector3Int),
-            typeof(Rect),typeof(RectInt),typeof(Bounds),typeof(Object),typeof(AnimationCurve),
-        };
-        private static bool IsBaseType(Type type)
-        {
+            if (type.IsSubclassOf(typeof(UnityEngine.Object)))
+                return true;
             if (type.IsEnum || _base.Contains(type)) return true;
             return false;
         }
+
+
         private object DrawBase(object value, string name, Type fieldType)
         {
 
@@ -114,7 +120,7 @@ namespace ActionEditor
             else if (fieldType == typeof(Rect)) return EditorGUILayout.RectField(name, (Rect)value);
             else if (fieldType == typeof(RectInt)) return EditorGUILayout.RectIntField(name, (RectInt)value);
             else if (fieldType == typeof(Bounds)) return EditorGUILayout.BoundsField(name, (Bounds)value);
-            else if (fieldType.IsSubclassOf(typeof(Object))) return EditorGUILayout.ObjectField(name, (Object)value, fieldType, false);
+            else if (fieldType.IsSubclassOf(typeof(UnityEngine.Object))) return EditorGUILayout.ObjectField(name, (UnityEngine.Object)value, fieldType, true);
             else if (fieldType == typeof(AnimationCurve))
             {
                 AnimationCurve curve = value as AnimationCurve;
@@ -124,6 +130,16 @@ namespace ActionEditor
                 }
 
                 return EditorGUILayout.CurveField(name, curve);
+            }
+            else if (fieldType == typeof(Gradient))
+            {
+                Gradient curve = value as Gradient;
+                if (curve == null)
+                {
+                    curve = new Gradient();
+                }
+
+                return EditorGUILayout.GradientField(name, curve);
             }
             return value;
         }
@@ -221,11 +237,28 @@ namespace ActionEditor
 
 
 
-        protected void FieldDefaultInspector(FieldInfo field, object obj)
+     
+        public void FieldDefaultInspector(FieldInfo field, object obj)
         {
-            var fieldType = field.FieldType;
-            var showType = field.FieldType;
-            var value = field.GetValue(obj);
+
+            //if (!(field is FieldInfo) && !(field is PropertyInfo)) return;
+
+            Type fieldType = null;
+            object value = null;
+            if (field is FieldInfo)
+            {
+                fieldType = (field as FieldInfo).FieldType;
+                //showType = (field as FieldInfo).FieldType;
+                value = (field as FieldInfo).GetValue(obj);
+            }
+
+            else if (typeof(Delegate).IsAssignableFrom(fieldType))
+            {
+                DrawDelegate(fieldType, value as Delegate);
+                return;
+            }
+
+        Again:
             var newValue = value;
             var name = field.Name;
             var attributes = field.GetCustomAttributes();
@@ -246,23 +279,22 @@ namespace ActionEditor
 
             }
 
+
+
             HeaderAttribute header = attributes.FirstOrDefault(x => x is HeaderAttribute) as HeaderAttribute;
             if (header != null)
                 GUILayout.Label(header.header, EditorStyles.boldLabel);
 
 
-
             ReadOnlyAttribute readOnly = attributes.FirstOrDefault(x => x is ReadOnlyAttribute) as ReadOnlyAttribute;
-
             using (new EditorGUI.DisabledScope(readOnly != null))
             {
-                NameAttribute Name = attributes.FirstOrDefault(x => x is NameAttribute) as NameAttribute;
-                if (Name != null)
-                    name = Name.name;
+
                 RangeAttribute range = attributes.FirstOrDefault(x => x is RangeAttribute) as RangeAttribute;
-                ObjectPathAttribute selectObjectPath = attributes.FirstOrDefault(x => x is ObjectPathAttribute) as ObjectPathAttribute;
                 MultilineAttribute mutiline = attributes.FirstOrDefault(x => x is MultilineAttribute) as MultilineAttribute;
+                ObjectPathAttribute selectObjectPath = attributes.FirstOrDefault(x => x is ObjectPathAttribute) as ObjectPathAttribute;
                 TextAreaAttribute textarea = attributes.FirstOrDefault(x => x is TextAreaAttribute) as TextAreaAttribute;
+
 
                 if (range != null && fieldType == typeof(float))
                     newValue = DrawRange(name, (float)value, range.min, range.max);
@@ -284,6 +316,24 @@ namespace ActionEditor
                     SetFoldout(array, fold);
                     for (int i = 0; i < result.Count; i++)
                         array.Add(result[i]);
+
+                    newValue = array;
+                }
+                else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Queue<>))
+                {
+                    Type elementType = fieldType.GetGenericArguments()[0];
+                    ICollection array = (ICollection)value;
+
+                    if (array == null)
+                        array = Activator.CreateInstance(typeof(Queue<>).MakeGenericType(elementType)) as ICollection;
+                    var fold = GetFoldout(value);
+                    var result = DrawArr(ref fold, name, array, elementType);
+
+                    fieldType.GetMethod(nameof(Queue.Clear)).Invoke(value, null);
+                    //array.Clear();
+                    SetFoldout(array, fold);
+                    for (int i = 0; i < result.Count; i++)
+                        fieldType.GetMethod(nameof(Queue.Enqueue)).Invoke(value, new object[] { result[i] });
                     newValue = array;
                 }
                 // 处理数组类型
@@ -298,32 +348,58 @@ namespace ActionEditor
                     var fold = GetFoldout(value);
                     var result = DrawArr(ref fold, name, array, elementType);
                     Array.Clear(array, 0, array.Length);
+
+
                     if (array.Length != result.Count)
                         array = Array.CreateInstance(elementType, result.Count);
                     SetFoldout(array, fold);
+
 
                     for (int i = 0; i < result.Count; i++)
                         array.SetValue(result[i], i);
                     newValue = array;
                 }
-
-                else
+                else if (IsBaseType(fieldType))
+                {
                     newValue = DrawBase(value, name, fieldType);
-                if (value != newValue)
-                    field.SetValue(obj, newValue);
+                }
+                else
+                {
+                    if (fieldType != typeof(System.Object))
+                    {
+                        newValue = DrawObj(value, name, fieldType);
+                    }
+                    else
+                    {
+                        if (value != null)
+                        {
+                            fieldType = value.GetType();
+                            //DrawTypeObj(value, name);
+                            if (fieldType != typeof(System.Object))
+                                goto Again;
+                            else
+                                return;
 
-                //GUI.contentColor = UnityEngine.Color.white;
+                        }
+                        else
+                        {
+                            newValue = DrawObj(value, name, fieldType);
+
+                        }
+                    }
+                }
             }
-            //if (readOnly != null)
-            //    GUI.enabled = GUI.enabled & false;
 
 
-
-
-
-            //GUI.enabled = true;
-
+            if (value != newValue)
+            {
+                if (field is FieldInfo)
+                    (field as FieldInfo).SetValue(obj, newValue);
+                //else if ((field as PropertyInfo).CanWrite)
+                //    (field as PropertyInfo).SetValue(obj, newValue);
+            }
         }
+
 
         private int FieldsSprtBy(FieldInfo f1, FieldInfo f2)
         {
@@ -368,5 +444,137 @@ namespace ActionEditor
             GUI.Label(rect, "", (GUIStyle)"WindowBottomResize");
             GUILayout.Space(2);
         }
+
+
+
+
+
+
+
+
+
+        private object DrawObj(object value, string name, Type fieldType)
+        {
+            bool fold = false;
+
+            if (value == null)
+            {
+                EditorGUILayout.LabelField(name, "Null");
+            }
+
+            else
+            {
+                fold = GetFoldout(value);
+                fold = EditorGUILayout.Foldout(fold, $"{name}", true);
+                EditorGUI.LabelField(GUILayoutUtility.GetLastRect(), "   ", value.GetType().FullName);
+                SetFoldout(value, fold);
+            }
+            if (fold)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(20);
+                var Newvalue = DrawDefaultInspector(value);
+                GUILayout.EndHorizontal();
+                return Newvalue;
+            }
+            return value;
+        }
+
+
+
+
+
+        private IList DrawArr(ref bool fold, string name, IEnumerable arr, Type ele)
+        {
+            GUILayout.BeginVertical();
+            IList array = Activator.CreateInstance(typeof(List<>).MakeGenericType(ele)) as IList;
+            var ie = arr.GetEnumerator();
+            while (ie.MoveNext())
+            {
+                array.Add(ie.Current);
+            }
+            //for (int i = 0; i < arr.Count; i++)
+            //    array.Add(arr[i]);
+            var cout = array.Count;
+            //GUILayout.Label("", EditorStyles.toolbar);
+            var rect = EditorGUILayout.GetControlRect(GUILayout.Height(20));
+            GUI.Label(rect, "", EditorStyles.toolbarPopup);
+
+            //var rs_second = RectEx.VerticalSplit(rect, rect.width - 20);
+            var rs_second_0 = rect;
+            var rs_second_1 = rect;
+
+            rs_second_0.width -= 20;
+            rs_second_1.x = rect.xMax-20;
+            rs_second_1.width = 20;
+            fold = EditorGUI.Foldout(rs_second_0, fold, $"{name}({ele.Name}): {cout}", true);
+            if (GUI.Button(rs_second_1, EditorGUIUtility.TrIconContent("d_Toolbar Plus"), EditorStyles.toolbarButton))
+            {
+                Array newArray = Array.CreateInstance(ele, array != null ? array.Count + 1 : 1);
+                if (array != null)
+                {
+                    array.CopyTo(newArray, 0);
+                }
+
+                newArray.SetValue(Activator.CreateInstance(ele), newArray.Length - 1);
+                array = newArray;
+                SetFoldout(newArray, true);
+            }
+
+            if (fold)
+            {
+                //GUILayout.Space(6);
+                GUILayout.BeginVertical();
+                for (int i = 0; i < array.Count; i++)
+                {
+                    object listItem = array[i];
+                    EditorGUILayout.BeginHorizontal();
+                    {
+                        GUILayout.Space(20);
+
+                        if (IsBaseType(ele))
+                            array[i] = DrawBase(listItem, $"Element {i}", ele);
+                        else
+                            array[i] = DrawDefaultInspector(listItem);
+
+                        if (GUILayout.Button(EditorGUIUtility.TrIconContent("d_Toolbar Minus"), GUILayout.Width(20)))
+                        {
+                            array.Remove(listItem);
+                            break;
+                        }
+
+                        using (new EditorGUI.DisabledGroupScope(i == 0))
+                            if (GUILayout.Button(EditorGUIUtility.TrIconContent("d_scrollup"), GUILayout.Width(20)))
+                            {
+                                var temp = array[i];
+                                array[i] = array[i - 1];
+                                array[i - 1] = temp;
+
+                            }
+                        using (new EditorGUI.DisabledGroupScope(i == array.Count - 1))
+
+                            if (GUILayout.Button(EditorGUIUtility.TrIconContent("d_scrolldown"), GUILayout.Width(20)))
+                            {
+                                var temp = array[i];
+                                array[i] = array[i + 1];
+                                array[i + 1] = temp;
+                            }
+                    }
+
+                    EditorGUILayout.EndHorizontal();
+                    GUILayout.Space(2);
+                }
+                GUILayout.EndVertical();
+            }
+            GUILayout.EndVertical();
+            return array;
+        }
+
+        private void DrawDelegate(MemberInfo field, Delegate value)
+        {
+            EditorGUILayout.LabelField($"{value.Target} <--> {value.Method.Name}");
+        }
+
+
     }
 }
