@@ -6,20 +6,12 @@ namespace ActionEditor
     /// 自定义检视面板
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
-    public class CustomInspectors : Attribute
+    public class CustomInspectorAttribute : Attribute
     {
         public Type InspectedType;
-        public bool _editorForChildClasses;
-
-        public CustomInspectors(Type inspectedType)
+        public CustomInspectorAttribute(Type inspectedType)
         {
             InspectedType = inspectedType;
-        }
-
-        public CustomInspectors(Type inspectedType, bool editorForChildClasses)
-        {
-            InspectedType = inspectedType;
-            _editorForChildClasses = editorForChildClasses;
         }
     }
 

@@ -5,20 +5,22 @@ using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using static System.Collections.Specialized.BitVector32;
 using Object = UnityEngine.Object;
 
 namespace ActionEditor
 {
     public class InspectorsBase
     {
-        protected object target;
+        protected IAction target;
 
         private Dictionary<int, bool> _unfoldDictionary = new Dictionary<int, bool>();
 
-        public void SetTarget(object t)
+        public void SetTarget(IAction t)
         {
             target = t;
             _unfoldDictionary.Clear();
+
         }
 
         public virtual void OnInspectorGUI()
@@ -28,7 +30,21 @@ namespace ActionEditor
 
         public void DrawDefaultInspector()
         {
-            DrawDefaultInspector(target);
+            if (target is IDirectable)
+            {
+                var action = target as IDirectable;
+                using (new EditorGUI.DisabledScope(action.IsLocked))
+                {
+                    DrawDefaultInspector(target);
+                }
+            }
+            else
+            {
+
+                DrawDefaultInspector(target);
+            }
+
+
         }
 
         public object DrawDefaultInspector(object obj)
@@ -218,12 +234,6 @@ namespace ActionEditor
             {
                 GUILayout.Space(space.height);
             }
-            ReadOnlyAttribute readOnly = attributes.FirstOrDefault(x => x is ReadOnlyAttribute) as ReadOnlyAttribute;
-            if(readOnly != null)
-                GUI.enabled = false;
-
-
-
             ValidCheckAttribute notNull = attributes.FirstOrDefault(x => x is ValidCheckAttribute) as ValidCheckAttribute;
             if (notNull != null)
             {
@@ -235,69 +245,83 @@ namespace ActionEditor
                 }
 
             }
+
             HeaderAttribute header = attributes.FirstOrDefault(x => x is HeaderAttribute) as HeaderAttribute;
             if (header != null)
                 GUILayout.Label(header.header, EditorStyles.boldLabel);
 
 
-            NameAttribute Name = attributes.FirstOrDefault(x => x is NameAttribute) as NameAttribute;
-            if (Name != null)
-                name = Name.name;
-            RangeAttribute range = attributes.FirstOrDefault(x => x is RangeAttribute) as RangeAttribute;
-            ObjectPathAttribute selectObjectPath = attributes.FirstOrDefault(x => x is ObjectPathAttribute) as ObjectPathAttribute;
-            MultilineAttribute mutiline = attributes.FirstOrDefault(x => x is MultilineAttribute) as MultilineAttribute;
-            TextAreaAttribute textarea = attributes.FirstOrDefault(x => x is TextAreaAttribute) as TextAreaAttribute;
 
-            if (range != null && fieldType == typeof(float))
-                newValue = DrawRange(name, (float)value, range.min, range.max);
-            else if (selectObjectPath != null && fieldType == typeof(string))
-                newValue = DrawSelectObj(name, (string)value, selectObjectPath.type);
-            else if (mutiline != null && fieldType == typeof(string))
-                newValue = DrawMutiLine(name, (string)value, mutiline.lines);
-            else if (textarea != null && fieldType == typeof(string))
-                newValue = DrawTextArea(name, (string)value, field);
-            else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(List<>))
+            ReadOnlyAttribute readOnly = attributes.FirstOrDefault(x => x is ReadOnlyAttribute) as ReadOnlyAttribute;
+
+            using (new EditorGUI.DisabledScope(readOnly != null))
             {
-                Type elementType = fieldType.GetGenericArguments()[0];
-                IList array = (IList)value;
-                if (array == null)
-                    array = Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType)) as IList;
-                var fold = GetFoldout(value);
-                var result = DrawArr(ref fold, name, array, elementType);
-                array.Clear();
-                SetFoldout(array, fold);
-                for (int i = 0; i < result.Count; i++)
-                    array.Add(result[i]);
-                newValue = array;
+                NameAttribute Name = attributes.FirstOrDefault(x => x is NameAttribute) as NameAttribute;
+                if (Name != null)
+                    name = Name.name;
+                RangeAttribute range = attributes.FirstOrDefault(x => x is RangeAttribute) as RangeAttribute;
+                ObjectPathAttribute selectObjectPath = attributes.FirstOrDefault(x => x is ObjectPathAttribute) as ObjectPathAttribute;
+                MultilineAttribute mutiline = attributes.FirstOrDefault(x => x is MultilineAttribute) as MultilineAttribute;
+                TextAreaAttribute textarea = attributes.FirstOrDefault(x => x is TextAreaAttribute) as TextAreaAttribute;
+
+                if (range != null && fieldType == typeof(float))
+                    newValue = DrawRange(name, (float)value, range.min, range.max);
+                else if (selectObjectPath != null && fieldType == typeof(string))
+                    newValue = DrawSelectObj(name, (string)value, selectObjectPath.type);
+                else if (mutiline != null && fieldType == typeof(string))
+                    newValue = DrawMutiLine(name, (string)value, mutiline.lines);
+                else if (textarea != null && fieldType == typeof(string))
+                    newValue = DrawTextArea(name, (string)value, field);
+                else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(List<>))
+                {
+                    Type elementType = fieldType.GetGenericArguments()[0];
+                    IList array = (IList)value;
+                    if (array == null)
+                        array = Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType)) as IList;
+                    var fold = GetFoldout(value);
+                    var result = DrawArr(ref fold, name, array, elementType);
+                    array.Clear();
+                    SetFoldout(array, fold);
+                    for (int i = 0; i < result.Count; i++)
+                        array.Add(result[i]);
+                    newValue = array;
+                }
+                // 处理数组类型
+                else if (fieldType.IsArray)
+                {
+
+                    Type elementType = fieldType.GetElementType();
+                    Array array = (Array)value;
+
+                    if (array == null)
+                        array = Array.CreateInstance(elementType, 0);
+                    var fold = GetFoldout(value);
+                    var result = DrawArr(ref fold, name, array, elementType);
+                    Array.Clear(array, 0, array.Length);
+                    if (array.Length != result.Count)
+                        array = Array.CreateInstance(elementType, result.Count);
+                    SetFoldout(array, fold);
+
+                    for (int i = 0; i < result.Count; i++)
+                        array.SetValue(result[i], i);
+                    newValue = array;
+                }
+
+                else
+                    newValue = DrawBase(value, name, fieldType);
+                if (value != newValue)
+                    field.SetValue(obj, newValue);
+
+                //GUI.contentColor = UnityEngine.Color.white;
             }
-            // 处理数组类型
-            else if (fieldType.IsArray)
-            {
+            //if (readOnly != null)
+            //    GUI.enabled = GUI.enabled & false;
 
-                Type elementType = fieldType.GetElementType();
-                Array array = (Array)value;
 
-                if (array == null)
-                    array = Array.CreateInstance(elementType, 0);
-                var fold = GetFoldout(value);
-                var result = DrawArr(ref fold, name, array, elementType);
-                Array.Clear(array, 0, array.Length);
-                if (array.Length != result.Count)
-                    array = Array.CreateInstance(elementType, result.Count);
-                SetFoldout(array, fold);
 
-                for (int i = 0; i < result.Count; i++)
-                    array.SetValue(result[i], i);
-                newValue = array;
-            }
 
-            else
-                newValue = DrawBase(value, name, fieldType);
-            if (value != newValue)
-                field.SetValue(obj, newValue);
 
-            GUI.contentColor = UnityEngine.Color.white;
-            GUI.enabled = true;
+            //GUI.enabled = true;
 
         }
 

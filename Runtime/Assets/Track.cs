@@ -67,7 +67,7 @@ namespace ActionEditor
                 // if (!newAction.CanAdd(this)) return null;
 
                 newAction.StartTime = time;
-                newAction.Name = type.Name;
+                //newAction.Name = type.Name;
                 Clips.Add(newAction);
                 //newAction.PostCreate(this);
 

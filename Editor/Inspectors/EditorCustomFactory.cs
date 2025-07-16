@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace ActionEditor
 {
-    public static class EditorCustomFactory
+    /*public*/ static class EditorCustomFactory
     {
         #region Header
 
@@ -100,10 +100,10 @@ namespace ActionEditor
             var childs = EditorEX.GetTypeMetaDerivedFrom(type);
             foreach (var t in childs)
             {
-                var arrs = t.type.GetCustomAttributes(typeof(CustomInspectors), true);
+                var arrs = t.type.GetCustomAttributes(typeof(CustomInspectorAttribute), true);
                 foreach (var arr in arrs)
                 {
-                    if (arr is CustomInspectors c)
+                    if (arr is CustomInspectorAttribute c)
                     {
                         var bindT = c.InspectedType;
                         var iT = t.type;

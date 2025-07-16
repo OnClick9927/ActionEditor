@@ -72,13 +72,13 @@ namespace ActionEditor
         }
 
 
-        public Group AddGroup(Type type)
+        public Group AddGroup(Type type, string name)
         {
             if (!typeof(Group).IsAssignableFrom(type)) return null;
             var newGroup = Activator.CreateInstance(type) as Group;
             if (newGroup != null)
             {
-                newGroup.Name = "New Group";
+                newGroup.name = name;
                 groups.Add(newGroup);
                 Validate();
             }
@@ -94,7 +94,7 @@ namespace ActionEditor
                 name = newGroup.GetType().Name;
             }
 
-            newGroup.Name = name;
+            newGroup.name = name;
             groups.Add(newGroup);
             Validate();
             return newGroup;

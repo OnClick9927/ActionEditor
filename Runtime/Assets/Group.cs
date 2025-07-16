@@ -17,6 +17,10 @@ namespace ActionEditor
             public string type;
             public string json;
         }
+        //[SerializeField][HideInInspector] private string name;
+
+        public string name;
+
         [UnityEngine.SerializeField] private List<Temp> Temps;
         private List<Track> tracks = new List<Track>();
         [SerializeField][HideInInspector] private bool isCollapsed;
@@ -78,7 +82,7 @@ namespace ActionEditor
             if (newTrack is Track track)
             {
                 // if (!track.CanAdd(this)) return null;
-                track.Name = type.Name;
+                //track.Name = type.Name;
                 Tracks.Add(track);
 
                 Root?.Validate();

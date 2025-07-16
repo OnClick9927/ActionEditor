@@ -9,9 +9,8 @@ namespace ActionEditor
 
         public override void OnDraw()
         {
-            GUI.enabled = App.AssetData != null;
+            using (new  EditorGUI.DisabledScope(App.AssetData == null))
             DrawPlayControl();
-            GUI.enabled = true;
 
             DrawPlayHeader();
 

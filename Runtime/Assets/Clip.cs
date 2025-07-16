@@ -85,7 +85,7 @@ namespace ActionEditor
         //public virtual bool CanCrossBlend => false;
 
 
-        public Clip GetNextClip() => this.GetNextSibling<Clip>();
+        //public Clip GetNextClip() => this.GetNextSibling<Clip>();
 
     }
 

@@ -3,31 +3,32 @@ using UnityEngine;
 
 namespace ActionEditor
 {
-    public abstract class ActionClipInspector<T> : ActionClipInspector where T : Clip
+    public abstract class ClipInspector<T> : ClipInspector where T : Clip
     {
         protected T action => (T)target;
     }
 
-    [CustomInspectors(typeof(Clip), true)]
-    public class ActionClipInspector : InspectorsBase
+    [CustomInspectorAttribute(typeof(Clip))]
+    public class ClipInspector : InspectorsBase
     {
         private Clip action => (Clip)target;
 
         public override void OnInspectorGUI()
         {
-            GUI.enabled = !action.IsLocked;
             ShowCommonInspector();
         }
 
-        protected void ShowCommonInspector(bool showBaseInspector = true)
+        protected void ShowCommonInspector()
         {
-            ShowErrors();
-            ShowInOutControls();
-            ShowBlendingControls();
-            if (showBaseInspector)
+            using (new EditorGUI.DisabledScope(action.IsLocked))
             {
-                base.OnInspectorGUI();
+                ShowErrors();
+                ShowInOutControls();
+                ShowBlendingControls();
             }
+
+            base.OnInspectorGUI();
+
         }
 
         void ShowErrors()
@@ -192,15 +193,18 @@ namespace ActionEditor
                 var left = blend.BlendIn;
                 var right = blend.Length - blend.BlendOut;
                 GUILayout.Label("Blend", EditorStyles.boldLabel);
-                GUI.enabled = false;
-                EditorGUILayout.MinMaxSlider(ref left, ref right, 0, blend.Length);
-                blend.SetBlendIn(left);
-                blend.SetBlendOut(blend.Length - right);
-                EditorGUILayout.FloatField(nameof(IBlendAble.BlendIn), blend.BlendIn);
-                EditorGUILayout.FloatField(nameof(IBlendAble.BlendOut), blend.BlendOut);
-                GUI.enabled = true;
 
-       
+                using (new EditorGUI.DisabledScope(true))
+                {
+
+                    EditorGUILayout.MinMaxSlider(ref left, ref right, 0, blend.Length);
+                    blend.SetBlendIn(left);
+                    blend.SetBlendOut(blend.Length - right);
+                    EditorGUILayout.FloatField(nameof(IBlendAble.BlendIn), blend.BlendIn);
+                    EditorGUILayout.FloatField(nameof(IBlendAble.BlendOut), blend.BlendOut);
+                }
+
+
                 GUILayout.EndVertical();
             }
         }

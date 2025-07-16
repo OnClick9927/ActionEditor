@@ -212,11 +212,13 @@ namespace ActionEditor
 
             var stringedOptions = options.Select(o => o != null ? o.ToString() : "NONE");
 
-            GUI.enabled = options.Count > 0;
-            if (!string.IsNullOrEmpty(prefix))
-                index = EditorGUILayout.Popup(prefix, index, stringedOptions.ToArray(), GUIOptions);
-            else index = EditorGUILayout.Popup(index, stringedOptions.ToArray(), GUIOptions);
-            GUI.enabled = true;
+            using (new EditorGUI.DisabledScope(options.Count <= 0))
+
+            {
+                if (!string.IsNullOrEmpty(prefix))
+                    index = EditorGUILayout.Popup(prefix, index, stringedOptions.ToArray(), GUIOptions);
+                else index = EditorGUILayout.Popup(index, stringedOptions.ToArray(), GUIOptions);
+            }
 
             return index == -1 ? default(T) : options[index];
         }
