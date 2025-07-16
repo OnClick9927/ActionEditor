@@ -40,7 +40,7 @@ namespace ActionEditor
         public override void OnInspectorGUI()
         {
             var ow = target as InspectorPreviewAsset;
-            if (ow == null || App.SelectCount < 1)
+            if (ow == null || AppInternal.SelectCount < 1)
             {
                 EditorGUILayout.HelpBox(Lan.ins.NotSelectAsset, MessageType.Info);
                 return;
@@ -66,8 +66,8 @@ namespace ActionEditor
         GUIStyle _style;
         void DoAssetInspector()
         {
-            if (App.AssetData == null) return;
-            var assetData = App.AssetData;
+            if (AppInternal.AssetData == null) return;
+            var assetData = AppInternal.AssetData;
 
             var title = EditorEX.GetTypeName(assetData.GetType());
             if (_style == null)
@@ -102,7 +102,7 @@ namespace ActionEditor
 
         void DoSelectionInspector()
         {
-            var data = App.FistSelect;
+            var data = AppInternal.FistSelect;
 
             if (data == null)
             {
@@ -144,8 +144,8 @@ namespace ActionEditor
         /// </summary>
         void ShowPreliminaryInspector()
         {
-            if (App.AssetData == null) return;
-            var type = App.FistSelect.GetType();
+            if (AppInternal.AssetData == null) return;
+            var type = AppInternal.FistSelect.GetType();
             var name =EditorEX.GetTypeName(type);
 
             GUILayout.BeginHorizontal();

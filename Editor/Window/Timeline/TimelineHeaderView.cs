@@ -9,7 +9,7 @@ namespace ActionEditor
 
         public override void OnDraw()
         {
-            using (new  EditorGUI.DisabledScope(App.AssetData == null))
+            using (new  EditorGUI.DisabledScope(AppInternal.AssetData == null))
             DrawPlayControl();
 
             DrawPlayHeader();
@@ -51,14 +51,14 @@ namespace ActionEditor
 
             if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.PrevKey")))
             {
-                App.StepBackward();
+                AppInternal.StepBackward();
             }
 
             EditorGUI.BeginChangeCheck();
 
-            if (App.IsPlay)
+            if (AppInternal.IsPlay)
                 GUI.backgroundColor = Color.blue + Color.cyan;
-            var isPlaying = DrawToggle(App.IsPlay, EditorGUIUtility.TrIconContent("d_Animation.Play"));
+            var isPlaying = DrawToggle(AppInternal.IsPlay, EditorGUIUtility.TrIconContent("d_Animation.Play"));
             GUI.backgroundColor = Color.white;
 
 
@@ -66,28 +66,28 @@ namespace ActionEditor
             {
                 if (isPlaying)
                 {
-                    App.Pause(false);
-                    App.Play();
+                    AppInternal.Pause(false);
+                    AppInternal.Play();
                 }
                 else
                 {
-                    App.Stop();
+                    AppInternal.Stop();
                 }
             }
             EditorGUI.BeginChangeCheck();
-            if (App.IsPause)
+            if (AppInternal.IsPause)
                 GUI.backgroundColor = Color.blue + Color.cyan;
-            var isPause = DrawToggle(App.IsPause, EditorGUIUtility.TrIconContent("d_PauseButton"));
+            var isPause = DrawToggle(AppInternal.IsPause, EditorGUIUtility.TrIconContent("d_PauseButton"));
             GUI.backgroundColor = Color.white;
 
             if (EditorGUI.EndChangeCheck())
             {
-                App.Pause(isPause);
+                AppInternal.Pause(isPause);
             }
 
             if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.NextKey")))
             {
-                App.StepForward();
+                AppInternal.StepForward();
             }
 
             if (DrawButton(EditorGUIUtility.TrIconContent("d_Animation.LastKey")))
@@ -145,18 +145,18 @@ namespace ActionEditor
                     CreateAssetWindow.Show(rect);
             }
             {
-                var gName = App.TextAsset != null ? App.TextAsset.name : "None";
+                var gName = AppInternal.TextAsset != null ? AppInternal.TextAsset.name : "None";
                 var size = GUI.skin.label.CalcSize(new GUIContent(gName));
                 var width = size.x + 8;
                 if (width < 80) width = 80;
                 var rect = EditorGUILayout.GetControlRect(GUILayout.Width(width + 20));
                 if (GUI.Button(rect, $"[{gName}]", EditorStyles.toolbarDropDown))
                 {
-                    App.AutoSave();
+                    AppInternal.AutoSave();
 
                     AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", (o) =>
                     {
-                        App.OnObjectPickerConfig(o);
+                        AppInternal.OnObjectPickerConfig(o);
                         GUIUtility.ExitGUI();
                     }, (x) =>
                     {
@@ -169,13 +169,13 @@ namespace ActionEditor
 
             GUILayout.Space(10);
             GUI.color = Color.cyan + Color.blue;
-            if (App.SelectCount != 0)
+            if (AppInternal.SelectCount != 0)
                 if (GUILayout.Button(Lan.ins.ClearSelect, EditorStyles.toolbarButton))
-                    App.Select();
+                    AppInternal.Select();
             GUILayout.Space(2);
-            if (App.CopyAsset != null)
+            if (AppInternal.CopyAsset != null)
                 if (GUILayout.Button(Lan.ins.ClearCopy, EditorStyles.toolbarButton))
-                    App.SetCopyAsset(null, false);
+                    AppInternal.SetCopyAsset(null, false);
             GUI.color = Color.white;
 
             //DrawAssetsHeader();
@@ -188,15 +188,15 @@ namespace ActionEditor
 
 
 
-            if (App.AssetData != null)
+            if (AppInternal.AssetData != null)
             {
                 GUILayout.Label(
-string.Format(Lan.ins.HeaderLastSaveTime, App.LastSaveTime.ToString("HH:mm:ss")));
+string.Format(Lan.ins.HeaderLastSaveTime, AppInternal.LastSaveTime.ToString("HH:mm:ss")));
 
                 if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("SaveActive")), EditorStyles.toolbarButton,
                         GUILayout.Width(26)))
                 {
-                    App.AutoSave(); //先保存当前的
+                    AppInternal.AutoSave(); //先保存当前的
                 }
 
             }

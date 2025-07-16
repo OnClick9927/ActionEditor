@@ -58,7 +58,7 @@ namespace ActionEditor
         public static void Reset()
         {
             List<Clip> clips = new List<Clip>();
-            var asset = App.AssetData;
+            var asset = AppInternal.AssetData;
             if (asset == null) return;
             foreach (var group in asset.groups)
             {

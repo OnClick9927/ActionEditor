@@ -148,7 +148,7 @@ namespace ActionEditor
 
                 action.StartTime = _in;
                 action.EndTime = _out;
-                App.Repaint();
+                AppInternal.Repaint();
             }
 
             if (_in > action.Parent.EndTime)

@@ -12,7 +12,7 @@ namespace ActionEditor
         private TimelinePointerView _pointerView;
         //private TimelineBottomView _bottomView;
 
-        public Asset asset => App.AssetData;
+        public Asset asset => AppInternal.AssetData;
 
         private Rect _pointerRect;
 
@@ -40,7 +40,7 @@ namespace ActionEditor
             GUILayout.EndArea();
 
 
-            App.Width = Styles.TimelineRightWidth;
+            AppInternal.Width = Styles.TimelineRightWidth;
             DoZoomAndPan();
             ItemDragger.OnCheck();
 
@@ -159,7 +159,7 @@ namespace ActionEditor
                 if (e.type == EventType.MouseDrag || e.type == EventType.MouseDown || e.type == EventType.MouseUp)
                 {
                     var offset = e.mousePosition.x - _lastZoomX;
-                    var t = Mathf.Abs(offset) / App.Width * asset.ViewTime();
+                    var t = Mathf.Abs(offset) / AppInternal.Width * asset.ViewTime();
 
                     var min = asset.ViewTimeMin + (offset > 0 ? -t : t);
                     var max = asset.ViewTimeMax + (offset > 0 ? -t : t);

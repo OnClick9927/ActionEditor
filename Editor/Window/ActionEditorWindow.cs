@@ -19,27 +19,27 @@ namespace ActionEditor
         void OnEnable()
         {
             Lan.Load();
-            App.Window = this;
+            AppInternal.Window = this;
 
 
             titleContent = new GUIContent(Lan.ins.Title);
             minSize = new Vector2(500, 250);
             EditorEX.InitializeAssetTypes();
-            App.OnInitialize?.Invoke();
+            AppInternal.OnInitialize?.Invoke();
             _timelineView = this.CreateView<TimelineView>();
         }
 
         void OnDisable()
         {
-            App.Window = null;
-            App.OnDisable?.Invoke();
+            AppInternal.Window = null;
+            AppInternal.OnDisable?.Invoke();
         }
         private void Update()
         {
             UpdateViews();
-            if (App.NeedForceRefresh)
+            if (AppInternal.NeedForceRefresh)
                 this.Repaint();
-            App.OnUpdate();
+            AppInternal.OnUpdate();
         }
 
         private Event eve;
@@ -50,14 +50,14 @@ namespace ActionEditor
             eve = Event.current;
             _eventData.SetEvent(eve);
             _timelineView.OnGUI(this.position);
-            App.OnGUIEnd();
-            App.KeyBoardEvent(eve);
-            if (App.CopyAsset != null)
+            AppInternal.OnGUIEnd();
+            AppInternal.KeyBoardEvent(eve);
+            if (AppInternal.CopyAsset != null)
                 this.Repaint();
         }
         private void OnInspectorUpdate()
         {
-            if (App.SelectCount > 0)
+            if (AppInternal.SelectCount > 0)
                 this.Repaint();
         }
 

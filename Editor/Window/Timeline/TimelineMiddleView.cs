@@ -8,7 +8,7 @@ namespace ActionEditor
     class TimelineMiddleView : ViewBase, IPointerDragHandler, IDragBeginHandler, IDragEndHandler,
        IPointerDownHandler, IPointerUpHandler
     {
-        public Asset asset => App.AssetData;
+        public Asset asset => AppInternal.AssetData;
 
 
         #region Static
@@ -83,7 +83,7 @@ namespace ActionEditor
 
         private void DrawList()
         {
-            if (_itemViews.Count < 1 || App.NeedForceRefresh)
+            if (_itemViews.Count < 1 || AppInternal.NeedForceRefresh)
             {
                 ResetViews();
             }
@@ -164,7 +164,7 @@ namespace ActionEditor
                                 () =>
                                 {
                                     asset.AddGroup(typeMetaInfo.type,EditorEX.GetTypeName(typeMetaInfo.type));
-                                    App.Refresh();
+                                    AppInternal.Refresh();
                                 });
                         }
 
@@ -173,7 +173,7 @@ namespace ActionEditor
                     else
                     {
                         //asset.AddGroup<Group>();
-                        App.Refresh();
+                        AppInternal.Refresh();
                     }
                 }
 
@@ -239,7 +239,7 @@ namespace ActionEditor
             var bigEnough = false;
             var start = _pointerDownPos;
             if (start.x < Styles.TimelineLeftWidth) return;
-            if (Event.current.button == 1 && _pointerDown && App.SelectCount <= 1)
+            if (Event.current.button == 1 && _pointerDown && AppInternal.SelectCount <= 1)
             {
                 if ((start - mousePosition).magnitude > 10)
                 {
@@ -271,7 +271,7 @@ namespace ActionEditor
                 Handles.DrawAAPolyLine(2f, topRight, bottomRight);
                 Handles.DrawAAPolyLine(2f, bottomRight, bottomLeft);
                 Handles.DrawAAPolyLine(2f, bottomLeft, topLeft);
-                App.Repaint();
+                AppInternal.Repaint();
             }
             if (Event.current.type == EventType.MouseUp)
                 _pointerDown = false;
@@ -284,7 +284,7 @@ namespace ActionEditor
                     _multipleRect.height);
                 var clips = ClipDrawer.GetClips(relaRect);
                 // ClipDrawer.GetClipByTrackPosition();
-                App.Select(clips.ToArray());
+                AppInternal.Select(clips.ToArray());
             }
 
 

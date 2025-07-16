@@ -69,7 +69,7 @@ namespace ActionEditor
         public static void TryResetTracks()
         {
             _tracks.Clear();
-            var assets = App.AssetData;
+            var assets = AppInternal.AssetData;
             if (assets == null) return;
             foreach (var group in assets.groups)
             {
@@ -96,7 +96,7 @@ namespace ActionEditor
         private static void CacheDragClipInfo()
         {
             DragItems.Clear();
-            foreach (var select in App.SelectItems)
+            foreach (var select in AppInternal.SelectItems)
             {
                 if (select is Clip clip)
                 {
@@ -154,17 +154,17 @@ namespace ActionEditor
 
         public static void OnBeginDrag(PointerEventData eventData)
         {
-            var asset = App.AssetData;
+            var asset = AppInternal.AssetData;
             if (asset == null) return;
             Clip stretchClip = null;
             var dragType = ItemDragType.Pos;
-            if (App.SelectCount == 1)
+            if (AppInternal.SelectCount == 1)
             {
-                if (App.FistSelect is Clip clip && clip.CanScale())
+                if (AppInternal.FistSelect is Clip clip && clip.CanScale())
                 {
                     var x = eventData.MousePosition.x - Styles.TimelineLeftTotalWidth;
-                    var time = asset.PosToTime(x, App.Width);
-                    var gapTime = asset.WidthToTime(Styles.ClipScaleRectWidth, App.Width);
+                    var time = asset.PosToTime(x, AppInternal.Width);
+                    var gapTime = asset.WidthToTime(Styles.ClipScaleRectWidth, AppInternal.Width);
                     if (time >= clip.StartTime && time <= clip.StartTime + gapTime)
                     {
                         dragType = ItemDragType.StretchStart;
@@ -176,7 +176,7 @@ namespace ActionEditor
 
                     stretchClip = clip;
                 }
-                else if (App.FistSelect is Track track)
+                else if (AppInternal.FistSelect is Track track)
                 {
                     if (eventData.MousePosition.x < Styles.TimelineLeftWidth)
                     {
@@ -263,8 +263,8 @@ namespace ActionEditor
         /// </summary>
         private static void CacheDragOffset(Vector2 vector2)
         {
-            var asset = App.AssetData;
-            var dragX = asset.PosToTime(vector2.x, App.Width);
+            var asset = AppInternal.AssetData;
+            var dragX = asset.PosToTime(vector2.x, AppInternal.Width);
             foreach (var clipItem in NowDragClips)
             {
                 var offset = dragX - clipItem.StartTime;
@@ -275,7 +275,7 @@ namespace ActionEditor
         private static void OnBeginDragPos(PointerEventData eventData)
         {
             DragType = ItemDragType.Pos;
-            ReloadClipItems(App.SelectItems);
+            ReloadClipItems(AppInternal.SelectItems);
             CacheDragOffset(eventData.MousePosition);
         }
 
@@ -283,7 +283,7 @@ namespace ActionEditor
         {
             if (DragType != ItemDragType.Pos) return;
             if (NowDragClips.Count < 1) return;
-            var asset = App.AssetData;
+            var asset = AppInternal.AssetData;
             var nowPos = eventData.MousePosition;
             //缓存拖动需要的信息 cache drag result 
             List<float> subTimes = new List<float>();
@@ -291,7 +291,7 @@ namespace ActionEditor
             {
                 if (DragOffsetDictionary.TryGetValue(clipItem, out var offsetTime))
                 {
-                    var cursorTime = asset.SnapTime(asset.PosToTime(nowPos.x, App.Width) - offsetTime);
+                    var cursorTime = asset.SnapTime(asset.PosToTime(nowPos.x, AppInternal.Width) - offsetTime);
                     cursorTime = CheckMagnetSnapTime(cursorTime, clipItem.Length);
                     subTimes.Add(asset.SnapTime(cursorTime - clipItem.StartTime));
                 }
@@ -362,13 +362,13 @@ namespace ActionEditor
         {
             if (DragType < ItemDragType.StretchStart) return;
 
-            var asset = App.AssetData;
-            var clipData = App.FistSelect as Clip;
+            var asset = AppInternal.AssetData;
+            var clipData = AppInternal.FistSelect as Clip;
             if (clipData == null) return;
 
             var nowOffset = eventData.MousePosition.x;
             var offsetX = nowOffset - _dragStretchOffset; //Mathf.Abs(nowOffset - _dragStretchOffset);
-            var offsetTime = asset.SnapTime(asset.WidthToTime(offsetX, App.Width));
+            var offsetTime = asset.SnapTime(asset.WidthToTime(offsetX, AppInternal.Width));
 
             var newTime = _dragStretchTime + offsetTime;
             if (DragType == ItemDragType.StretchEnd)
@@ -398,7 +398,7 @@ namespace ActionEditor
                 clipData.EndTime = newTime;
             }
 
-            App.Refresh();
+            AppInternal.Refresh();
         }
 
         #endregion
@@ -422,7 +422,7 @@ namespace ActionEditor
 
         private static void CheckMoveToTrack(PointerEventData eventDat, bool confirm = false)
         {
-            Track targetTrack = App.FistSelect as Track;
+            Track targetTrack = AppInternal.FistSelect as Track;
             if (targetTrack == null) return;
 
 
@@ -457,7 +457,7 @@ namespace ActionEditor
                 TimelineTrackItemView.MoveToItem = trackItem.Data;
                 if (old != trackItem.Data)
                 {
-                    App.Repaint();
+                    AppInternal.Repaint();
                 }
 
                 if (confirm)
@@ -491,7 +491,7 @@ namespace ActionEditor
                         track.Group.InsertTrack(targetTrack, index);
                     }
 
-                    App.Refresh();
+                    AppInternal.Refresh();
                 }
 
 
@@ -550,7 +550,7 @@ namespace ActionEditor
                 }
             }
 
-            magnetSnapInterval = App.AssetData.ViewTime() * 0.01f;
+            magnetSnapInterval = AppInternal.AssetData.ViewTime() * 0.01f;
             magnetSnapTimesCache = result.Distinct().ToArray();
             // Debug.LogError($"缓存磁吸结果={magnetSnapTimesCache.Length}");
         }

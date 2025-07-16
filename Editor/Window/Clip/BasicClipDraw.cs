@@ -36,8 +36,8 @@ namespace ActionEditor
             Select = select;
             Copy = copy;
             TrackRect = trackRect;
-            StartPosX = clip.Root.TimeToPos(clip.StartTime, App.Width) + trackRect.x;
-            EndPosX = clip.Root.TimeToPos(clip.EndTime, App.Width) + trackRect.x;
+            StartPosX = clip.Root.TimeToPos(clip.StartTime, AppInternal.Width) + trackRect.x;
+            EndPosX = clip.Root.TimeToPos(clip.EndTime, AppInternal.Width) + trackRect.x;
 
             ClipRect = new Rect(StartPosX, TrackRect.y, EndPosX - StartPosX, Styles.LineHeight);
             ClipRealRect = new Rect(StartPosX, trackRightRect.y, EndPosX - StartPosX, Styles.LineHeight);
