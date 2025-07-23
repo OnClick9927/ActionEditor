@@ -60,7 +60,7 @@ namespace ActionEditor
             public void valid()
             {
                 var metas = EditorEX.GetTypeMetaDerivedFrom(typeof(Clip));
-
+                clips.RemoveAll(x => !metas.Any(y => y.type.FullName == x.type));
                 foreach (var meta in metas)
                 {
                     var find = clips.Find(x => x.type == meta.type.FullName);
@@ -80,6 +80,8 @@ namespace ActionEditor
 
                 }
                 metas = EditorEX.GetTypeMetaDerivedFrom(typeof(Track));
+                tracks.RemoveAll(x => !metas.Any(y => y.type.FullName == x.type));
+
                 var metas_group = EditorEX.GetTypeMetaDerivedFrom(typeof(Group));
                 var metas_asset = EditorEX.GetTypeMetaDerivedFrom(typeof(Asset));
 
@@ -113,7 +115,6 @@ namespace ActionEditor
                             .Select(x => metas_asset.First(y => y.type == x))
                             .Select(x => x.type.FullName).ToList();
 
-                        Console.WriteLine();
                     }
                 }
             }
