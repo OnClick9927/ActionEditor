@@ -1,7 +1,12 @@
-﻿namespace ActionEditor
+﻿using System;
+
+namespace ActionEditor
 {
     interface ILanguages
     {
+        string AssetPickListType { get; }
+
+        string Language { get; }
         //**********  Welcome *********
         string Title { get; }
         string CreateAsset { get; }

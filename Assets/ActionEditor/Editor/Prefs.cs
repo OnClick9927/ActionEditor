@@ -19,10 +19,13 @@ namespace ActionEditor
             Frames
         }
 
+
+
         [Serializable]
         public class SerializedData
         {
             public TimeStepMode TimeStepMode = TimeStepMode.Seconds;
+            public AssetPickListType searchListType = AssetPickListType.Tiled;
             public float SnapInterval = 0.1f;
             public int FrameRate = 30;
 
@@ -109,7 +112,7 @@ namespace ActionEditor
                         find.asset = _groups.SelectMany(x => x.attachableTypes)
                             .Select(x => metas_asset.First(y => y.type == x))
                             .Select(x => x.type.FullName).ToList();
-                            
+
                         Console.WriteLine();
                     }
                 }
@@ -240,6 +243,19 @@ namespace ActionEditor
                 {
                     data.TimeStepMode = value;
                     FrameRate = value == TimeStepMode.Frames ? 30 : 10;
+                    //Save();
+                }
+            }
+        }
+
+        public static AssetPickListType pickListType
+        {
+            get => data.searchListType;
+            set
+            {
+                if (data.searchListType != value)
+                {
+                    data.searchListType = value;
                     //Save();
                 }
             }

@@ -40,12 +40,16 @@ namespace ActionEditor
             GUILayout.Space(2);
 
             scroll = GUILayout.BeginScrollView(scroll);
-            var lan = EditorEX.CleanPopup<string>("Language", Lan.Language,
+            var lan = EditorEX.CleanPopup<string>(Lan.ins.Language, Lan.Language,
                 Lan.AllLanguages.Keys.ToList());
+
+
+
             if (lan != Lan.Language)
             {
                 Lan.SetLanguage(lan);
             }
+            Prefs.pickListType = (AssetPickListType)EditorGUILayout.EnumPopup(Lan.ins.AssetPickListType, Prefs.pickListType);
 
 
             Prefs.timeStepMode =
