@@ -3,6 +3,10 @@
     [Name("English")]
     class LanEN : ILanguages
     {
+        public string Language => "Language";
+
+        public string AssetPickListType => "AssetPickListType";
+
 
         //**********  Welcome *********
         string ILanguages.Title => "Action Editor";

@@ -154,7 +154,7 @@ namespace ActionEditor
                 {
                     AppInternal.AutoSave();
 
-                    AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", (o) =>
+                    AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset",Prefs.pickListType, (o) =>
                     {
                         AppInternal.OnObjectPickerConfig(o);
                         GUIUtility.ExitGUI();

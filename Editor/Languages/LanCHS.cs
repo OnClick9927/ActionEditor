@@ -3,6 +3,9 @@
     [Name("简体中文")]
      class LanCHS : ILanguages
     {
+        public string Language => "语言";
+
+        public string AssetPickListType => "资源搜索框列表形式";
 
 
         //**********  Welcome *********
