@@ -49,6 +49,7 @@ namespace ActionEditor
         {
             eve = Event.current;
             _eventData.SetEvent(eve);
+        
             _timelineView.OnGUI(this.position);
             AppInternal.OnGUIEnd();
             AppInternal.KeyBoardEvent(eve);
