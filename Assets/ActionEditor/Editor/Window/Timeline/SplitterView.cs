@@ -21,7 +21,7 @@ namespace ActionEditor
         public override void OnDraw()
         {
             // 绘制分隔条，可以拖动改变左右区域比例
-            GUILayout.BeginArea(new Rect(Width, 0, Styles.SplitterWidth, Position.height),
+            GUILayout.BeginArea(new Rect(Width, Position.y, Styles.SplitterWidth, Position.height),
                 EditorStyles.helpBox);
             EditorGUIUtility.AddCursorRect(new Rect(0, 0, Styles.SplitterWidth, Position.height),
                 MouseCursor.ResizeHorizontal);

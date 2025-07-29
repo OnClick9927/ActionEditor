@@ -189,20 +189,20 @@ namespace ActionEditor
 
         public static bool CanMultipleSelect { get; set; }
 
-        [System.NonSerialized] private static InspectorPreviewAsset _currentInspectorPreviewAsset;
+        //[System.NonSerialized] private static InspectorPreviewAsset _currentInspectorPreviewAsset;
 
-        private static InspectorPreviewAsset CurrentInspectorPreviewAsset
-        {
-            get
-            {
-                if (_currentInspectorPreviewAsset == null)
-                {
-                    _currentInspectorPreviewAsset = ScriptableObject.CreateInstance<InspectorPreviewAsset>();
-                }
+        //private static InspectorPreviewAsset CurrentInspectorPreviewAsset
+        //{
+        //    get
+        //    {
+        //        if (_currentInspectorPreviewAsset == null)
+        //        {
+        //            _currentInspectorPreviewAsset = ScriptableObject.CreateInstance<InspectorPreviewAsset>();
+        //        }
 
-                return _currentInspectorPreviewAsset;
-            }
-        }
+        //        return _currentInspectorPreviewAsset;
+        //    }
+        //}
 
         public static void Select(params IDirectable[] objs)
         {
@@ -243,11 +243,11 @@ namespace ActionEditor
                     CanMultipleSelect = false;
 
             }
-            if (objs != null && objs.Length > 0)
-            {
-                EditorUtility.SetDirty(CurrentInspectorPreviewAsset);
-                Selection.activeObject = CurrentInspectorPreviewAsset;
-            }
+            //if (objs != null && objs.Length > 0)
+            //{
+            //    EditorUtility.SetDirty(CurrentInspectorPreviewAsset);
+            //    Selection.activeObject = CurrentInspectorPreviewAsset;
+            //}
         }
 
         public static bool IsSelect(IDirectable directable)

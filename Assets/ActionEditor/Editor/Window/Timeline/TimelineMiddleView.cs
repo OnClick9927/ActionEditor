@@ -90,7 +90,7 @@ namespace ActionEditor
 
             // 左侧列表部分
             GUILayout.BeginVertical();
-            Styles.TimelineScrollPos = EditorGUILayout.BeginScrollView(Styles.TimelineScrollPos);
+            TimelineScrollPos = EditorGUILayout.BeginScrollView(TimelineScrollPos);
 
             var maxHeight = _itemViews.Count * Styles.LineHeight + _itemViews.Count * Styles.Space;
 
@@ -187,7 +187,7 @@ namespace ActionEditor
 
         private bool _pointerDown;
         private Vector2 _pointerDownPos;
-
+        static Vector2 TimelineScrollPos;
         public void OnDragBegin(PointerEventData eventData)
         {
             if (emptyRect.Contains(eventData.MousePosition) || !eventData.IsLeft()) return;
@@ -230,6 +230,7 @@ namespace ActionEditor
 
         private bool _preMultipleResult;
         private Rect _multipleRect;
+
         public static bool MutiSelecting { get; private set; }
         private void DrawMultiple()
         {
@@ -278,7 +279,7 @@ namespace ActionEditor
             //check select clips
             if (!_pointerDown && _preMultipleResult)
             {
-                var yOffset = Styles.TimelineScrollPos.y;
+                var yOffset = TimelineScrollPos.y;
                 var relaRect = new Rect(_multipleRect.x - Styles.TimelineLeftTotalWidth, _multipleRect.y + yOffset,
                     _multipleRect.width,
                     _multipleRect.height);

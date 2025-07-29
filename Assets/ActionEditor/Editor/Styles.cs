@@ -6,7 +6,7 @@ namespace ActionEditor
     static class Styles
     {
         private static float _timelineLeftWidth = 240;
-        private static float _timelineRightWidth;
+        //private static float _timelineRightWidth;
 
         public static Texture2D WhiteTexture => EditorGUIUtility.whiteTexture;
 
@@ -54,13 +54,13 @@ namespace ActionEditor
 
         public static float TimelineLeftTotalWidth => TimelineLeftWidth + SplitterWidth + RightGapWidth;
 
-        public static float TimelineRightWidth
-        {
-            get => _timelineRightWidth;
-            set => _timelineRightWidth = value;
-        }
+        //public static float TimelineRightWidth
+        //{
+        //    get => _timelineRightWidth;
+        //    set => _timelineRightWidth = value;
+        //}
 
-        public static Vector2 TimelineScrollPos;
+        //public static Vector2 TimelineScrollPos;
 
     }
 }

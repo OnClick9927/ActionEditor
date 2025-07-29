@@ -1,14 +1,15 @@
 ﻿using System.Collections.Generic;
-using System.Reflection;
+using static UnityEngine.GraphicsBuffer;
 using UnityEditor;
 using UnityEngine;
+using System.Reflection;
+using UnityEngine.UIElements;
 
 namespace ActionEditor
 {
-    [CustomEditor(typeof(InspectorPreviewAsset))]
-    class InspectorPreviewAssetInspector : Editor
+    class InspectorView : ViewBase
     {
-        private bool _optionsAssetFold = true;
+        //private bool _optionsAssetFold = true;
 
         //private static bool _willResample;
 
@@ -17,52 +18,34 @@ namespace ActionEditor
 
         private static InspectorsBase _currentDirectableEditor;
         private static InspectorsBase _currentAssetEditor;
-
-
-        void OnEnable()
+        static Vector2 scroll;
+        public override void OnDraw()
         {
-            _currentDirectableEditor = null;
-            //_willResample = false;
-        }
-
-        void OnDisable()
-        {
-            _currentDirectableEditor = null;
-            directableEditors.Clear();
-            //_willResample = false;
-        }
-
-        protected override void OnHeaderGUI()
-        {
-            GUILayout.Space(18f);
-        }
-
-        public override void OnInspectorGUI()
-        {
-            var ow = target as InspectorPreviewAsset;
-            if (ow == null || AppInternal.SelectCount < 1)
+            scroll = EditorGUILayout.BeginScrollView(scroll);
+            bool change=false;
+            EditorGUI.BeginChangeCheck();
+            if (AppInternal.SelectCount < 1)
             {
-                EditorGUILayout.HelpBox(Lan.ins.NotSelectAsset, MessageType.Info);
-                return;
+                if (AppInternal.AssetData == null)
+                {
+                    EditorGUILayout.HelpBox(Lan.ins.NotSelectAsset, MessageType.Info);
+                }
+                else
+                {
+                    DoAssetInspector();
+
+                }
             }
+            else
+            {
+                DoSelectionInspector();
+            }
+            change = EditorGUI.EndChangeCheck();
+            EditorGUILayout.EndScrollView();
+            if (change)
+                AppInternal.Refresh();
 
-            //GUI.skin.GetStyle("label").richText = true;
-
-            GUILayout.Space(5);
-
-            DoAssetInspector();
-            DoSelectionInspector();
-
-
-            //if (_willResample)
-            //{
-            //    _willResample = false;
-            //    EditorApplication.delayCall += () => { Debug.Log("cutscene.ReSample();"); };
-            //}
-
-            Repaint();
         }
-
         GUIStyle _style;
         void DoAssetInspector()
         {
@@ -72,31 +55,28 @@ namespace ActionEditor
             var title = EditorEX.GetTypeName(assetData.GetType());
             if (_style == null)
             {
-                _style = new GUIStyle(EditorStyles.foldout)
+                _style = new GUIStyle(EditorStyles.boldLabel)
                 {
                     fontSize = 25,
                     fontStyle = FontStyle.Bold
                 };
             }
-            _optionsAssetFold = EditorGUILayout.Foldout(_optionsAssetFold, title, _style);
+            EditorGUILayout.LabelField(title, _style, GUILayout.Height(30));
 
             GUILayout.Space(2);
-            if (_optionsAssetFold)
+            if (!directableEditors.TryGetValue(assetData, out var newEditor))
             {
-                if (!directableEditors.TryGetValue(assetData, out var newEditor))
-                {
-                    directableEditors[assetData] = newEditor = EditorCustomFactory.GetInspector(assetData);
-                }
+                directableEditors[assetData] = newEditor = EditorCustomFactory.GetInspector(assetData);
+            }
 
-                if (_currentAssetEditor != newEditor)
-                {
-                    _currentAssetEditor = newEditor;
-                }
+            if (_currentAssetEditor != newEditor)
+            {
+                _currentAssetEditor = newEditor;
+            }
 
-                if (_currentAssetEditor != null)
-                {
-                    _currentAssetEditor.OnInspectorGUI();
-                }
+            if (_currentAssetEditor != null)
+            {
+                _currentAssetEditor.OnInspectorGUI();
             }
         }
 
@@ -130,7 +110,7 @@ namespace ActionEditor
                 _currentDirectableEditor = newEditor;
             }
 
-            EditorEX.BoldSeparator();
+            //EditorEX.BoldSeparator();
             GUILayout.Space(4);
             ShowPreliminaryInspector();
 
@@ -146,7 +126,7 @@ namespace ActionEditor
         {
             if (AppInternal.AssetData == null) return;
             var type = AppInternal.FistSelect.GetType();
-            var name =EditorEX.GetTypeName(type);
+            var name = EditorEX.GetTypeName(type);
 
             GUILayout.BeginHorizontal();
             if (_style2 == null)
