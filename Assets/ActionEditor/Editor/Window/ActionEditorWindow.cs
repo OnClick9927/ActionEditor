@@ -25,14 +25,12 @@ namespace ActionEditor
             titleContent = new GUIContent(Lan.ins.Title);
             minSize = new Vector2(500, 250);
             EditorEX.InitializeAssetTypes();
-            AppInternal.OnInitialize?.Invoke();
             _timelineView = this.CreateView<TimelineView>();
         }
 
         void OnDisable()
         {
             AppInternal.Window = null;
-            AppInternal.OnDisable?.Invoke();
         }
         private void Update()
         {
