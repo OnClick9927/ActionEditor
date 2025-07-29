@@ -11,25 +11,16 @@ namespace ActionEditor
     [InitializeOnLoad]
     static class AppInternal
     {
+        const string key = "ActionEditor.APP";
         static AppInternal()
         {
             Prefs.Valid();
-            string key = "ActionEditor.APP";
             string path = EditorPrefs.GetString(key);
             OnObjectPickerConfig(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path));
-            OnDisable += () =>
-            {
-                if (TextAsset != null)
-                {
-                    EditorPrefs.SetString(key, AssetDatabase.GetAssetPath(TextAsset));
-                }
-            };
-
         }
         private static TextAsset _textAsset;
         public static event Action OnSave;
-        public static Action OnInitialize;
-        public static Action OnDisable;
+     
 
         public static Asset AssetData { get; private set; } = null;
 
@@ -69,26 +60,18 @@ namespace ActionEditor
 
         public static float Width;
 
-        public static void OnObjectPickerConfig(Object obj)
-        {
-            if (obj is TextAsset textAsset)
-            {
-                TextAsset = textAsset;
-            }
-        }
+        public static void OnObjectPickerConfig(Object obj) => TextAsset = obj as TextAsset;
 
         public static void SaveAsset()
         {
             if (AssetData == null) return;
+            OnSave?.Invoke();
             var path = AssetDatabase.GetAssetPath(TextAsset);
             if (string.IsNullOrEmpty(path)) return;
-            var json = AssetData.Serialize();
-
-            System.IO.File.WriteAllText(path, json);
-            //EditorUtility.SetDirty(TextAsset);
-            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            EditorPrefs.SetString(key, path);
+            System.IO.File.WriteAllText(path, AssetData.Serialize());
             AssetDatabase.Refresh();
-            OnSave?.Invoke();
+
         }
 
         public static void OnGUIEnd()
@@ -118,9 +101,7 @@ namespace ActionEditor
 
         private static DateTime _lastSaveTime = DateTime.Now;
 
-        /// <summary>
-        /// 尝试自动保存
-        /// </summary>
+
         public static void TryAutoSave()
         {
             var timespan = DateTime.Now - _lastSaveTime;
@@ -188,21 +169,6 @@ namespace ActionEditor
         public static IDirectable FistSelect => _selectList.Count > 0 ? _selectList.First() : null;
 
         public static bool CanMultipleSelect { get; set; }
-
-        //[System.NonSerialized] private static InspectorPreviewAsset _currentInspectorPreviewAsset;
-
-        //private static InspectorPreviewAsset CurrentInspectorPreviewAsset
-        //{
-        //    get
-        //    {
-        //        if (_currentInspectorPreviewAsset == null)
-        //        {
-        //            _currentInspectorPreviewAsset = ScriptableObject.CreateInstance<InspectorPreviewAsset>();
-        //        }
-
-        //        return _currentInspectorPreviewAsset;
-        //    }
-        //}
 
         public static void Select(params IDirectable[] objs)
         {
