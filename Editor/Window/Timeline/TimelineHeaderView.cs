@@ -9,8 +9,8 @@ namespace ActionEditor
 
         public override void OnDraw()
         {
-            using (new  EditorGUI.DisabledScope(AppInternal.AssetData == null))
-            DrawPlayControl();
+            using (new EditorGUI.DisabledScope(AppInternal.AssetData == null))
+                DrawPlayControl();
 
             DrawPlayHeader();
 
@@ -154,7 +154,7 @@ namespace ActionEditor
                 {
                     AppInternal.AutoSave();
 
-                    AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset",Prefs.pickListType, (o) =>
+                    AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", Prefs.pickListType, (o) =>
                     {
                         AppInternal.OnObjectPickerConfig(o);
                         GUIUtility.ExitGUI();
@@ -166,17 +166,8 @@ namespace ActionEditor
                 }
             }
 
-
-            GUILayout.Space(10);
-            GUI.color = Color.cyan + Color.blue;
-            if (AppInternal.SelectCount != 0)
-                if (GUILayout.Button(Lan.ins.ClearSelect, EditorStyles.toolbarButton))
-                    AppInternal.Select();
-            GUILayout.Space(2);
-            if (AppInternal.CopyAsset != null)
-                if (GUILayout.Button(Lan.ins.ClearCopy, EditorStyles.toolbarButton))
-                    AppInternal.SetCopyAsset(null, false);
-            GUI.color = Color.white;
+            var header = EditorCustomFactory.GetHeaderFooter(AppInternal.AssetData);
+            header?.OnGUI(AppInternal.AssetData);
 
             //DrawAssetsHeader();
 
@@ -190,9 +181,6 @@ namespace ActionEditor
 
             if (AppInternal.AssetData != null)
             {
-                GUILayout.Label(
-string.Format(Lan.ins.HeaderLastSaveTime, AppInternal.LastSaveTime.ToString("HH:mm:ss")));
-
                 if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("SaveActive")), EditorStyles.toolbarButton,
                         GUILayout.Width(26)))
                 {

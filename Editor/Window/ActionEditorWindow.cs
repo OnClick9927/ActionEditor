@@ -47,8 +47,9 @@ namespace ActionEditor
         {
             eve = Event.current;
             _eventData.SetEvent(eve);
-        
-            _timelineView.OnGUI(this.position);
+            var pos = this.position;
+            pos.position = Vector2.zero;
+            _timelineView.OnGUI(pos);
             AppInternal.OnGUIEnd();
             AppInternal.KeyBoardEvent(eve);
             if (AppInternal.CopyAsset != null)

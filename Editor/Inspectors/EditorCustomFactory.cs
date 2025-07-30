@@ -4,61 +4,108 @@ using System.Linq;
 
 namespace ActionEditor
 {
-    /*public*/ static class EditorCustomFactory
+    /*public*/
+    static class EditorCustomFactory
     {
         #region Header
 
-        //private static bool _initHeadersDic = false;
-        //private static readonly Dictionary<Type, Type> _headerDic = new Dictionary<Type, Type>();
+        private static bool _initHeadersDic = false;
+        private static readonly Dictionary<Type, Type> _headerDic = new Dictionary<Type, Type>();
+        private static readonly Dictionary<Type, Type> _footerDic = new Dictionary<Type, Type>();
+        private static Dictionary<Type, HeaderFooterBase> head_foot = new Dictionary<Type, HeaderFooterBase>();
+        public static HeaderFooterBase GetHeaderFooter(Asset asset, bool header = true)
+        {
+            if (asset == null) return null;
+            if (!_initHeadersDic)
+            {
+                InitHeaderDic();
+                InitFooterDic();
+                _initHeadersDic = true;
+            }
 
-        //public static HeaderBase GetHeader(Asset asset)
-        //{
-        //    InitHeaderDic();
 
-        //    var type = asset.GetType();
-        //    if (_headerDic.TryGetValue(type, out var t))
-        //    {
-        //        return Activator.CreateInstance(t) as HeaderBase;
-        //    }
 
-        //    return null;
-        //}
+            var type = asset.GetType();
+            var dic = header ? _headerDic : _footerDic;
+            if (dic.TryGetValue(type, out var t))
+            {
 
-        //public static void InitHeaderDic()
-        //{
-        //    if (_initHeadersDic) return;
+                if (head_foot.TryGetValue(t, out HeaderFooterBase headerFooter))
+                    return headerFooter;
 
-        //    _initHeadersDic = true;
 
-        //    //先获取有绑定关系的所有对象和面板对象映射
-        //    Type type = typeof(HeaderBase);
-        //    var childs = EditorEX.GetTypeMetaDerivedFrom(type);
-        //    foreach (var t in childs)
-        //    {
-        //        var arrs = t.type.GetCustomAttributes(typeof(CustomHeader), true);
-        //        foreach (var arr in arrs)
-        //        {
-        //            if (arr is CustomHeader c)
-        //            {
-        //                var bindT = c.InspectedType;
-        //                var iT = t.type;
-        //                if (!_headerDic.ContainsKey(bindT))
-        //                {
-        //                    if (!iT.IsAbstract) _headerDic[bindT] = iT;
-        //                }
-        //                else
-        //                {
-        //                    var old = _headerDic[bindT];
-        //                    if (!iT.IsAbstract && iT.IsSubclassOf(old))
-        //                    {
-        //                        _headerDic[bindT] = iT;
-        //                    }
-        //                }
-        //            }
-        //        }
-        //    }
-        //}
+                headerFooter = Activator.CreateInstance(t) as HeaderFooterBase;
+                head_foot[t] = headerFooter;
+                return headerFooter;
+            }
 
+            return null;
+        }
+
+        static void InitHeaderDic()
+        {
+            //if (_initHeadersDic) return;
+
+            //_initHeadersDic = true;
+
+            //先获取有绑定关系的所有对象和面板对象映射
+            Type type = typeof(HeaderFooterBase);
+            var childs = EditorEX.GetTypeMetaDerivedFrom(type);
+            foreach (var t in childs)
+            {
+                var arrs = t.type.GetCustomAttributes(typeof(CustomHeaderAttribute), true);
+                foreach (var arr in arrs)
+                {
+                    if (arr is CustomHeaderAttribute c)
+                    {
+                        var bindT = c.InspectedType;
+                        var iT = t.type;
+                        if (!_headerDic.ContainsKey(bindT))
+                        {
+                            if (!iT.IsAbstract) _headerDic[bindT] = iT;
+                        }
+                        else
+                        {
+                            var old = _headerDic[bindT];
+                            if (!iT.IsAbstract && iT.IsSubclassOf(old))
+                            {
+                                _headerDic[bindT] = iT;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        static void InitFooterDic()
+        {
+            //先获取有绑定关系的所有对象和面板对象映射
+            Type type = typeof(HeaderFooterBase);
+            var childs = EditorEX.GetTypeMetaDerivedFrom(type);
+            foreach (var t in childs)
+            {
+                var arrs = t.type.GetCustomAttributes(typeof(CustomFooterAttribute), true);
+                foreach (var arr in arrs)
+                {
+                    if (arr is CustomFooterAttribute c)
+                    {
+                        var bindT = c.InspectedType;
+                        var iT = t.type;
+                        if (!_footerDic.ContainsKey(bindT))
+                        {
+                            if (!iT.IsAbstract) _footerDic[bindT] = iT;
+                        }
+                        else
+                        {
+                            var old = _headerDic[bindT];
+                            if (!iT.IsAbstract && iT.IsSubclassOf(old))
+                            {
+                                _footerDic[bindT] = iT;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         #endregion
 
         #region Inspectors

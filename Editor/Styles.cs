@@ -40,7 +40,7 @@ namespace ActionEditor
         public const int ClipBottomRectHeight = 4;
         public const int ClipScaleRectWidth = 5;
 
-        public const int BottomHeight = 5;
+        public const int BottomHeight = 22;
 
 
         public static float TimelineLeftWidth
