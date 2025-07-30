@@ -29,5 +29,26 @@ namespace ActionEditor
             PreviewType = type;
         }
     }
+    [AttributeUsage(AttributeTargets.Class)]
 
+    public class CustomHeaderAttribute : System.Attribute
+    {
+        public Type InspectedType;
+
+        public CustomHeaderAttribute(Type inspectedType)
+        {
+            InspectedType = inspectedType;
+        }
+    }
+    [AttributeUsage(AttributeTargets.Class)]
+
+    public class CustomFooterAttribute : System.Attribute
+    {
+        public Type InspectedType;
+
+        public CustomFooterAttribute(Type inspectedType)
+        {
+            InspectedType = inspectedType;
+        }
+    }
 }

@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace ActionEditor
 {
+
     class TimelineView : ViewBase
     {
         private SplitterView _splitterView;
@@ -10,7 +11,8 @@ namespace ActionEditor
         private TimelineHeaderView _headerView;
         private TimelineMiddleView _middleView;
         private TimelinePointerView _pointerView;
-        //private TimelineBottomView _bottomView;
+        private TimelineBottomView _bottomView;
+        private TimelineBottomView_custom _Custom_footer;
         private SplitterView _splitter_inspector;
         private InspectorView _inspector;
 
@@ -27,21 +29,28 @@ namespace ActionEditor
             _pointerView = Window.CreateView<TimelinePointerView>();
             _splitter_inspector = Window.CreateView<SplitterView>();
             _inspector = Window.CreateView<InspectorView>();
-            //_bottomView = Window.CreateView<TimelineBottomView>();
-
+            _bottomView = Window.CreateView<TimelineBottomView>();
+            _Custom_footer = Window.CreateView<TimelineBottomView_custom>();
             Prefs.SnapInterval = 0.01f;
         }
         static float _inspector_width = 380;
         static float TimelineRightWidth;
         public override void OnDraw()
         {
+            var bottom_rect = new Rect(Position.x,
+Position.yMax - Styles.BottomHeight,
+Position.width - _inspector_width,
+Styles.BottomHeight);
+            GUI.Box(bottom_rect, "", EditorStyles.helpBox);
             var leftWidth = Styles.TimelineLeftWidth;
             var spit_rect = new Rect(0, Styles.PlayControlHeight, Position.width, Position.height - Styles.PlayControlHeight);
 
             leftWidth = _splitterView.OnSplit(spit_rect, leftWidth);
             if (!leftWidth.Equals(Styles.TimelineLeftWidth))
                 Styles.TimelineLeftWidth = leftWidth;
-            spit_rect.y = Styles.HeaderHeight;
+            spit_rect.y = Position.y;
+            spit_rect.height = Position.height;
+
             _inspector_width = Position.width - _splitter_inspector.OnSplit(spit_rect, Position.width - _inspector_width);
 
 
@@ -51,7 +60,7 @@ namespace ActionEditor
                 asset.Validate();
 
 
-            var headRect = new Rect(0, 0, Position.width, Styles.PlayControlHeight);
+            var headRect = new Rect(0, 0, Position.width - _inspector_width, Styles.PlayControlHeight);
             GUILayout.BeginArea(headRect);
             _headerView.OnGUI(new Rect(0, 0, headRect.width, headRect.height));
             GUILayout.EndArea();
@@ -66,7 +75,7 @@ namespace ActionEditor
             ItemDragger.OnCheck();
 
             var middleRect = new Rect(0, Styles.PlayControlHeight, Position.width - _inspector_width,
-                Position.height - Styles.PlayControlHeight /*- Styles.BottomHeight*/);
+                Position.height - Styles.PlayControlHeight - Styles.BottomHeight);
 
             //groups and tracks
             GUILayout.BeginArea(middleRect);
@@ -74,11 +83,11 @@ namespace ActionEditor
                 middleRect.height));
             GUILayout.EndArea();
 
-            var inspector_rect = new Rect(Position.width - _inspector_width, Styles.HeaderHeight, _inspector_width, Position.height);
-            inspector_rect.width -= 10;
-            inspector_rect.height -= 10;
-            inspector_rect.x += 5;
-            inspector_rect.y += 5;
+            var inspector_rect = new Rect(Position.width - _inspector_width, Position.y, _inspector_width, Position.height);
+            //inspector_rect.width -= 10;
+            //inspector_rect.height -= 10;
+            //inspector_rect.x += 5;
+            //inspector_rect.y += 5;
 
 
             GUILayout.BeginArea(inspector_rect, EditorStyles.helpBox);
@@ -88,16 +97,30 @@ namespace ActionEditor
 
             var leftOffset = Styles.TimelineLeftWidth + Styles.SplitterWidth + Styles.RightGapWidth;
             TimelineRightWidth = Position.width - leftOffset - _inspector_width;
+
             var pointerRect = new Rect(leftOffset, Styles.HeaderHeight, TimelineRightWidth,
-                Position.height - 5 - Styles.HeaderHeight);
+                Position.height - 5 - Styles.HeaderHeight - Styles.BottomHeight);
             _pointerRect = pointerRect;
             GUILayout.BeginArea(pointerRect);
             _pointerView.OnGUI(new Rect(0, 0, pointerRect.width, pointerRect.height));
             GUILayout.EndArea();
 
 
+            var bottom_rect_right = new Rect(Position.x + leftOffset,
+    Position.yMax - Styles.BottomHeight,
+    Position.width - _inspector_width - leftOffset,
+    Styles.BottomHeight);
+            GUILayout.BeginArea(bottom_rect_right);
 
+            _Custom_footer.OnGUI(new Rect(0, 0, bottom_rect_right.width, bottom_rect_right.height));
+            GUILayout.EndArea();
 
+            var bottom_rect_left = new Rect(Position.x, Position.yMax - Styles.BottomHeight,
+                   leftOffset, Styles.BottomHeight);
+            GUILayout.BeginArea(bottom_rect_left);
+
+            _bottomView.OnGUI(new Rect(0, 0, bottom_rect_left.width, bottom_rect_left.height));
+            GUILayout.EndArea();
 
         }
 

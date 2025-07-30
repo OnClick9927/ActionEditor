@@ -20,7 +20,7 @@ namespace ActionEditor
         }
         private static TextAsset _textAsset;
         public static event Action OnSave;
-     
+
 
         public static Asset AssetData { get; private set; } = null;
 
@@ -130,9 +130,24 @@ namespace ActionEditor
             CopyAsset = asset;
             IsCut = cut;
         }
-        public static void AddCopyClipToTrack(Track track)
+
+
+        public static void PasteCopyTo(IDirectable target)
+        {
+            if (target is Track track)
+            {
+                AddCopyClipToTrack(track);
+            }
+            else if (target is Group group)
+            {
+                AddCopyTrackToGroup(group);
+            }
+        }
+
+        static void AddCopyClipToTrack(Track track)
         {
             Clip clip = CopyAsset as Clip;
+            if (clip == null) return;
             if (!IsCut)
                 clip = clip.DeepCopy();
 
@@ -144,9 +159,11 @@ namespace ActionEditor
             AppInternal.Select(clip);
             //CopyAsset = null;
         }
-        public static void AddCopyTrackToGroup(Group group)
+        static void AddCopyTrackToGroup(Group group)
         {
             Track track = CopyAsset as Track;
+            if (track == null) return;
+
             if (!IsCut)
                 track = track.DeepCopy();
 
@@ -385,7 +402,7 @@ namespace ActionEditor
                             if (_asset is Group && AppInternal.CopyAsset is Track)
                             {
                                 Group group = _asset as Group;
-                                AppInternal.AddCopyTrackToGroup(group);
+                                AppInternal.PasteCopyTo(group);
                                 AppInternal.Refresh();
                                 eve.Use();
 
@@ -393,7 +410,7 @@ namespace ActionEditor
                             else if (_asset is Track && AppInternal.CopyAsset is Clip)
                             {
                                 Track track = _asset as Track;
-                                AppInternal.AddCopyClipToTrack(track);
+                                AppInternal.PasteCopyTo(track);
                                 AppInternal.Refresh();
                                 eve.Use();
 

@@ -257,7 +257,7 @@ namespace ActionEditor
                     {
                         if (group.CanAddTrack(copyTrack))
                         {
-                            AppInternal.AddCopyTrackToGroup(group);
+                            AppInternal.PasteCopyTo(group);
                             AppInternal.Refresh();
                         }
                     });
@@ -523,7 +523,7 @@ namespace ActionEditor
                         menu.AddItem(new GUIContent(string.Format(Lan.ins.Paste, EditorEX.GetTypeName(copyType))), false,
                             () =>
                             {
-                                AppInternal.AddCopyClipToTrack(track);
+                                AppInternal.PasteCopyTo(track);
                                 AppInternal.Refresh();
                                 //track.PasteClip(DirectorUtility.CopyClip, cursorTime);
                             });
