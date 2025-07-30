@@ -148,7 +148,7 @@ namespace ActionEditor
         // }
 
         private static readonly Queue<TimerHandler> _pool = new Queue<TimerHandler>();
-        private static int _mid = 1;
+        //private static int _mid = 1;
 
         /// <summary>
         /// 当前帧开始的时间
