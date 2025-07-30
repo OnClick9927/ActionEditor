@@ -113,7 +113,7 @@ namespace ActionEditor
         internal static Type GetType(string typeName)
         {
             Type type = null;
-#if !UNITY_EDITOR
+//#if !UNITY_EDITOR
 
             if (GetTypeByTypeName != null)
             {
@@ -122,7 +122,7 @@ namespace ActionEditor
                     return type;
             }
 
-#endif
+//#endif
             foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
             {
                 type = a.GetType(typeName);
