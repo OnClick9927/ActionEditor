@@ -99,10 +99,10 @@ namespace ActionEditor
                 if (Data is Group group)
                 {
                     var collapseAllRect = EditorGUILayout.GetControlRect(GUILayout.Width(15), GUILayout.Height(16));
-                    var temp = !EditorGUI.Foldout(collapseAllRect, !Data.IsCollapsed, "");
-                    if (temp != Data.IsCollapsed)
+                    var temp = !EditorGUI.Foldout(collapseAllRect, !group.isCollapsed, "");
+                    if (temp != group.isCollapsed)
                     {
-                        group.IsCollapsed = !Data.IsCollapsed;
+                        group.isCollapsed = !group.isCollapsed;
                         AppInternal.Refresh();
                         Event.current.Use();
                     }

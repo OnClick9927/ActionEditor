@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 //using FullSerializer;
-using UnityEngine;
+//using UnityEngine;
 using static ActionEditor.Group;
 
 namespace ActionEditor
@@ -14,10 +14,31 @@ namespace ActionEditor
     [Attachable(typeof(Group))]
     public abstract class Track : DirectableBase, IDirectable
     {
+        [ReadOnly] public bool isLocked;
+        [ReadOnly] public bool active = true;
         private List<Clip> clips = new List<Clip>();
 
         [UnityEngine.SerializeField] private List<Temp> Temps;
 
+
+
+        public override sealed bool IsLocked
+        {
+            get => Parent != null && (Parent.IsLocked || isLocked);
+            set => isLocked = value;
+        }
+        public override sealed bool IsActive
+        {
+            get => Parent != null && Parent.IsActive && active;
+            set
+            {
+                if (active != value)
+                {
+                    active = value;
+                    if (Root != null) Root.Validate();
+                }
+            }
+        }
 
         public List<Clip> Clips
         {
@@ -28,11 +49,11 @@ namespace ActionEditor
         public Group Group => Parent as Group;
 
         public sealed override IEnumerable<IDirectable> Children => clips;
-        public override bool IsCollapsed
-        {
-            get => Parent != null && Parent.IsCollapsed;
-            set { }
-        }
+        //public override bool IsCollapsed
+        //{
+        //    get => Parent != null && Parent.IsCollapsed;
+        //    set { }
+        //}
         public sealed override float Length { get => EndTime - StartTime; set { } }
 
 
@@ -72,7 +93,7 @@ namespace ActionEditor
                 //newAction.PostCreate(this);
 
                 var nextAction = Clips.FirstOrDefault(a => a.StartTime > newAction.StartTime);
-                if (nextAction != null) newAction.EndTime = Mathf.Min(newAction.EndTime, nextAction.StartTime);
+                if (nextAction != null) newAction.EndTime = IDirectableExtensions.Min(newAction.EndTime, nextAction.StartTime);
 
                 Root.Validate();
                 // DirectorUtility.selectedObject = newAction;
@@ -107,24 +128,26 @@ namespace ActionEditor
 
         protected override void OnAfterDeserialize()
         {
-            clips = this.Temps.ConvertAll(x =>
-            {
-                var type = Asset.GetType(x.type);
-                if (type != null)
-                    return JsonUtility.FromJson(x.json, type) as Clip;
-                return null;
-            });
-            clips.RemoveAll(x => x == null);
+            Asset.FromTemp(this.Temps, this.clips);
+            //clips = this.Temps.ConvertAll(x =>
+            //{
+            //    var type = Asset.GetType(x.type);
+            //    if (type != null)
+            //        return JsonUtility.FromJson(x.json, type) as Clip;
+            //    return null;
+            //});
+            //clips.RemoveAll(x => x == null);
         }
         protected override void OnBeforeSerialize()
         {
+            Asset.ToTemp(this.Temps, this.clips);
 
-            Temps = clips.ConvertAll(x => new Temp()
-            {
-                type = x.GetType().FullName,
-                json = JsonUtility.ToJson(x)
+            //Temps = clips.ConvertAll(x => new Temp()
+            //{
+            //    type = x.GetType().FullName,
+            //    json = JsonUtility.ToJson(x)
 
-            });
+            //});
         }
 
 

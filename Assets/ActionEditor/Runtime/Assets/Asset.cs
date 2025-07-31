@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
+
+//using UnityEngine;
 using static ActionEditor.Group;
 
 namespace ActionEditor
@@ -10,18 +11,18 @@ namespace ActionEditor
     public abstract class Asset : IAction
     {
         public const string FileEx = "action.bytes";
+        //public static bool pretty_json = false;
 
+        [NonSerialized] public List<Group> groups = new List<Group>();
         [UnityEngine.SerializeField] private List<Temp> Temps;
-
-        [NonSerialized][HideInInspector] public List<Group> groups = new List<Group>();
-        [SerializeField] private float length = 5f;
-        [SerializeField] private float viewTimeMin;
-        [SerializeField] private float viewTimeMax = 5f;
+        [UnityEngine.SerializeField] private float length = 5f;
+        [UnityEngine.SerializeField] private float viewTimeMin;
+        [UnityEngine.SerializeField] private float viewTimeMax = 5f;
 
         public float Length
         {
             get => length;
-            set => length = Mathf.Max(value, 0.1f);
+            set => length = IDirectableExtensions.Max(value, 0.1f);
         }
 
         public float ViewTimeMin
@@ -29,14 +30,14 @@ namespace ActionEditor
             get => viewTimeMin;
             set
             {
-                if (ViewTimeMax > 0) viewTimeMin = Mathf.Min(value, ViewTimeMax - 0.25f);
+                if (ViewTimeMax > 0) viewTimeMin = IDirectableExtensions.Min(value, ViewTimeMax - 0.25f);
             }
         }
 
         public float ViewTimeMax
         {
             get => viewTimeMax;
-            set => viewTimeMax = Mathf.Max(value, ViewTimeMin + 0.25f, 0);
+            set => viewTimeMax = IDirectableExtensions.Max(value, ViewTimeMin + 0.25f, 0);
         }
 
         public float StartTime => 0;
@@ -53,16 +54,17 @@ namespace ActionEditor
         {
             var t = 0f;
 
-            foreach (IDirectable group in groups)
+            foreach (var group in groups)
             {
                 group.Validate(this, null);
                 foreach (var track in group.Children)
                 {
+                    var _tracks = track as Track;
                     track.Validate(this, group);
                     foreach (var clip in track.Children)
                     {
                         clip.Validate(this, track);
-                        if (group.IsActive && track.IsActive && clip.IsActive && clip.EndTime > t)
+                        if (clip.IsActive && clip.EndTime > t)
                             t = clip.EndTime;
                     }
                 }
@@ -105,7 +107,7 @@ namespace ActionEditor
         public string Serialize()
         {
             this.BeforeSerialize();
-            return $"{GetType().FullName}\n{JsonUtility.ToJson(this, false)}";
+            return $"{GetType().FullName}\n{IDirectableExtensions.ObjectToJson(this)}";
         }
 
         public static event Func<string, System.Type> GetTypeByTypeName;
@@ -113,7 +115,7 @@ namespace ActionEditor
         internal static Type GetType(string typeName)
         {
             Type type = null;
-//#if !UNITY_EDITOR
+            //#if !UNITY_EDITOR
 
             if (GetTypeByTypeName != null)
             {
@@ -122,7 +124,7 @@ namespace ActionEditor
                     return type;
             }
 
-//#endif
+            //#endif
             foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
             {
                 type = a.GetType(typeName);
@@ -141,39 +143,64 @@ namespace ActionEditor
             type = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes())
                 .FirstOrDefault(x => x.FullName == typename);
 #endif
-            var asset = JsonUtility.FromJson(serializedState.Remove(0, sps[0].Length), type) as Asset;
+            var asset = IDirectableExtensions.JsonToObject(serializedState.Remove(0, sps[0].Length), type) as Asset;
             asset.AfterDeserialize();
             return asset;
         }
         protected virtual void OnAfterDeserialize() { }
         protected virtual void OnBeforeSerialize() { }
+
+        internal static void FromTemp<T>(List<Temp> src, List<T> result) where T : class, IDirectable
+        {
+            result.Clear();
+            for (int i = 0; i < src.Count; i++)
+            {
+
+                var tem = src[i];
+                var type = Asset.GetType(tem.type);
+                if (type != null)
+                {
+                    T t = IDirectableExtensions.JsonToObject(tem.json, type) as T;
+                    if (t != null)
+                    {
+                        result.Add(t);
+                    }
+                }
+            }
+            for (int i = 0; i < result.Count; i++)
+                result[i].AfterDeserialize();
+        }
+        internal static void ToTemp<T>(List<Temp> result, List<T> src) where T : class, IDirectable
+        {
+            for (int i = 0; i < src.Count; i++)
+                src[i].BeforeSerialize();
+            result.Clear();
+            for (int i = 0; i < src.Count; i++)
+            {
+
+                var tem = src[i];
+                result.Add(new Temp()
+                {
+                    type = tem.GetType().FullName,
+                    json = IDirectableExtensions.ObjectToJson(tem)
+                });
+            }
+
+        }
         private void AfterDeserialize()
         {
-            groups = this.Temps.ConvertAll(x =>
-            {
-                var type = Asset.GetType(x.type);
-                if (type != null)
-                    return JsonUtility.FromJson(x.json, type) as Group;
-                return null;
-            });
-            groups.RemoveAll(x => x == null);
+            FromTemp(this.Temps, this.groups);
 
-            for (int i = 0; i < groups.Count; i++)
-                (groups[i] as IDirectable).AfterDeserialize();
+
+            //for (int i = 0; i < groups.Count; i++)
+            //    (groups[i] as IDirectable).AfterDeserialize();
             OnAfterDeserialize();
             Validate();
         }
 
         private void BeforeSerialize()
         {
-            for (int i = 0; i < groups.Count; i++)
-                (groups[i] as IDirectable).BeforeSerialize();
-            Temps = groups.ConvertAll(x => new Temp()
-            {
-                type = x.GetType().FullName,
-                json = JsonUtility.ToJson(x)
-            });
-
+            ToTemp(Temps, this.groups);
             OnBeforeSerialize();
         }
     }

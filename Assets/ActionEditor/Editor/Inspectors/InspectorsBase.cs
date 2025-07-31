@@ -63,12 +63,16 @@ namespace ActionEditor
                 var attributes = field.GetCustomAttributes();
                 foreach (var attribute in attributes)
                 {
-                    if (attribute is HideInInspector hide)
+                    if (attribute is HideInInspector)
                     {
                         need = false;
                         break;
                     }
-
+                    if (attribute is NonSerializedAttribute)
+                    {
+                        need = false;
+                        break;
+                    }
 
                 }
 
@@ -237,7 +241,7 @@ namespace ActionEditor
 
 
 
-     
+
         public void FieldDefaultInspector(FieldInfo field, object obj)
         {
 
@@ -505,7 +509,7 @@ namespace ActionEditor
             var rs_second_1 = rect;
 
             rs_second_0.width -= 20;
-            rs_second_1.x = rect.xMax-20;
+            rs_second_1.x = rect.xMax - 20;
             rs_second_1.width = 20;
             fold = EditorGUI.Foldout(rs_second_0, fold, $"{name}({ele.Name}): {cout}", true);
             if (GUI.Button(rs_second_1, EditorGUIUtility.TrIconContent("d_Toolbar Plus"), EditorStyles.toolbarButton))

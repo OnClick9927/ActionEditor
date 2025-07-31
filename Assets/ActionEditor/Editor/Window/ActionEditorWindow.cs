@@ -6,7 +6,7 @@ namespace ActionEditor
 {
     class ActionEditorWindow : EditorWindow
     {
-        [MenuItem("Tools/Action Editor")]
+        [MenuItem("Tools/Action Editor", priority = 0)]
         public static void OpenDirectorWindow()
         {
             var window = GetWindow(typeof(ActionEditorWindow)) as ActionEditorWindow;

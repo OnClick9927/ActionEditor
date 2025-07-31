@@ -72,7 +72,7 @@ namespace ActionEditor
             foreach (var group in asset.groups)
             {
                 AddView(group);
-                if (group.IsCollapsed) continue;
+                if (group.isCollapsed) continue;
                 foreach (var track in group.Tracks)
                 {
                     AddView(track);
