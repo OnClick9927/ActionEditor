@@ -17,10 +17,10 @@ namespace ActionEditor
         //string Name { get; set; }
 
         bool IsActive { get; set; }
-        bool IsCollapsed { get; set; }
+        //bool IsCollapsed { get; set; }
         bool IsLocked { get; set; }
 
-  
+
 
         void Validate(Asset root, IDirectable parent);
         void AfterDeserialize();

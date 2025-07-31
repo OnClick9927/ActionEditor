@@ -1,10 +1,18 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 
 namespace ActionEditor
 {
     public static class IDirectableExtensions
     {
 
+        public static string ObjectToJson(object o) => UnityEngine.JsonUtility.ToJson(o, false);
+        public static object JsonToObject(string o, Type type) => UnityEngine.JsonUtility.FromJson(o, type);
+
+        public static float Min(float a, float b) => a < b ? a : b;
+
+        public static float Max(float a, float b) => a > b ? a : b;
+        public static float Max(float a, float b, float c) => Max(a, Max(b, c));
 
         private static float Clamp(float value, float min, float max)
         {

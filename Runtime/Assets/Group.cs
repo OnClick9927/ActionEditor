@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-//using FullSerializer;
-using UnityEngine;
+
 
 namespace ActionEditor
 {
@@ -20,21 +19,28 @@ namespace ActionEditor
         //[SerializeField][HideInInspector] private string name;
 
         public string name;
+        [ReadOnly] public bool isCollapsed;
+        [ReadOnly] public bool isLocked;
+        [ReadOnly] public bool active = true;
 
         [UnityEngine.SerializeField] private List<Temp> Temps;
         private List<Track> tracks = new List<Track>();
-        [SerializeField][HideInInspector] private bool isCollapsed;
         public List<Track> Tracks
         {
             get => tracks;
             set => tracks = value;
         }
-        public sealed override bool IsLocked
+
+
+
+
+
+        public override sealed bool IsLocked
         {
             get => isLocked;
             set => isLocked = value;
         }
-        public sealed override bool IsActive
+        public override sealed bool IsActive
         {
             get => active;
             set
@@ -49,7 +55,7 @@ namespace ActionEditor
         public sealed override IEnumerable<IDirectable> Children => Tracks;
 
 
-        public override bool IsCollapsed { get => isCollapsed; set => isCollapsed = value; }
+        //public bool IsCollapsed { get => isCollapsed; set => isCollapsed = value; }
         public override float StartTime { get => 0; set { } }
         public override float EndTime { get => Root.Length; set { } }
         public sealed override float Length { get => EndTime - StartTime; set { } }
@@ -127,30 +133,33 @@ namespace ActionEditor
 
         protected override void OnAfterDeserialize()
         {
-            tracks = this.Temps.ConvertAll(x =>
-            {
-                var type = Asset.GetType(x.type);
-                if (type != null)
-                    return JsonUtility.FromJson(x.json, type) as Track;
-                return null;
-            });
-            tracks.RemoveAll(x => x == null);
-            for (int i = 0; i < tracks.Count; i++)
-            {
-                ((IDirectable)tracks[i]).AfterDeserialize();
-            }
+            Asset.FromTemp(this.Temps, this.tracks);
+            //tracks = this.Temps.ConvertAll(x =>
+            //{
+            //    var type = Asset.GetType(x.type);
+            //    if (type != null)
+            //        return JsonUtility.FromJson(x.json, type) as Track;
+            //    return null;
+            //});
+            //tracks.RemoveAll(x => x == null);
+            //for (int i = 0; i < tracks.Count; i++)
+            //{
+            //    ((IDirectable)tracks[i]).AfterDeserialize();
+            //}
         }
         protected override void OnBeforeSerialize()
         {
-            for (int i = 0; i < tracks.Count; i++)
-            {
-                (tracks[i] as IDirectable).BeforeSerialize();
-            }
-            Temps = tracks.ConvertAll(x => new Temp()
-            {
-                type = x.GetType().FullName,
-                json = JsonUtility.ToJson(x)
-            });
+            Asset.ToTemp(this.Temps, this.tracks);
+
+            //for (int i = 0; i < tracks.Count; i++)
+            //{
+            //    (tracks[i] as IDirectable).BeforeSerialize();
+            //}
+            //Temps = tracks.ConvertAll(x => new Temp()
+            //{
+            //    type = x.GetType().FullName,
+            //    json = JsonUtility.ToJson(x)
+            //});
         }
 
 

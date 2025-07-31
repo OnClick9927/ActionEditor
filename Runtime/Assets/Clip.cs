@@ -1,17 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 //using FullSerializer;
-using UnityEngine;
+//using UnityEngine;
 
 namespace ActionEditor
 {
     [Serializable]
     public abstract class Clip : DirectableBase, IClip
     {
-        [SerializeField] private float startTime;
-        [SerializeField][HideInInspector] protected float length = 1f;
+        [UnityEngine.SerializeField] private float startTime;
+        [UnityEngine.SerializeField]/*[UnityEngine.HideInInspector]*/ protected float length = 1f;
 
-
+        public sealed override bool IsActive { get => Parent == null ? false : Parent.IsActive; set { } }
+        public sealed override bool IsLocked { get => Parent == null ? false : Parent.IsLocked; set { } }
         public override float Length
         {
             get => length;
@@ -33,7 +34,7 @@ namespace ActionEditor
             {
                 if (Math.Abs(startTime - value) > 0.0001f)
                 {
-                    startTime = Mathf.Max(value, 0);
+                    startTime = IDirectableExtensions.Max(value, 0);
                 }
             }
         }
@@ -45,47 +46,12 @@ namespace ActionEditor
             {
                 if (Math.Abs(StartTime + Length - value) > 0.0001f)
                 {
-                    Length = Mathf.Max(value - StartTime, 0);
+                    Length = IDirectableExtensions.Max(value - StartTime, 0);
                     this.AsBlendAble()?.ValidBlend();
 
                 }
             }
         }
-
-        public sealed override bool IsActive
-        {
-            get => Parent?.IsActive ?? false;
-            set { }
-        }
-
-        public sealed override bool IsCollapsed
-        {
-            get { return Parent != null && Parent.IsCollapsed; }
-            set { }
-        }
-
-        public sealed override bool IsLocked
-        {
-            get { return Parent != null && Parent.IsLocked; }
-            set { }
-        }
-
-        //public virtual float BlendIn
-        //{
-        //    get => 0;
-        //    set { }
-        //}
-
-        //public virtual float BlendOut
-        //{
-        //    get => 0;
-        //    set { }
-        //}
-
-        //public virtual bool CanCrossBlend => false;
-
-
-        //public Clip GetNextClip() => this.GetNextSibling<Clip>();
 
     }
 

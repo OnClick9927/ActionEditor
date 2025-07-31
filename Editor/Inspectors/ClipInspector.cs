@@ -55,7 +55,9 @@ namespace ActionEditor
                 nextTime += Mathf.Min(action.Length / 2, (nextClip.EndTime - nextClip.StartTime) / 2);
             }
 
-            var canScale = action.CanScale();
+            //var canScale = action.CanScale();
+            var normal_clip = !(action is ClipSignal);
+
             var doFrames = Prefs.timeStepMode == Prefs.TimeStepMode.Frames;
 
             GUILayout.BeginVertical("box");
@@ -65,52 +67,49 @@ namespace ActionEditor
             var _length = action.Length;
             var _out = action.EndTime;
 
-            if (canScale)
+            if (normal_clip)
             {
                 GUILayout.Label("IN", GUILayout.Width(30));
                 if (doFrames)
-                {
-                    _in *= Prefs.FrameRate;
-                    _in = EditorGUILayout.DelayedIntField((int)_in, GUILayout.Width(80));
-                    _in *= (1f / Prefs.FrameRate);
-                }
+                    _in = (float)EditorGUILayout.DelayedFloatField(_in * Prefs.FrameRate, GUILayout.Width(80)) / Prefs.FrameRate;
                 else
-                {
                     _in = EditorGUILayout.DelayedFloatField(_in, GUILayout.Width(80));
-                }
+
 
                 GUILayout.FlexibleSpace();
                 GUILayout.Label("◄");
-                if (doFrames)
-                {
-                    _length *= Prefs.FrameRate;
-                    _length = EditorGUILayout.DelayedIntField((int)_length, GUILayout.Width(80));
-                    _length *= (1f / Prefs.FrameRate);
-                }
-                else
-                {
-                    _length = EditorGUILayout.DelayedFloatField(_length, GUILayout.Width(80));
-                }
+                using (new EditorGUI.DisabledScope(!action.CanScale()))
+                    if (doFrames)
+                        _length = (float)EditorGUILayout.DelayedFloatField(_length * Prefs.FrameRate, GUILayout.Width(80)) / Prefs.FrameRate;
+                    else
+                        _length = EditorGUILayout.DelayedFloatField(_length, GUILayout.Width(80));
+
 
                 GUILayout.Label("►");
                 GUILayout.FlexibleSpace();
 
                 GUILayout.Label("OUT", GUILayout.Width(30));
                 if (doFrames)
-                {
-                    _out *= Prefs.FrameRate;
-                    _out = EditorGUILayout.DelayedIntField((int)_out, GUILayout.Width(80));
-                    _out *= (1f / Prefs.FrameRate);
-                }
+                    _out = (float)EditorGUILayout.DelayedFloatField(_out * Prefs.FrameRate, GUILayout.Width(80)) / Prefs.FrameRate;
                 else
-                {
-                    _out = EditorGUILayout.DelayedFloatField(_out, GUILayout.Width(80));
-                }
-            }
+                   _out = EditorGUILayout.DelayedFloatField(_out, GUILayout.Width(80));
 
+            }
+            else
+            {
+                GUILayout.Label("IN", GUILayout.Width(30));
+
+
+                if (doFrames)
+                    _in = EditorGUILayout.Slider(_in * Prefs.FrameRate, 0, action.Parent.EndTime * Prefs.FrameRate) / Prefs.FrameRate;
+                else
+                    _in = EditorGUILayout.Slider(_in, 0, action.Parent.EndTime);
+
+                _out = _in;
+            }
             GUILayout.EndHorizontal();
 
-            if (canScale)
+            if (normal_clip)
             {
                 if (_in >= action.Parent.StartTime && _out <= action.Parent.EndTime)
                 {
@@ -125,12 +124,7 @@ namespace ActionEditor
                     }
                 }
             }
-            else
-            {
-                GUILayout.Label("IN", GUILayout.Width(30));
-                _in = EditorGUILayout.Slider(_in, 0, action.Parent.EndTime);
-                _out = _in;
-            }
+
 
 
             if (GUI.changed)
