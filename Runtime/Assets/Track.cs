@@ -18,7 +18,7 @@ namespace ActionEditor
         [ReadOnly] public bool active = true;
         private List<Clip> clips = new List<Clip>();
 
-        [UnityEngine.SerializeField] private List<Temp> Temps;
+        [UnityEngine.SerializeField] private List<Temp> Temps = new List<Temp>();
 
 
 
@@ -77,7 +77,7 @@ namespace ActionEditor
 
         public Clip AddClip(Type type, float time)
         {
-       
+
 
             var newAction = Activator.CreateInstance(type) as Clip;
 
