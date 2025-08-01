@@ -63,8 +63,8 @@ namespace ActionEditor
             var paths = AssetDatabase.FindAssets("t:script").Select(x => AssetDatabase.GUIDToAssetPath(x));
             var find = paths.FirstOrDefault(x => x.EndsWith(cs_file));
             path = find ?? path;
-            var types = EditorEX.GetImplementationsOf(typeof(IDirectable));
-            string add = "";
+            var types = EditorEX.GetImplementationsOf(typeof(IAction));
+            string add = "\n";
 
             foreach (var type in types) {
                 add += $"{{ \"{type.FullName}\",typeof({type.FullName}) }},\n";

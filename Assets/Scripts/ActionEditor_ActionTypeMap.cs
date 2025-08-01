@@ -1,5 +1,7 @@
 namespace ActionEditor { public class ActionEditor_ActionTypeMap {
-private static System.Collections.Generic.Dictionary<string,System.Type> map=new System.Collections.Generic.Dictionary<string,System.Type>(){{ "ActionEditor.PlayAnimation",typeof(ActionEditor.PlayAnimation) },
+private static System.Collections.Generic.Dictionary<string,System.Type> map=new System.Collections.Generic.Dictionary<string,System.Type>(){
+{ "ActionEditor.BuffAsset",typeof(ActionEditor.BuffAsset) },
+{ "ActionEditor.PlayAnimation",typeof(ActionEditor.PlayAnimation) },
 { "ActionEditor.PlayAudio",typeof(ActionEditor.PlayAudio) },
 { "ActionEditor.PlayParticle",typeof(ActionEditor.PlayParticle) },
 { "ActionEditor.TriggerEvent",typeof(ActionEditor.TriggerEvent) },
@@ -16,6 +18,7 @@ private static System.Collections.Generic.Dictionary<string,System.Type> map=new
 { "ActionEditor.AudioTrack",typeof(ActionEditor.AudioTrack) },
 { "ActionEditor.EffectTrack",typeof(ActionEditor.EffectTrack) },
 { "ActionEditor.SignalTrack",typeof(ActionEditor.SignalTrack) },
+{ "ActionEditor.SkillAsset",typeof(ActionEditor.SkillAsset) },
 };
 #if UNITY_EDITOR
         [UnityEditor.InitializeOnLoadMethod] 

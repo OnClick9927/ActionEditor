@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+
 
 //using UnityEngine;
 using static ActionEditor.Group;
@@ -133,15 +133,14 @@ namespace ActionEditor
             }
             return null;
         }
-
+        
 
         public static Asset Deserialize(Type type, string serializedState)
         {
             var sps = serializedState.Split('\n');
 #if UNITY_EDITOR
             var typename = sps[0].Trim();
-            type = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes())
-                .FirstOrDefault(x => x.FullName == typename);
+            type = GetType(typename);
 #endif
             var asset = IDirectableExtensions.JsonToObject(serializedState.Remove(0, sps[0].Length), type) as Asset;
             asset.AfterDeserialize();
@@ -187,6 +186,8 @@ namespace ActionEditor
             }
 
         }
+
+
         private void AfterDeserialize()
         {
             FromTemp(this.Temps, this.groups);
