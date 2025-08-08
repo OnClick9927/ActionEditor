@@ -11,11 +11,8 @@ namespace ActionEditor
             GUILayout.BeginHorizontal();
 
             if (AppInternal.AssetData != null)
-            {
+                ActonEditorView.GetEditor(AppInternal.AssetData)?.OnAssetFooterGUI();
 
-                var header = EditorCustomFactory.GetHeaderFooter(AppInternal.AssetData, false);
-                header?.OnGUI(AppInternal.AssetData);
-            }
             GUILayout.FlexibleSpace();
             GUI.color = Color.cyan + Color.blue;
             if (AppInternal.SelectCount != 0)

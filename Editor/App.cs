@@ -9,8 +9,8 @@ namespace ActionEditor
     public class App
     {
         public static Asset AssetData => AppInternal.AssetData;
+        public static string assetPath => AppInternal.assetPath;
 
-        public static TextAsset TextAsset => AppInternal.TextAsset;
         public static event Action OnSave
         {
             add { AppInternal.OnSave += value; }
@@ -39,7 +39,7 @@ namespace ActionEditor
         public static void StepBackward() => AppInternal.StepBackward();
 
 
-        public static void EditAsset(TextAsset asset) => AppInternal.OnObjectPickerConfig(asset);
+        public static void EditAsset(string path) => AppInternal.OnObjectPickerConfig(path);
         public static void SaveAsset() => AppInternal.SaveAsset();
         public static void Select(params IDirectable[] objs) => AppInternal.Select(objs);
         public static bool IsSelect(IDirectable directable) => AppInternal.IsSelect(directable);

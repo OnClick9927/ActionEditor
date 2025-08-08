@@ -87,10 +87,12 @@ namespace ActionEditor
 
                 if (temps.Count == 0)
                 {
-                    var now = new AdvancedDropdownItem(name)
+                    var obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                    var now = new AdvancedDropdownItem(Path.GetFileNameWithoutExtension(name))
                     {
-                        id = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path).GetInstanceID()
-
+                        id = obj.GetInstanceID(),
+                        icon = AssetPreview.GetMiniThumbnail(obj),
+                        
                     };
                     parent.AddChild(now);
                 }
@@ -140,9 +142,12 @@ namespace ActionEditor
 
                 for (int i = 0; i < paths.Length; i++)
                 {
-                    root.AddChild(new AdvancedDropdownItem(paths[i])
+                    var path = paths[i];
+                    var obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(paths[i]);
+                    root.AddChild(new AdvancedDropdownItem($"{Path.GetDirectoryName(path)}/{Path.GetFileNameWithoutExtension(path)}")
                     {
-                        id = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(paths[i]).GetInstanceID()
+                        icon = AssetPreview.GetMiniThumbnail(obj),
+                        id = obj.GetInstanceID()
 
                     });
                 }

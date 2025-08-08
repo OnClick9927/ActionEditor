@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using Object = UnityEngine.Object;
 using System.Linq;
+using System.IO;
 
 namespace ActionEditor
 {
@@ -12,63 +12,49 @@ namespace ActionEditor
     static class AppInternal
     {
         const string key = "ActionEditor.APP";
+        public static string assetPath => EditorPrefs.GetString(key);
         static AppInternal()
         {
             Prefs.Valid();
-            string path = EditorPrefs.GetString(key);
-            OnObjectPickerConfig(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path));
+            OnObjectPickerConfig(assetPath);
         }
-        private static TextAsset _textAsset;
         public static event Action OnSave;
 
+        private static Asset _asset;
+        public static Asset AssetData => _asset;
 
-        public static Asset AssetData { get; private set; } = null;
-
-        public static TextAsset TextAsset
-        {
-            get => _textAsset;
-            set
-            {
-                _textAsset = value;
-
-                if (_textAsset == null)
-                {
-                    AssetData = null;
-                }
-                else
-                {
-                    try
-                    {
-                        var asset = Asset.Deserialize(typeof(Asset), _textAsset.text);
-                        AssetData = asset;
-                        asset.Validate();
-                    }
-                    catch (Exception)
-                    {
-                        _textAsset = null;
-                        AssetData = null;
-                    }
-                    AppInternal.Refresh();
-
-                }
-            }
-        }
-
+     
         public static EditorWindow Window;
 
         public static long Frame;
 
         public static float Width;
 
-        public static void OnObjectPickerConfig(Object obj) => TextAsset = obj as TextAsset;
+        public static void OnObjectPickerConfig(string path)
+        {
+            if (!File.Exists(path)) return;
+            var text = File.ReadAllText(path);
+            try
+            {
+                var asset = Asset.Deserialize(typeof(Asset),text);
+                asset.Validate();
+                _asset = asset;
+            }
+            catch (Exception)
+            {
+                _asset = null;
+                return;
+            }
+            EditorPrefs.SetString(key, path);
+            AppInternal.Refresh();
+        }
 
         public static void SaveAsset()
         {
             if (AssetData == null) return;
-            OnSave?.Invoke();
-            var path = AssetDatabase.GetAssetPath(TextAsset);
+            var path = assetPath;
             if (string.IsNullOrEmpty(path)) return;
-            EditorPrefs.SetString(key, path);
+            OnSave?.Invoke();
             System.IO.File.WriteAllText(path, AssetData.Serialize());
             AssetDatabase.Refresh();
 

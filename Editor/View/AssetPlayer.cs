@@ -30,7 +30,7 @@ namespace ActionEditor
         /// </summary>
         private List<IDirectableTimePointer> unsortedStartTimePointers;
 
-    
+
         private float currentTime;
 
         public float previousTime { get; private set; }
@@ -47,7 +47,7 @@ namespace ActionEditor
             get => currentTime;
             set => currentTime = Mathf.Clamp(value, 0, Length);
         }
-        
+
         public float Length
         {
             get
@@ -69,11 +69,8 @@ namespace ActionEditor
         public void Sample(float time)
         {
             CurrentTime = time;
-            if ((currentTime == 0 || currentTime == Length) && previousTime == currentTime)
-            {
-                return;
-            }
-            
+            if ((currentTime == 0 || currentTime == Length) && previousTime == currentTime) return;
+
             if (!preInitialized && currentTime > 0 && previousTime == 0)
             {
                 InitializePreviewPointers();
@@ -125,41 +122,12 @@ namespace ActionEditor
             }
         }
 
-        /// <summary>
-        /// 初始化时间指针预览器
-        /// </summary>
+
         public void InitializePreviewPointers()
         {
             timePointers = new List<IDirectableTimePointer>();
             unsortedStartTimePointers = new List<IDirectableTimePointer>();
 
-            Dictionary<Type, Type> typeDic = new Dictionary<Type, Type>();
-            var childs = EditorEX.GetTypeMetaDerivedFrom(typeof(PreviewBase));
-            foreach (var t in childs)
-            {
-                var arrs = t.type.GetCustomAttributes(typeof(CustomPreviewAttribute), true);
-                foreach (var arr in arrs)
-                {
-                    if (arr is CustomPreviewAttribute c)
-                    {
-                        var bindT = c.PreviewType;
-                        var iT = t.type;
-                        if (!typeDic.ContainsKey(bindT))
-                        {
-                            if (!iT.IsAbstract) typeDic[bindT] = iT;
-                        }
-                        else
-                        {
-                            var old = typeDic[bindT];
-                            //如果不是抽象类，且是子类就更新
-                            if (!iT.IsAbstract && iT.IsSubclassOf(old))
-                            {
-                                typeDic[bindT] = iT;
-                            }
-                        }
-                    }
-                }
-            }
 
             foreach (var group in Asset.groups.AsEnumerable().Reverse())
             {
@@ -167,35 +135,28 @@ namespace ActionEditor
                 foreach (var track in group.Tracks.AsEnumerable().Reverse())
                 {
                     if (!track.IsActive) continue;
-                    var tType = track.GetType();
-                    if (typeDic.TryGetValue(tType, out var t1))
+                    //var tType = track.GetType();
                     {
-                        if (Activator.CreateInstance(t1) is PreviewBase preview)
-                        {
-                            preview.SetTarget(track);
-                            var p3 = new StartTimePointer(preview);
-                            timePointers.Add(p3);
-                
-                            unsortedStartTimePointers.Add(p3);
-                            timePointers.Add(new EndTimePointer(preview));
-                        }
+
+                        var preview_track = ActonEditorView.GetEditor(track);
+
+                        preview_track.SetTarget(track);
+                        var p3 = new StartTimePointer(preview_track);
+                        timePointers.Add(p3);
+
+                        unsortedStartTimePointers.Add(p3);
+                        timePointers.Add(new EndTimePointer(preview_track));
                     }
-                
+
                     foreach (var clip in track.Clips)
                     {
                         var cType = clip.GetType();
-                        if (typeDic.TryGetValue(cType, out var t))
-                        {
-                            if (Activator.CreateInstance(t) is PreviewBase preview)
-                            {
-                                preview.SetTarget(clip);
-                                var p3 = new StartTimePointer(preview);
-                                timePointers.Add(p3);
-                
-                                unsortedStartTimePointers.Add(p3);
-                                timePointers.Add(new EndTimePointer(preview));
-                            }
-                        }
+                        var preview_clip = ActonEditorView.GetEditor(clip);
+                        preview_clip.SetTarget(clip);
+                        var p3 = new StartTimePointer(preview_clip);
+                        timePointers.Add(p3);
+                        unsortedStartTimePointers.Add(p3);
+                        timePointers.Add(new EndTimePointer(preview_clip));
                     }
                 }
             }

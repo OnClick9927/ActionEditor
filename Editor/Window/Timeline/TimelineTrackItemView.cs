@@ -106,7 +106,7 @@ namespace ActionEditor
                         AppInternal.Refresh();
                         Event.current.Use();
                     }
-                    GUILayout.Label(group.name, GUILayout.Height(20));
+                    GUILayout.Label(group.name, GUILayout.ExpandWidth(false), GUILayout.Height(20));
 
                 }
                 else if (Data is Track track)
@@ -121,11 +121,12 @@ namespace ActionEditor
                     GUILayout.Space(2);
 
                     GUI.DrawTexture(EditorGUILayout.GetControlRect(GUILayout.Width(20), GUILayout.Height(20)), track.GetIcon()); // 绘制图标
-                    GUILayout.Label(EditorEX.GetTypeName(Data.GetType()), GUILayout.Height(20));
+
+                    GUILayout.Label(EditorEX.GetTypeName(Data), GUILayout.ExpandWidth(false), GUILayout.Height(20));
 
                 }
-
-
+                ActonEditorView.GetEditor(Data).OnGroupTrackLeftGUI();
+                GUILayout.FlexibleSpace();
 
 
                 if (Data.IsLocked)

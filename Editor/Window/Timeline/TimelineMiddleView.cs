@@ -106,6 +106,7 @@ namespace ActionEditor
                 var itemRect = new Rect(0, y, width, Styles.LineHeight);
                 var item = _itemViews[i];
                 item.OnGUI(itemRect);
+
                 GUILayout.Space(Styles.Space);
             }
             GUI.color = Color.white;
