@@ -92,7 +92,7 @@ namespace ActionEditor
                     {
                         id = obj.GetInstanceID(),
                         icon = AssetPreview.GetMiniThumbnail(obj),
-                        
+
                     };
                     parent.AddChild(now);
                 }
@@ -112,7 +112,10 @@ namespace ActionEditor
                         {
                             name = $"{string.Join("/", parentNames)}/{name}";
                         }
-                        AdvancedDropdownItem now = new AdvancedDropdownItem(name);
+                        AdvancedDropdownItem now = new AdvancedDropdownItem(name)
+                        {
+                            icon = EditorGUIUtility.TrIconContent("Folder Icon").image as Texture2D
+                        };
                         parent.AddChild(now);
                         parent = now;
                     }
