@@ -109,13 +109,12 @@ namespace ActionEditor
 
                 GUILayout.Space(Styles.Space);
             }
-            GUI.color = Color.white;
             GUILayout.Space(_itemViews.Count * Styles.LineHeight);
             emptyRect = EditorGUILayout.GetControlRect(GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
             DrawAddGroupButton(emptyRect);
             EditorGUILayout.EndScrollView();
 
-            //GUI.Box(emptyRect, Lan.ins.EmptyRect, new GUIStyle(EditorStyles.helpBox)
+            //GUI.Box(emptyRect, "444", new GUIStyle(EditorStyles.helpBox)
             //{
             //    alignment = TextAnchor.MiddleCenter,
             //    fontSize = 20,
@@ -263,8 +262,7 @@ namespace ActionEditor
 
             if (bigEnough)
             {
-                GUI.color = Color.white.WithAlpha(0.1f);
-                GUI.DrawTexture(rect, Styles.WhiteTexture);
+                GUI.Box(rect, "",EditorStyles.selectionRect);
                 Vector3 topLeft = new Vector3(rect.xMin, rect.yMin, 0);
                 Vector3 topRight = new Vector3(rect.xMax, rect.yMin, 0);
                 Vector3 bottomRight = new Vector3(rect.xMax, rect.yMax, 0);

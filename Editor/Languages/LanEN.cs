@@ -47,7 +47,7 @@
         string ILanguages.Save => "Save";
 
         //**********  Header *********
-        string ILanguages.HeaderLastSaveTime => "Last save time：{0}";
+        string ILanguages.HeaderLastSaveTime => "Last save time";
 
         //**********  Group Menu *********
         string ILanguages.MenuAddTrack => "Add Track";
