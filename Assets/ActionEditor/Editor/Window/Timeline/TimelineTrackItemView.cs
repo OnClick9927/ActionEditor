@@ -26,7 +26,7 @@ namespace ActionEditor
 
         public override void OnDraw()
         {
-            GUI.color = Color.white;
+            //GUI.color = Color.white;
             GUI.Box(Position, "", AppInternal.IsSelect(Data) ? EditorStyles.selectionRect : GUI.skin.box);
 
 

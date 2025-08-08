@@ -40,10 +40,11 @@ namespace ActionEditor
             pick.Show(rect);
             return pick;
         }
-
+      
         protected override void ItemSelected(AdvancedDropdownItem item)
         {
-            EditorWindow.mouseOverWindow.Close();
+       
+            EditorWindow.focusedWindow.Close();
 
             itemSelectedCallback?.Invoke(EditorUtility.InstanceIDToObject(item.id));
             //base.ItemSelected(item);

@@ -14,15 +14,15 @@ namespace ActionEditor
                 ActonEditorView.GetEditor(AppInternal.AssetData)?.OnAssetFooterGUI();
 
             GUILayout.FlexibleSpace();
-            GUI.color = Color.cyan + Color.blue;
-            if (AppInternal.SelectCount != 0)
-                if (GUILayout.Button(Lan.ins.ClearSelect, EditorStyles.toolbarButton))
-                    AppInternal.Select();
-            GUILayout.Space(2);
+            //GUI.color = Color.cyan + Color.blue;
             if (AppInternal.CopyAsset != null)
-                if (GUILayout.Button(Lan.ins.ClearCopy, EditorStyles.toolbarButton))
+                if (EditorGUILayout.LinkButton(Lan.ins.ClearCopy))
                     AppInternal.SetCopyAsset(null, false);
-            GUI.color = Color.white;
+            GUILayout.Space(2);
+            if (AppInternal.SelectCount != 0)
+                if (EditorGUILayout.LinkButton(Lan.ins.ClearSelect))
+                    AppInternal.Select();
+            //GUI.color = Color.white;
             GUILayout.Space(2);
             GUILayout.EndHorizontal();
 
@@ -39,8 +39,7 @@ namespace ActionEditor
 
             if (AppInternal.AssetData != null)
             {
-                GUILayout.Label(
-string.Format(Lan.ins.HeaderLastSaveTime, AppInternal.LastSaveTime.ToString("HH:mm:ss")));
+                GUILayout.Label($"{Lan.ins.HeaderLastSaveTime}  {AppInternal.LastSaveTime.ToString("HH:mm:ss.fffffff")}",EditorStyles.linkLabel);
             }
             //GUILayout.Space(2);
 

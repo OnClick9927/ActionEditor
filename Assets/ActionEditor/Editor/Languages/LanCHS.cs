@@ -44,7 +44,7 @@
         string ILanguages.Save => "保存";
 
         //**********  Header *********
-        string ILanguages.HeaderLastSaveTime => "最后保存时间：{0}";
+        string ILanguages.HeaderLastSaveTime => "最后保存时间";
 
 
         //**********  Group Menu *********

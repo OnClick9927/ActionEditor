@@ -70,6 +70,11 @@ namespace ActionEditor
             if (string.IsNullOrEmpty(path)) return;
             OnSave?.Invoke();
             System.IO.File.WriteAllText(path, AssetData.Serialize());
+            var text = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            EditorUtility.SetDirty(text);
+            AssetDatabase.SaveAssetIfDirty(text);
+
             AssetDatabase.Refresh();
 
         }

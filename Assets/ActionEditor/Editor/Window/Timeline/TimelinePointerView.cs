@@ -11,8 +11,8 @@ namespace ActionEditor
         EndRange
     }
 
-     class TimelinePointerView : ViewBase, IPointerClickHandler,
-        IPointerDragHandler, IDragBeginHandler, IDragEndHandler
+    class TimelinePointerView : ViewBase, IPointerClickHandler,
+       IPointerDragHandler, IDragBeginHandler, IDragEndHandler
     {
         public Asset asset => AppInternal.AssetData;
 
@@ -29,6 +29,7 @@ namespace ActionEditor
 
         public override void OnDraw()
         {
+
             if (asset == null) return;
 
             DrawTimeStep();
@@ -104,9 +105,10 @@ namespace ActionEditor
             var width = AppInternal.Width;
             var height = Styles.PlayControlHeight - Styles.HeaderHeight;
             var x = asset.TimeToPos(asset.Length, width);
+            
             GUI.color = Styles.EndPointerColor;
             GUI.DrawTexture(new Rect(x - 2, Position.y, 5, height), Styles.WhiteTexture);
-            GUI.DrawTexture(new Rect(x, Position.y, 1, Position.height), Styles.WhiteTexture);
+            GUI.DrawTexture(new Rect(x, Position.y, 2, Position.height), Styles.WhiteTexture);
             GUI.color = Color.white;
 
             //if (App.IsPlay)
@@ -199,7 +201,7 @@ namespace ActionEditor
             }
 
             var text = time.ToString("0.00");
-            var size = GUI.skin.label.CalcSize(new GUIContent(text));
+            var size = EditorStyles.whiteLargeLabel.CalcSize(new GUIContent(text));
             var width = size.x + 5;
 
             var showX = x - width * 0.5f;
@@ -207,9 +209,8 @@ namespace ActionEditor
             //GUI.color = Color.black.WithAlpha(0.8f);
 
             //GUI.DrawTexture(new Rect(showX, Position.y, width, 18), Styles.BackgroundTexture);
-            var stampRect = new Rect(showX + 2, 0, size.x, size.y);
-            GUI.color = Color.white;
-            GUI.Box(stampRect, text, GUI.skin.label);
+            var stampRect = new Rect(showX + 2, Position.height - size.y * 2, size.x, size.y);
+            GUI.Box(stampRect, text, EditorStyles.whiteLargeLabel);
         }
 
         #endregion

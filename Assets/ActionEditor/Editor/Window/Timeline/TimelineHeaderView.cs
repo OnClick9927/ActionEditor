@@ -118,27 +118,25 @@ namespace ActionEditor
 
         #region Header
 
-        private Rect _headerRect;
 
         private void DrawPlayHeader()
         {
             var gap = Styles.TimelineLeftWidth + Styles.SplitterWidth;
-            _headerRect = new Rect(Position.x + gap, Position.y,
-                Position.width - gap,
-                Position.height - Styles.HeaderHeight);
+            var _headerRect = new Rect(Position.x + gap, Position.y,
+                   Position.width - gap,
+                   Position.height - Styles.HeaderHeight);
 
-            GUILayout.BeginArea(_headerRect);
+            GUILayout.BeginArea(_headerRect, EditorStyles.toolbar);
             OnHearderGUI();
             GUILayout.EndArea();
 
 
-            GUI.color = Color.black.WithAlpha(0.2f);
-            GUI.DrawTexture(new Rect(_headerRect.x, _headerRect.y + _headerRect.height, _headerRect.width, 1),
-                Styles.WhiteTexture);
+ 
         }
 
         private void OnHearderGUI()
         {
+
             GUILayout.BeginHorizontal(EditorStyles.toolbar);
             {
                 var rect = EditorGUILayout.GetControlRect(GUILayout.Width(25));
