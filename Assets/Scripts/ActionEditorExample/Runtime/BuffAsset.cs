@@ -1,5 +1,4 @@
 ﻿using System;
-using ActionEditor;
 using UnityEngine;
 
 namespace ActionEditor
@@ -12,9 +11,17 @@ namespace ActionEditor
         public string test;
     }
 #if UNITY_EDITOR
-    [CustomInspector(typeof(BuffAsset))]
-    public class BuffAssetIns : InspectorsBase
+    [CustomActionView(typeof(BuffAsset))]
+    public class BuffAssetIns : ActonEditorView
     {
+        public override void OnAssetFooterGUI()
+        {
+            GUILayout.Button("BuffAsset OnAssetFooterGUI");
+        }
+        public override void OnAssetHeaderGUI()
+        {
+            GUILayout.Button("BuffAsset OnAssetHeaderGUI");
+        }
         public override void OnInspectorGUI()
         {
             GUILayout.Label("789498");

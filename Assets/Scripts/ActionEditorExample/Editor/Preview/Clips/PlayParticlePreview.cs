@@ -7,14 +7,14 @@ namespace ActionEditorExample
     /// <summary>
     /// 普通粒子预览
     /// </summary>
-    [ActionEditor.CustomPreview(typeof(PlayParticle))]
-    public class PlayParticlePreview : PreviewBase<PlayParticle>
+    [CustomActionView(typeof(PlayParticle))]
+    public class PlayParticlePreview : ClipEditorView<PlayParticle>
     {
         private GameObject _effectObj;
         public ParticleSystem particles;
         private ParticleSystem.EmissionModule em;
 
-        public override void Update(float time, float previousTime)
+        public override void OnPreviewUpdate(float time, float previousTime)
         {
             if (_effectObj == null)
             {
@@ -41,7 +41,7 @@ namespace ActionEditorExample
             }
         }
 
-        public override void Enter()
+        public override void OnPreviewEnter()
         {
             if (_effectObj == null)
             {
@@ -53,7 +53,7 @@ namespace ActionEditorExample
             Play(_effectObj);
         }
 
-        public override void Exit()
+        public override void OnPreviewExit()
         {
             if (_effectObj != null)
             {

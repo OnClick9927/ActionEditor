@@ -5,21 +5,105 @@ using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
-using static System.Collections.Specialized.BitVector32;
-using Object = UnityEngine.Object;
 
 namespace ActionEditor
 {
-    public class InspectorsBase
+    partial class ActonEditorView
     {
-        protected IAction target;
+        private static bool _initHeadersDic = false;
+        private static readonly Dictionary<Type, Type> editorTypes = new Dictionary<Type, Type>();
+        private static Dictionary<IAction, ActonEditorView> editor_ins = new Dictionary<IAction, ActonEditorView>();
+        public static ActonEditorView GetEditor(IAction asset)
+        {
+            if (asset == null) return null;
+            if (!_initHeadersDic)
+            {
+                InitHeaderDic();
+                _initHeadersDic = true;
+            }
+            //var dic = editorTypes;
+            ActonEditorView result = null;
+
+            if (!editor_ins.TryGetValue(asset, out result))
+            {
+                var type = asset.GetType();
+                editorTypes.TryGetValue(type, out var editor_type);
+                if (editor_type == null)
+                {
+                    var _type = type;
+                    while (true)
+                    {
+                        _type = _type.BaseType;
+                        if (_type == typeof(System.Object))
+                            break;
+                        if (editorTypes.TryGetValue(_type, out editor_type))
+                        {
+                            if (editor_type.IsAbstract)
+                                editor_type = null;
+                            else
+                                break;
+                        }
+                    }
+                    if (editor_type == null) editor_type = typeof(ActonEditorView);
+                    editorTypes.Add(type, editor_type);
+                }
+                result = Activator.CreateInstance(editor_type) as ActonEditorView;
+                editor_ins[asset] = result;
+            }
+            result?.SetTarget(asset);
+            return result;
+        }
+
+
+        static void InitHeaderDic()
+        {
+
+            Type type = typeof(ActonEditorView);
+            var childs = EditorEX.GetTypeMetaDerivedFrom(type);
+            foreach (var t in childs)
+            {
+                var arr = t.type.GetCustomAttribute(typeof(CustomActionViewAttribute), true) as CustomActionViewAttribute;
+                if (arr != null)
+                {
+                    var bindT = arr.InspectedType;
+                    var iT = t.type;
+                    if (!editorTypes.ContainsKey(bindT))
+                    {
+                        if (!iT.IsAbstract) editorTypes[bindT] = iT;
+                    }
+                    else
+                    {
+                        var old = editorTypes[bindT];
+                        if (!iT.IsAbstract && iT.IsSubclassOf(old))
+                        {
+                            editorTypes[bindT] = iT;
+                        }
+                    }
+                }
+            }
+        }
+
+     
+    }
+
+
+
+    partial class ActonEditorView
+    {
+        public virtual void OnAssetHeaderGUI() { }
+        public virtual void OnAssetFooterGUI() { }
+        public virtual void OnGroupTrackLeftGUI() { }
+    }
+    public partial class ActonEditorView
+    {
+        public IAction target { get;private set; }
 
         private Dictionary<int, bool> _unfoldDictionary = new Dictionary<int, bool>();
 
-        public void SetTarget(IAction t)
+        internal void SetTarget(IAction t)
         {
             target = t;
-            _unfoldDictionary.Clear();
+            //_unfoldDictionary.Clear();
 
         }
 
@@ -153,7 +237,7 @@ namespace ActionEditor
         }
         private string DrawSelectObj(string name, string value, Type objType)
         {
-            Object o = null;
+            UnityEngine.Object o = null;
             var path = value.ToString();
             if (!string.IsNullOrEmpty(path))
                 o = AssetDatabase.LoadAssetAtPath(path, objType);
@@ -168,7 +252,6 @@ namespace ActionEditor
 
         static MethodInfo method;
         static private Dictionary<FieldInfo, Vector2> scrolls = new Dictionary<FieldInfo, Vector2>();
-
         private string DrawTextArea(string name, string value, FieldInfo field)
         {
             GUILayout.Label(name);
@@ -188,7 +271,6 @@ namespace ActionEditor
             scrolls[field] = scroll;
             return methodResult?.ToString();
         }
-
         private IList DrawArr(ref bool fold, string name, IList arr, Type ele)
         {
             IList array = Activator.CreateInstance(typeof(List<>).MakeGenericType(ele)) as IList;
@@ -238,10 +320,6 @@ namespace ActionEditor
             }
             return array;
         }
-
-
-
-
         public void FieldDefaultInspector(FieldInfo field, object obj)
         {
 
@@ -403,8 +481,6 @@ namespace ActionEditor
                 //    (field as PropertyInfo).SetValue(obj, newValue);
             }
         }
-
-
         private int FieldsSprtBy(FieldInfo f1, FieldInfo f2)
         {
             if (f1 == null || f2 == null) return 0;
@@ -422,8 +498,6 @@ namespace ActionEditor
 
             return 0;
         }
-
-
         private bool GetFoldout(object obj)
         {
             if (obj == null) return false;
@@ -434,7 +508,6 @@ namespace ActionEditor
 
             return value;
         }
-
         private void SetFoldout(object obj, bool unfold)
         {
             if (obj == null) return;
@@ -448,15 +521,6 @@ namespace ActionEditor
             GUI.Label(rect, "", (GUIStyle)"WindowBottomResize");
             GUILayout.Space(2);
         }
-
-
-
-
-
-
-
-
-
         private object DrawObj(object value, string name, Type fieldType)
         {
             bool fold = false;
@@ -483,11 +547,6 @@ namespace ActionEditor
             }
             return value;
         }
-
-
-
-
-
         private IList DrawArr(ref bool fold, string name, IEnumerable arr, Type ele)
         {
             GUILayout.BeginVertical();
@@ -573,12 +632,25 @@ namespace ActionEditor
             GUILayout.EndVertical();
             return array;
         }
-
         private void DrawDelegate(MemberInfo field, Delegate value)
         {
             EditorGUILayout.LabelField($"{value.Target} <--> {value.Method.Name}");
         }
 
 
+    }
+
+    partial class ActonEditorView
+    {
+        public virtual void OnPreviewEnter() { }
+
+        public virtual void OnPreviewExit() { }
+
+        public virtual void OnPreviewReverseEnter() { }
+
+        public virtual void OnPreviewReverse() { }
+
+
+        public virtual void OnPreviewUpdate(float time, float previousTime) { }
     }
 }

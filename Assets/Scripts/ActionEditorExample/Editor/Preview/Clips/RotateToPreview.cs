@@ -6,19 +6,19 @@ namespace ActionEditorExample
     /// <summary>
     /// 旋转角度预览
     /// </summary>
-    [CustomPreview(typeof(RotateTo))]
-    public class RotateToPreview : PreviewBase<RotateTo>
+    [CustomActionView(typeof(RotateTo))]
+    public class RotateToPreview : ClipEditorView<RotateTo>
     {
         private Vector3 originalRot;
 
-        public override void Update(float time, float previousTime)
+        public override void OnPreviewUpdate(float time, float previousTime)
         {
             var target = originalRot + clip.targetRotation;
             ModelSampler.EditModel.transform.localEulerAngles =
                 Easing.Ease(clip.interpolation, originalRot, target, time / clip.Length);
         }
 
-        public override void Enter()
+        public override void OnPreviewEnter()
         {
             if (ModelSampler.EditModel != null)
             {

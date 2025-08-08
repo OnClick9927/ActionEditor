@@ -13,8 +13,7 @@ namespace ActionEditor
 
         public static void Show(Rect rect) => PopupWindow.Show(rect, new CreateAssetWindow());
 
-        public override Vector2 GetWindowSize() => new Vector2(300, 120);
-
+        public override Vector2 GetWindowSize() => new Vector2(300, 130);
         public override void OnGUI(Rect rect)
         {
             GUILayout.Label(Lan.ins.CreateAsset, new GUIStyle(EditorStyles.label)
@@ -30,11 +29,16 @@ namespace ActionEditor
             }
             else
             {
+                using (new EditorGUI.DisabledScope(true))
+                    EditorGUILayout.TextField(Lan.ins.SavePath, Prefs.savePath);
+
+
                 if (string.IsNullOrEmpty(_selectType))
                     _selectType = EditorEX.AssetNames.FirstOrDefault();
                 _selectType = EditorEX.CleanPopup(Lan.ins.CrateAssetType, _selectType, EditorEX.AssetNames);
                 _createName = EditorGUILayout.TextField(new GUIContent(Lan.ins.CrateAssetName, Lan.ins.CreateAssetFileName),
                     _createName);
+                GUILayout.FlexibleSpace();
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button(new GUIContent(Lan.ins.CreateAssetConfirm)))
                 {
@@ -45,6 +49,7 @@ namespace ActionEditor
                     CreateConfirm(true);
                 }
                 GUILayout.EndHorizontal();
+                GUILayout.Space(5);
             }
 
 
@@ -99,11 +104,7 @@ namespace ActionEditor
                     var json = inst.Serialize();
                     System.IO.File.WriteAllText(path, json);
                     AssetDatabase.Refresh();
-                    var textAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
-                    if (textAsset != null)
-                    {
-                        AppInternal.OnObjectPickerConfig(textAsset);
-                    }
+                    AppInternal.OnObjectPickerConfig(path);
                     editorWindow.Close();
                 }
             }

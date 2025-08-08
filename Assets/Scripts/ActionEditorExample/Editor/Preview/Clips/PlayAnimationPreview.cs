@@ -7,13 +7,13 @@ namespace ActionEditorExample
     /// <summary>
     /// 动画预览
     /// </summary>
-    [CustomPreview(typeof(PlayAnimation))]
-    public class PlayAnimationPreview : PreviewBase<PlayAnimation>
+    [CustomActionView(typeof(PlayAnimation))]
+    public class PlayAnimationPreview : ClipEditorView<PlayAnimation>
     {
         private Animator _animator;
         private AnimationClip _animationClip;
 
-        public override void Update(float time, float previousTime)
+        public override void OnPreviewUpdate(float time, float previousTime)
         {
             if (_animator != null && _animationClip != null)
             {
@@ -21,7 +21,7 @@ namespace ActionEditorExample
             }
         }
 
-        public override void Enter()
+        public override void OnPreviewEnter()
         {
             var model = ModelSampler.EditModel;
             if (model != null)

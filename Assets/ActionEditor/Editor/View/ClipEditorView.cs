@@ -3,13 +3,13 @@ using UnityEngine;
 
 namespace ActionEditor
 {
-    public abstract class ClipInspector<T> : ClipInspector where T : Clip
+    public abstract class ClipEditorView<T> : ClipEditorView where T : Clip
     {
-        protected T action => (T)target;
+        protected T clip => (T)target;
     }
 
-    [CustomInspectorAttribute(typeof(Clip))]
-    public class ClipInspector : InspectorsBase
+    [CustomActionView(typeof(Clip))]
+    public class ClipEditorView : ActonEditorView
     {
         private Clip action => (Clip)target;
 

@@ -1,4 +1,5 @@
-﻿using UnityEditor;
+﻿using System.IO;
+using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
@@ -145,7 +146,11 @@ namespace ActionEditor
                     CreateAssetWindow.Show(rect);
             }
             {
-                var gName = AppInternal.TextAsset != null ? AppInternal.TextAsset.name : "None";
+
+                var file = Path.GetFileName(AppInternal.assetPath);
+                var gName = file;
+                gName = gName.Replace($".{Asset.FileEx}", "");
+                gName = string.IsNullOrEmpty(gName) ? "None" : gName;
                 var size = GUI.skin.label.CalcSize(new GUIContent(gName));
                 var width = size.x + 8;
                 if (width < 80) width = 80;
@@ -156,7 +161,7 @@ namespace ActionEditor
 
                     AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", Prefs.pickListType, (o) =>
                     {
-                        AppInternal.OnObjectPickerConfig(o);
+                        AppInternal.OnObjectPickerConfig(AssetDatabase.GetAssetPath(o));
                         GUIUtility.ExitGUI();
                     }, (x) =>
                     {
@@ -165,9 +170,10 @@ namespace ActionEditor
                     });
                 }
             }
+            ActonEditorView.GetEditor(AppInternal.AssetData)?.OnAssetHeaderGUI();
 
-            var header = EditorCustomFactory.GetHeaderFooter(AppInternal.AssetData);
-            header?.OnGUI(AppInternal.AssetData);
+            //var header = EditorCustomFactory.GetEditor(AppInternal.AssetData);
+            //header?.OnGUI(AppInternal.AssetData);
 
             //DrawAssetsHeader();
 

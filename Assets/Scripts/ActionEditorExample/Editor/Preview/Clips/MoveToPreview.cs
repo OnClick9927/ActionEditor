@@ -6,12 +6,12 @@ namespace ActionEditorExample
     /// <summary>
     /// 移动至预览
     /// </summary>
-    [CustomPreview(typeof(MoveTo))]
-    public class MoveToPreview : PreviewBase<MoveTo>
+    [CustomActionView(typeof(MoveTo))]
+    public class MoveToPreview : ClipEditorView<MoveTo>
     {
         private Vector3 originalPos;
 
-        public override void Update(float time, float previousTime)
+        public override void OnPreviewUpdate(float time, float previousTime)
         {
             var endPos = TargetPosition();
 
@@ -22,7 +22,7 @@ namespace ActionEditorExample
         }
 
 
-        public override void Enter()
+        public override void OnPreviewEnter()
         {
             if (ModelSampler.EditModel != null)
             {

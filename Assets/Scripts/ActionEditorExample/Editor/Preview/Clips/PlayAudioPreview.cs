@@ -6,12 +6,12 @@ namespace ActionEditorExample
     /// <summary>
     /// 音频预览
     /// </summary>
-    [CustomPreview(typeof(PlayAudio))]
-    public class PlayAudioPreview : PreviewBase<PlayAudio>
+    [CustomActionView(typeof(PlayAudio))]
+    public class PlayAudioPreview : ClipEditorView<PlayAudio>
     {
         private AudioSource source;
 
-        public override void Update(float time, float previousTime)
+        public override void OnPreviewUpdate(float time, float previousTime)
         {
             if (source != null)
             {
@@ -20,22 +20,22 @@ namespace ActionEditorExample
             }
         }
 
-        public override void Enter()
+        public override void OnPreviewEnter()
         {
             Do();
         }
 
-        public override void ReverseEnter()
+        public override void OnPreviewReverseEnter()
         {
             Do();
         }
 
-        public override void Exit()
+        public override void OnPreviewExit()
         {
             Undo();
         }
 
-        public override void Reverse()
+        public override void OnPreviewReverse()
         {
             Undo();
         }
