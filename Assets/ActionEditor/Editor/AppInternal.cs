@@ -16,15 +16,24 @@ namespace ActionEditor
         static AppInternal()
         {
             Prefs.Valid();
-            OnObjectPickerConfig(assetPath);
+            //OnObjectPickerConfig(assetPath);
         }
         public static event Action OnSave;
 
         private static Asset _asset;
         public static Asset AssetData => _asset;
 
-     
-        public static EditorWindow Window;
+        public static EditorWindow _window;
+        public static EditorWindow Window
+        {
+            get { return _window; }
+            set
+            {
+                OnObjectPickerConfig(assetPath);
+
+                _window = value;
+            }
+        }
 
         public static long Frame;
 
@@ -32,11 +41,15 @@ namespace ActionEditor
 
         public static void OnObjectPickerConfig(string path)
         {
+            _asset = null;
+            EditorPrefs.SetString(key, string.Empty);
+
+            AppInternal.Refresh();
             if (!File.Exists(path)) return;
             var text = File.ReadAllText(path);
             try
             {
-                var asset = Asset.Deserialize(typeof(Asset),text);
+                var asset = Asset.Deserialize(typeof(Asset), text);
                 asset.Validate();
                 _asset = asset;
             }
@@ -47,6 +60,7 @@ namespace ActionEditor
             }
             EditorPrefs.SetString(key, path);
             AppInternal.Refresh();
+
         }
 
         public static void SaveAsset()
