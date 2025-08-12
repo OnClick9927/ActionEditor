@@ -23,7 +23,7 @@ namespace ActionEditor
         [ReadOnly] public bool isLocked;
         [ReadOnly] public bool active = true;
 
-        [UnityEngine.SerializeField] private List<Temp> Temps;
+        [UnityEngine.SerializeField] private List<Temp> Temps=new List<Temp>();
         private List<Track> tracks = new List<Track>();
         public List<Track> Tracks
         {
