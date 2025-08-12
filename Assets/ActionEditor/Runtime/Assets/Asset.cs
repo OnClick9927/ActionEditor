@@ -14,7 +14,7 @@ namespace ActionEditor
         //public static bool pretty_json = false;
 
         [NonSerialized] public List<Group> groups = new List<Group>();
-        [UnityEngine.SerializeField] private List<Temp> Temps;
+        [UnityEngine.SerializeField] private List<Temp> Temps = new List<Temp>();
         [UnityEngine.SerializeField] private float length = 5f;
         [UnityEngine.SerializeField] private float viewTimeMin;
         [UnityEngine.SerializeField] private float viewTimeMax = 5f;
@@ -133,7 +133,7 @@ namespace ActionEditor
             }
             return null;
         }
-        
+
 
         public static Asset Deserialize(Type type, string serializedState)
         {
