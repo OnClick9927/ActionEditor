@@ -25,7 +25,12 @@ namespace ActionEditor
             EditorGUI.LabelField(ClipRect, EditorGUIUtility.TrIconContent("AnimationWindowEvent Icon", _clip.GetTypeName()));
             //GUI.matrix = matrix;
             GUI.color = Color.white;
-           
+
+            center = ClipRealRect.center;
+            ClipRealRect.width = 20;
+            ClipRealRect.center = center;
+
+
         }
     }
 }
