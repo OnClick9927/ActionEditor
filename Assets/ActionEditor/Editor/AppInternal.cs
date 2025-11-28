@@ -354,6 +354,29 @@ namespace ActionEditor
             Repaint();
         }
 
+        public static void SaveAs()
+        {
+            var srcname = System.IO.Path.GetFileName(AppInternal.assetPath);
+            srcname = srcname.Remove(srcname.IndexOf(Asset.FileEx) - 1);
+            string path = EditorUtility.SaveFilePanel(Lan.ins.SaveAs, Prefs.savePath, srcname + "_", Asset.FileEx);
+
+            if (!string.IsNullOrEmpty(path))
+            {
+                while (true)
+                {
+                    var index = path.IndexOf(Asset.FileEx);
+                    if (index == -1) break;
+                    path = path.Remove(index - 1);
+                }
+                path = $"{path}.{Asset.FileEx}";
+                if (path != AppInternal.assetPath)
+                {
+                    var txt = AppInternal.AssetData.Serialize();
+                    File.WriteAllText(path, txt);
+                    AssetDatabase.Refresh();
+                }
+            }
+        }
         internal static void KeyBoardEvent(Event eve)
         {
             if (AssetData == null) return;
@@ -361,7 +384,10 @@ namespace ActionEditor
             {
                 if (eve.keyCode == KeyCode.S)
                 {
-                    AppInternal.AutoSave();
+                    if (eve.shift)
+                        SaveAs();
+                    else
+                        AppInternal.AutoSave();
                     eve.Use();
 
                 }

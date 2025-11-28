@@ -7,6 +7,7 @@
 
         public string AssetPickListType => "AssetPickListType";
 
+        string ILanguages.SaveAs => "SaveAs";
 
         //**********  Welcome *********
         string ILanguages.Title => "Action Editor";

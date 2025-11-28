@@ -45,6 +45,7 @@ namespace ActionEditor
         string Disable { get; }
         string Locked { get; }
         string Save { get; }
+        string SaveAs {  get; }
 
         //**********  Header *********
         string HeaderLastSaveTime { get; }
