@@ -131,7 +131,7 @@ namespace ActionEditor
             GUILayout.EndArea();
 
 
- 
+
         }
 
         private void OnHearderGUI()
@@ -185,12 +185,19 @@ namespace ActionEditor
 
             if (AppInternal.AssetData != null)
             {
+                if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("SaveAs")), EditorStyles.toolbarButton,
+                     GUILayout.Width(26)))
+                {
+
+                    AppInternal.SaveAs();
+
+
+                }
                 if (GUILayout.Button(new GUIContent(EditorGUIUtility.TrIconContent("SaveActive")), EditorStyles.toolbarButton,
                         GUILayout.Width(26)))
                 {
                     AppInternal.AutoSave(); //先保存当前的
                 }
-
             }
             {
                 var rect = EditorGUILayout.GetControlRect(GUILayout.Width(25));
