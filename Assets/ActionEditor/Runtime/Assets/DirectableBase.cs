@@ -22,17 +22,17 @@ namespace ActionEditor
         public IDirectable Parent => parent;
 
 
-        void IDirectable.AfterDeserialize() => OnAfterDeserialize();
+        //void IDirectable.AfterDeserialize() => OnAfterDeserialize();
 
-        void IDirectable.BeforeSerialize() => OnBeforeSerialize();
+        //void IDirectable.BeforeSerialize() => OnBeforeSerialize();
 
         public virtual void Validate(Asset root, IDirectable parent)
         {
             this.root = root;
             this.parent = parent;
         }
-        protected virtual void OnAfterDeserialize() { }
-        protected virtual void OnBeforeSerialize() { }
+        //protected virtual void OnAfterDeserialize() { }
+        //protected virtual void OnBeforeSerialize() { }
 
 
         public virtual IEnumerable<IDirectable> Children { get; }
@@ -43,5 +43,11 @@ namespace ActionEditor
 
         public abstract float EndTime { get; set; }
 
+        void IBufferObject.ReadField(string id,BufferReader reader) => ReadField(id,reader);
+        void IBufferObject.WriteField(string id, BufferWriter writer) => WriteField(id,writer);
+
+        protected abstract void ReadField(string id, BufferReader reader);
+
+        protected abstract void WriteField(string id, BufferWriter writer);
     }
 }

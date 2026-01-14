@@ -1,15 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
-//using FullSerializer;
-//using UnityEngine;
+
 
 namespace ActionEditor
 {
     [Serializable]
     public abstract class Clip : DirectableBase, IClip
     {
-        [UnityEngine.SerializeField] private float startTime;
-        [UnityEngine.SerializeField]/*[UnityEngine.HideInInspector]*/ protected float length = 1f;
+
+
+
+        [Buffer] private float startTime;
+        [Buffer] protected float length = 1f;
+        protected override void ReadField(string id, BufferReader reader)
+        {
+            
+        }
+        protected override void WriteField(string id, BufferWriter writer)
+        {
+            
+        }
 
         public sealed override bool IsActive { get => Parent == null ? false : Parent.IsActive; set { } }
         public sealed override bool IsLocked { get => Parent == null ? false : Parent.IsLocked; set { } }

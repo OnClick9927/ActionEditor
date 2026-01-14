@@ -6,8 +6,7 @@ namespace ActionEditor
     public static class IDirectableExtensions
     {
 
-        public static string ObjectToJson(object o) => UnityEngine.JsonUtility.ToJson(o, false);
-        public static object JsonToObject(string o, Type type) => UnityEngine.JsonUtility.FromJson(o, type);
+  
 
         public static float Min(float a, float b) => a < b ? a : b;
 

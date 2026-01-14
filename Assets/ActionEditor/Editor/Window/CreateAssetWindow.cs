@@ -102,7 +102,7 @@ namespace ActionEditor
                 if (inst != null)
                 {
                     var json = inst.Serialize();
-                    System.IO.File.WriteAllText(path, json);
+                    System.IO.File.WriteAllBytes(path, json);
                     AssetDatabase.Refresh();
                     AppInternal.OnObjectPickerConfig(path);
                     editorWindow.Close();

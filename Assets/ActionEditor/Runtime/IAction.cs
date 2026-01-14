@@ -2,7 +2,7 @@
 
 namespace ActionEditor
 {
-    public interface IAction {
+    public interface IAction:IBufferObject {
         float Length { get; set; }
         float StartTime { get; }
         float EndTime { get; }
@@ -23,9 +23,9 @@ namespace ActionEditor
 
 
         void Validate(Asset root, IDirectable parent);
-        void AfterDeserialize();
+        //void AfterDeserialize();
 
-        void BeforeSerialize();
+        //void BeforeSerialize();
     }
 
     public interface IClip : IDirectable { }

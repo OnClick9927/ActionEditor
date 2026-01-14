@@ -5,26 +5,35 @@ using System.Linq;
 
 namespace ActionEditor
 {
-    //[Name("Default Group")]
     [Serializable]
     public abstract class Group : DirectableBase
     {
 
-        [System.Serializable]
-        internal class Temp
+
+
+        [Buffer] public string name;
+        [ReadOnly][Buffer] public bool isCollapsed;
+        [ReadOnly][Buffer] public bool isLocked;
+        [ReadOnly][Buffer] public bool active = true;
+
+        [Buffer] private List<Track> tracks = new List<Track>();
+
+        protected override void ReadField(string id, BufferReader reader)
         {
-            public string type;
-            public string json;
+            if (id == nameof(tracks))
+                tracks = reader.ReadList(reader.ReadObject<Track>);
+
         }
-        //[SerializeField][HideInInspector] private string name;
+        protected override void WriteField(string id, BufferWriter writer)
+        {
+            if (id == nameof(tracks))
 
-        public string name;
-        [ReadOnly] public bool isCollapsed;
-        [ReadOnly] public bool isLocked;
-        [ReadOnly] public bool active = true;
+                writer.WriteList(tracks, writer.WriteObject);
 
-        [UnityEngine.SerializeField] private List<Temp> Temps=new List<Temp>();
-        private List<Track> tracks = new List<Track>();
+        }
+
+
+
         public List<Track> Tracks
         {
             get => tracks;
@@ -131,36 +140,7 @@ namespace ActionEditor
 
 
 
-        protected override void OnAfterDeserialize()
-        {
-            Asset.FromTemp(this.Temps, this.tracks);
-            //tracks = this.Temps.ConvertAll(x =>
-            //{
-            //    var type = Asset.GetType(x.type);
-            //    if (type != null)
-            //        return JsonUtility.FromJson(x.json, type) as Track;
-            //    return null;
-            //});
-            //tracks.RemoveAll(x => x == null);
-            //for (int i = 0; i < tracks.Count; i++)
-            //{
-            //    ((IDirectable)tracks[i]).AfterDeserialize();
-            //}
-        }
-        protected override void OnBeforeSerialize()
-        {
-            Asset.ToTemp(this.Temps, this.tracks);
 
-            //for (int i = 0; i < tracks.Count; i++)
-            //{
-            //    (tracks[i] as IDirectable).BeforeSerialize();
-            //}
-            //Temps = tracks.ConvertAll(x => new Temp()
-            //{
-            //    type = x.GetType().FullName,
-            //    json = JsonUtility.ToJson(x)
-            //});
-        }
 
 
     }

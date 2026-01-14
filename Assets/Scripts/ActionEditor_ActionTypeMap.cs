@@ -13,12 +13,13 @@ private static System.Collections.Generic.Dictionary<string,System.Type> map=new
 { "ActionEditor.RotateTo",typeof(ActionEditor.RotateTo) },
 { "ActionEditor.ScaleTo",typeof(ActionEditor.ScaleTo) },
 { "ActionEditor.ActionTrack",typeof(ActionEditor.ActionTrack) },
-{ "ActionEditor.TestGroup",typeof(ActionEditor.TestGroup) },
 { "ActionEditor.AnimationTrack",typeof(ActionEditor.AnimationTrack) },
 { "ActionEditor.AudioTrack",typeof(ActionEditor.AudioTrack) },
 { "ActionEditor.EffectTrack",typeof(ActionEditor.EffectTrack) },
 { "ActionEditor.SignalTrack",typeof(ActionEditor.SignalTrack) },
+{ "ActionEditor.TestGroup",typeof(ActionEditor.TestGroup) },
 { "ActionEditor.SkillAsset",typeof(ActionEditor.SkillAsset) },
+{ "ActionEditor.BuffAsset.TestBuff",typeof(ActionEditor.BuffAsset.TestBuff) },
 };
 #if UNITY_EDITOR
         [UnityEditor.InitializeOnLoadMethod] 

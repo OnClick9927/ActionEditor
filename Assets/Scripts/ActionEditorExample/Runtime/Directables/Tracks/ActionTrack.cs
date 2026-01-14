@@ -14,13 +14,7 @@ namespace ActionEditor
         [Name("测试2")] public float Test2;
 
         [Name("测试3")] public string Test3;
-    }
-
-    [Name("测试")]
-    [Attachable(typeof(SkillAsset),typeof(BuffAsset))]
-
-    public class TestGroup:Group
-    {
-
+  
+   
     }
 }

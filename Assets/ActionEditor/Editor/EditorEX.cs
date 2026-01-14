@@ -99,23 +99,18 @@ namespace ActionEditor
             subClipContainable.Length = subClipContainable.MatchAbleLength;
         }
 
-        //public static void TryMatchPreviousSubClipLoop(this ISubClipContainable subClipContainable)
-        //{
-        //    subClipContainable.Length = subClipContainable.GetPreviousLoopLocalTime();
-        //}
-
-        //public static void TryMatchNextSubClipLoop(this ISubClipContainable subClipContainable)
-        //{
-        //    var targetLength = subClipContainable.GetNextLoopLocalTime();
-        //    var nextClip = subClipContainable.GetNextSibling();
-        //    if (nextClip == null || subClipContainable.StartTime + targetLength <= nextClip.StartTime) subClipContainable.Length = targetLength;
-        //}
         public static T DeepCopy<T>(this T directable) where T : class, IDirectable
         {
-            directable.BeforeSerialize();
-            var copy = JsonUtility.FromJson(JsonUtility.ToJson(directable), directable.GetType()) as T;
-            copy.AfterDeserialize();
-            return copy;
+            BufferWriter writer = new BufferWriter();
+            writer.WriteObject(directable);
+            BufferReader reader = new BufferReader(writer.GetValidBuffer());
+
+            T t = reader.ReadObject<T>();
+        
+            //directable.BeforeSerialize();
+
+            //copy.AfterDeserialize();
+            return t;
         }
 
 
@@ -241,7 +236,7 @@ namespace ActionEditor
                 var info = new TypeMetaInfo
                 {
                     type = type,
-                    name =GetTypeName(type),
+                    name = GetTypeName(type),
                 };
 
 
