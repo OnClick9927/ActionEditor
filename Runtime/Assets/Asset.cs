@@ -2,8 +2,7 @@
 using System.Collections.Generic;
 
 
-//using UnityEngine;
-using static ActionEditor.Group;
+
 
 namespace ActionEditor
 {
@@ -11,14 +10,28 @@ namespace ActionEditor
     public abstract class Asset : IAction
     {
         public const string FileEx = "action.bytes";
-        //public static bool pretty_json = false;
 
-        [NonSerialized] public List<Group> groups = new List<Group>();
-        [UnityEngine.SerializeField] private List<Temp> Temps = new List<Temp>();
-        [UnityEngine.SerializeField] private float length = 5f;
-        [UnityEngine.SerializeField] private float viewTimeMin;
-        [UnityEngine.SerializeField] private float viewTimeMax = 5f;
 
+
+        [Buffer] public List<Group> groups = new List<Group>();
+        [Buffer] private float length = 5f;
+        [Buffer] private float viewTimeMin;
+        [Buffer] private float viewTimeMax = 5f;
+        void IBufferObject.WriteField(string id, BufferWriter writer) => WriteField(id, writer);
+        void IBufferObject.ReadField(string id, BufferReader reader) => ReadField(id, reader);
+        protected virtual void ReadField(string id, BufferReader reader)
+        {
+            if (id == nameof(groups))
+                groups = reader.ReadList(reader.ReadObject<Group>);
+
+        }
+
+        protected virtual void WriteField(string id, BufferWriter writer)
+        {
+            if (id == nameof(groups))
+                writer.WriteList(groups, writer.WriteObject);
+
+        }
         public float Length
         {
             get => length;
@@ -104,10 +117,12 @@ namespace ActionEditor
 
 
 
-        public string Serialize()
+        public byte[] Serialize()
         {
             this.BeforeSerialize();
-            return $"{GetType().FullName}\n{IDirectableExtensions.ObjectToJson(this)}";
+            BufferWriter writer = new BufferWriter(1024);
+            writer.WriteObject(this);
+            return writer.GetValidBuffer();
         }
 
         public static event Func<string, System.Type> GetTypeByTypeName;
@@ -135,74 +150,30 @@ namespace ActionEditor
         }
 
 
-        public static Asset Deserialize(Type type, string serializedState)
+        public static Asset Deserialize(Type type, byte[] buffer)
         {
-            var sps = serializedState.Split('\n');
-#if UNITY_EDITOR
-            var typename = sps[0].Trim();
-            type = GetType(typename);
-#endif
-            var asset = IDirectableExtensions.JsonToObject(serializedState.Remove(0, sps[0].Length), type) as Asset;
+            BufferReader reader = new BufferReader(buffer);
+            var asset = reader.ReadObject<Asset>();
             asset.AfterDeserialize();
             return asset;
         }
         protected virtual void OnAfterDeserialize() { }
         protected virtual void OnBeforeSerialize() { }
 
-        internal static void FromTemp<T>(List<Temp> src, List<T> result) where T : class, IDirectable
-        {
-            result.Clear();
-            for (int i = 0; i < src.Count; i++)
-            {
-
-                var tem = src[i];
-                var type = Asset.GetType(tem.type);
-                if (type != null)
-                {
-                    T t = IDirectableExtensions.JsonToObject(tem.json, type) as T;
-                    if (t != null)
-                    {
-                        result.Add(t);
-                    }
-                }
-            }
-            for (int i = 0; i < result.Count; i++)
-                result[i].AfterDeserialize();
-        }
-        internal static void ToTemp<T>(List<Temp> result, List<T> src) where T : class, IDirectable
-        {
-            for (int i = 0; i < src.Count; i++)
-                src[i].BeforeSerialize();
-            result.Clear();
-            for (int i = 0; i < src.Count; i++)
-            {
-
-                var tem = src[i];
-                result.Add(new Temp()
-                {
-                    type = tem.GetType().FullName,
-                    json = IDirectableExtensions.ObjectToJson(tem)
-                });
-            }
-
-        }
 
 
         private void AfterDeserialize()
         {
-            FromTemp(this.Temps, this.groups);
 
-
-            //for (int i = 0; i < groups.Count; i++)
-            //    (groups[i] as IDirectable).AfterDeserialize();
             OnAfterDeserialize();
             Validate();
         }
 
         private void BeforeSerialize()
         {
-            ToTemp(Temps, this.groups);
             OnBeforeSerialize();
         }
+
+
     }
 }

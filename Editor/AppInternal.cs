@@ -46,7 +46,7 @@ namespace ActionEditor
 
             AppInternal.Refresh();
             if (!File.Exists(path)) return;
-            var text = File.ReadAllText(path);
+            var text = File.ReadAllBytes(path);
             try
             {
                 var asset = Asset.Deserialize(typeof(Asset), text);
@@ -69,7 +69,7 @@ namespace ActionEditor
             var path = assetPath;
             if (string.IsNullOrEmpty(path)) return;
             OnSave?.Invoke();
-            System.IO.File.WriteAllText(path, AssetData.Serialize());
+            System.IO.File.WriteAllBytes(path, AssetData.Serialize());
             var text = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             EditorUtility.SetDirty(text);
@@ -372,7 +372,7 @@ namespace ActionEditor
                 if (path != AppInternal.assetPath)
                 {
                     var txt = AppInternal.AssetData.Serialize();
-                    File.WriteAllText(path, txt);
+                    File.WriteAllBytes(path, txt);
                     AssetDatabase.Refresh();
                 }
             }

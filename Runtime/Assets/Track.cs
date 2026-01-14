@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-//using FullSerializer;
-//using UnityEngine;
-using static ActionEditor.Group;
+
 
 namespace ActionEditor
 {
@@ -14,12 +12,27 @@ namespace ActionEditor
     [Attachable(typeof(Group))]
     public abstract class Track : DirectableBase, IDirectable
     {
-        [ReadOnly] public bool isLocked;
-        [ReadOnly] public bool active = true;
-        private List<Clip> clips = new List<Clip>();
 
-        [UnityEngine.SerializeField] private List<Temp> Temps = new List<Temp>();
 
+
+        [ReadOnly][Buffer] public bool isLocked;
+        [ReadOnly][Buffer] public bool active = true;
+        [Buffer] private List<Clip> clips = new List<Clip>();
+
+        protected override void ReadField(string id, BufferReader reader)
+        {
+            if (id == nameof(clips))
+                clips = reader.ReadList(reader.ReadObject<Clip>);
+
+
+        }
+        protected override void WriteField(string id, BufferWriter writer)
+        {
+
+            if (id == nameof(clips))
+                writer.WriteList(clips, writer.WriteObject);
+
+        }
 
 
         public override sealed bool IsLocked
@@ -126,29 +139,7 @@ namespace ActionEditor
         }
 
 
-        protected override void OnAfterDeserialize()
-        {
-            Asset.FromTemp(this.Temps, this.clips);
-            //clips = this.Temps.ConvertAll(x =>
-            //{
-            //    var type = Asset.GetType(x.type);
-            //    if (type != null)
-            //        return JsonUtility.FromJson(x.json, type) as Clip;
-            //    return null;
-            //});
-            //clips.RemoveAll(x => x == null);
-        }
-        protected override void OnBeforeSerialize()
-        {
-            Asset.ToTemp(this.Temps, this.clips);
 
-            //Temps = clips.ConvertAll(x => new Temp()
-            //{
-            //    type = x.GetType().FullName,
-            //    json = JsonUtility.ToJson(x)
-
-            //});
-        }
 
 
     }
