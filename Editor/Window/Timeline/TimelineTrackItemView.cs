@@ -7,17 +7,17 @@ namespace ActionEditor
 {
     class TimelineTrackItemView : ViewBase, IPointerClickHandler, IPointerDownHandler
     {
-        public static IDirectable MoveToItem;
+        public static ISegment MoveToItem;
 
         private Rect _leftRect, rightRect;
 
-        public IDirectable Data;
+        public ISegment Data;
 
         private TimelineTrackItemRightView _rightView;
 
         protected static GUIStyle NameStyle;
 
-        public void SetData(IDirectable asset)
+        public void SetData(ISegment asset)
         {
             Data = asset;
             _rightView = Window.CreateView<TimelineTrackItemRightView>();
@@ -357,11 +357,11 @@ namespace ActionEditor
 
     class TimelineTrackItemRightView : ViewBase, IPointerClickHandler, IPointerDownHandler
     {
-        public IDirectable Data;
+        public ISegment Data;
 
         public static Rect TrackRightRect { get; private set; }
 
-        public void SetData(IDirectable asset)
+        public void SetData(ISegment asset)
         {
             Data = asset;
         }
@@ -551,7 +551,7 @@ namespace ActionEditor
             });
             menu.AddItem(new GUIContent(Lan.ins.Delete), false, () =>
             {
-                if (clip.Parent is Track track) track.DeleteAction(clip);
+                if (clip.Parent is Track track) track.DeleteClip(clip);
                 AppInternal.Refresh();
             });
             if (clip is ILengthMatchAble subContainable && subContainable.MatchAbleLength > 0)

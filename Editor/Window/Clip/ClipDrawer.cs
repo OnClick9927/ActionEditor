@@ -9,9 +9,9 @@ namespace ActionEditor
     {
         private static Dictionary<Clip, ClipDrawBase> _clipDraws = new Dictionary<Clip, ClipDrawBase>();
 
-        public static List<IDirectable> GetClips(Rect rect)
+        public static List<ISegment> GetClips(Rect rect)
         {
-            List<IDirectable> list = new List<IDirectable>();
+            List<ISegment> list = new List<ISegment>();
             foreach (var clip in _clipDraws.Keys)
             {
                 var draw = _clipDraws[clip];
@@ -38,7 +38,7 @@ namespace ActionEditor
             return false;
         }
 
-        public static Clip GetClipByTrackPosition(IDirectable track, Vector2 mousePosition)
+        public static Clip GetClipByTrackPosition(ISegment track, Vector2 mousePosition)
         {
             foreach (var clip in _clipDraws.Keys)
             {

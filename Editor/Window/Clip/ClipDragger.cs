@@ -64,7 +64,7 @@ namespace ActionEditor
 
         #region Tracks
 
-        private static readonly List<IDirectable> _tracks = new List<IDirectable>();
+        private static readonly List<ISegment> _tracks = new List<ISegment>();
 
         public static void TryResetTracks()
         {
@@ -242,7 +242,7 @@ namespace ActionEditor
         private static readonly Dictionary<Clip, float> DragOffsetDictionary =
             new Dictionary<Clip, float>();
 
-        private static void ReloadClipItems(IDirectable[] selectItems)
+        private static void ReloadClipItems(ISegment[] selectItems)
         {
             TryResetTracks();
             NowDragClips.Clear();
@@ -526,7 +526,7 @@ namespace ActionEditor
             return false;
         }
 
-        private static void CacheMagnetSnapInfo(IDirectable[] selectItems)
+        private static void CacheMagnetSnapInfo(ISegment[] selectItems)
         {
             var result = new List<float>
             {

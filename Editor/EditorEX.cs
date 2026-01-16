@@ -226,6 +226,7 @@ namespace ActionEditor
                 bool hasNext = childProp.Next(true);
 
                 while (hasNext)
+
                 {
                     // 终止条件：遍历到当前父属性的同级属性时，停止遍历
                     if (childProp.propertyPath == parentProp.propertyPath)

@@ -60,7 +60,7 @@ namespace ActionEditor
 
         private void ResetViews()
         {
-            void AddView(IDirectable data)
+            void AddView(ISegment data)
             {
                 var view = Window.CreateView<TimelineTrackItemView>();
                 view.SetData(data);
