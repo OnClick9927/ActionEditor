@@ -31,23 +31,16 @@ namespace ActionEditor
             this.root = root;
             this.parent = parent;
         }
-        //protected virtual void OnAfterDeserialize() { }
-        //protected virtual void OnBeforeSerialize() { }
+
 
 
         public virtual IEnumerable<IDirectable> Children { get; }
 
-        //public abstract bool IsCollapsed { get; set; }
 
         public abstract float StartTime { get; set; }
 
         public abstract float EndTime { get; set; }
 
-        void IBufferObject.ReadField(string id,BufferReader reader) => ReadField(id,reader);
-        void IBufferObject.WriteField(string id, BufferWriter writer) => WriteField(id,writer);
-
-        protected abstract void ReadField(string id, BufferReader reader);
-
-        protected abstract void WriteField(string id, BufferWriter writer);
+     
     }
 }

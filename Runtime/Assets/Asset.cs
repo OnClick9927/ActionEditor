@@ -13,25 +13,11 @@ namespace ActionEditor
 
 
 
-        [Buffer] public List<Group> groups = new List<Group>();
+        [Buffer][ReadOnly] public List<Group> groups = new List<Group>();
         [Buffer] private float length = 5f;
         [Buffer] private float viewTimeMin;
         [Buffer] private float viewTimeMax = 5f;
-        void IBufferObject.WriteField(string id, BufferWriter writer) => WriteField(id, writer);
-        void IBufferObject.ReadField(string id, BufferReader reader) => ReadField(id, reader);
-        protected virtual void ReadField(string id, BufferReader reader)
-        {
-            if (id == nameof(groups))
-                groups = reader.ReadList(reader.ReadObject<Group>);
 
-        }
-
-        protected virtual void WriteField(string id, BufferWriter writer)
-        {
-            if (id == nameof(groups))
-                writer.WriteList(groups, writer.WriteObject);
-
-        }
         public float Length
         {
             get => length;
@@ -101,7 +87,7 @@ namespace ActionEditor
             return newGroup;
         }
 
-        public T AddGroup<T>(string name = "") where T : Group, new()
+        internal T AddGroup<T>(string name = "") where T : Group, new()
         {
             var newGroup = new T();
             if (string.IsNullOrEmpty(name))
@@ -117,62 +103,15 @@ namespace ActionEditor
 
 
 
-        public byte[] Serialize()
-        {
-            this.BeforeSerialize();
-            BufferWriter writer = new BufferWriter(1024);
-            writer.WriteObject(this);
-            return writer.GetValidBuffer();
-        }
-
-        public static event Func<string, System.Type> GetTypeByTypeName;
-
-        internal static Type GetType(string typeName)
-        {
-            Type type = null;
-            //#if !UNITY_EDITOR
-
-            if (GetTypeByTypeName != null)
-            {
-                type = GetTypeByTypeName.Invoke(typeName);
-                if (type != null)
-                    return type;
-            }
-
-            //#endif
-            foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                type = a.GetType(typeName);
-                if (type != null)
-                    return type;
-            }
-            return null;
-        }
-
+        public byte[] Serialize() => BuffConverter.ToBytes(this);
 
         public static Asset Deserialize(Type type, byte[] buffer)
         {
-            BufferReader reader = new BufferReader(buffer);
-            var asset = reader.ReadObject<Asset>();
-            asset.AfterDeserialize();
+            var asset = BuffConverter.ToObject(buffer, type) as Asset;
+            asset.Validate();
             return asset;
         }
-        protected virtual void OnAfterDeserialize() { }
-        protected virtual void OnBeforeSerialize() { }
 
-
-
-        private void AfterDeserialize()
-        {
-
-            OnAfterDeserialize();
-            Validate();
-        }
-
-        private void BeforeSerialize()
-        {
-            OnBeforeSerialize();
-        }
 
 
     }

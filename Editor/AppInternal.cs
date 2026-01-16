@@ -1,15 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
-using System.Linq;
-using System.IO;
 
 namespace ActionEditor
 {
 
     [InitializeOnLoad]
-    static class AppInternal
+    static partial class AppInternal
     {
         const string key = "ActionEditor.APP";
         public static string assetPath => EditorPrefs.GetString(key);
@@ -154,7 +155,7 @@ namespace ActionEditor
             Clip clip = CopyAsset as Clip;
             if (clip == null) return;
             if (!IsCut)
-                clip = clip.DeepCopy();
+                clip = clip.DeepCopyByBuffer();
 
             var rect = TimelineTrackItemRightView.TrackRightRect;
             var time = track.Root.PosToTime(Event.current.mousePosition.x - rect.x, rect.width);
@@ -170,7 +171,7 @@ namespace ActionEditor
             if (track == null) return;
 
             if (!IsCut)
-                track = track.DeepCopy();
+                track = track.DeepCopyByBuffer();
 
 
             if (group.CanAddTrack(track))
@@ -478,6 +479,70 @@ namespace ActionEditor
                 eve.Use();
             }
             #endregion
+        }
+    }
+
+    partial class AppInternal
+    {
+        public static readonly Dictionary<string, Type> AssetTypes = new Dictionary<string, Type>();
+        public static readonly List<string> AssetNames = new List<string>();
+        public static void InitializeAssetTypes()
+        {
+            AssetTypes.Clear();
+
+
+            AssetNames.Clear();
+            var types = EditorEX.GetImplementationsOf(typeof(Asset));
+            foreach (var t in types)
+            {
+                var typeName = EditorEX.GetTypeName(t);
+                AssetTypes[typeName] = t;
+                AssetNames.Add(typeName);
+            }
+        }
+        public static Color GetColor(this IDirectable track)
+        {
+            if (track is Clip)
+            {
+
+                return Prefs.data.clips.First(x => x.type == track.GetType().FullName).color;
+            }
+            else if (track is Track)
+            {
+                return Prefs.data.tracks.First(x => x.type == track.GetType().FullName).color;
+
+            }
+            return Color.white;
+        }
+
+        public static bool CanAddTrack(this Group group, Track track)
+        {
+
+            if (track == null) return false;
+            var type = track.GetType();
+            if (type == null || !type.IsSubclassOf(typeof(Track)) || type.IsAbstract) return false;
+            //if (type.IsDefined(typeof(UniqueTrackAttribute), true) &&
+            //    group.ExistSameTypeTrack(type))
+            //    return false;
+            var attachAtt = type.GetCustomAttribute<AttachableAttribute>(true);
+            if (attachAtt == null || attachAtt.Types == null || attachAtt.Types.All(t => t != group.GetType())) return false;
+
+            return true;
+        }
+
+        public static float ViewTime(this Asset asset) => asset.ViewTimeMax - asset.ViewTimeMin;
+
+        public static float SnapTime(this Asset asset, float time) => Mathf.Round(time / Prefs.SnapInterval) * Prefs.SnapInterval;
+
+        public static float TimeToPos(this Asset asset, float time, float width) => (time - asset.ViewTimeMin) / asset.ViewTime() * width;
+
+        public static float PosToTime(this Asset asset, float pos, float width) => pos / width * asset.ViewTime() + asset.ViewTimeMin;
+
+        public static float WidthToTime(this Asset asset, float pos, float width) => pos / width * asset.ViewTime();
+
+        public static void TryMatchSubClipLength(this ILengthMatchAble subClipContainable)
+        {
+            subClipContainable.Length = subClipContainable.MatchAbleLength;
         }
     }
 }

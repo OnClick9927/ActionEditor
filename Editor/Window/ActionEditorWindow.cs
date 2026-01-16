@@ -24,7 +24,7 @@ namespace ActionEditor
 
             titleContent = new GUIContent(Lan.ins.Title);
             minSize = new Vector2(500, 250);
-            EditorEX.InitializeAssetTypes();
+            AppInternal.InitializeAssetTypes();
             _timelineView = this.CreateView<TimelineView>();
         }
 

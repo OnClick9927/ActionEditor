@@ -19,20 +19,7 @@ namespace ActionEditor
         [ReadOnly][Buffer] public bool active = true;
         [Buffer] private List<Clip> clips = new List<Clip>();
 
-        protected override void ReadField(string id, BufferReader reader)
-        {
-            if (id == nameof(clips))
-                clips = reader.ReadList(reader.ReadObject<Clip>);
 
-
-        }
-        protected override void WriteField(string id, BufferWriter writer)
-        {
-
-            if (id == nameof(clips))
-                writer.WriteList(clips, writer.WriteObject);
-
-        }
 
 
         public override sealed bool IsLocked

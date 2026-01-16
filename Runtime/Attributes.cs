@@ -1,58 +1,17 @@
 ﻿using System;
-using System.Reflection;
 
 namespace ActionEditor
 {
-
-    [AttributeUsage(AttributeTargets.Field)]
-
-    public abstract class ValidCheckAttribute : Attribute
-    {
-        public abstract bool IsValid(FieldInfo field, object obj, out string err);
-    }
-    [AttributeUsage(AttributeTargets.Field)]
-    public class NotNullAttribute : ValidCheckAttribute
-    {
-        public override bool IsValid(FieldInfo field, object obj, out string err)
-        {
-
-            bool error = false;
-            if (field.FieldType == typeof(string))
-            {
-                if (string.IsNullOrEmpty((string)obj))
-                {
-                    error = true;
-                }
-            }
-            else if (obj == null)
-            {
-                error = true;
-            }
-            err = error ? "Can not be NULL" : string.Empty;
-            return !error;
-        }
-    }
-
-    /// <summary>
-    /// 选择对象路径
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Field)]
-    public class ObjectPathAttribute : Attribute
-    {
-        public Type type;
-
-        public ObjectPathAttribute(Type type)
-        {
-            this.type = type;
-        }
-    }
-
-
     /// <summary>
     /// 自定义名称
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property)]
-    public class NameAttribute : Attribute
+    public class NameAttribute :
+#if UNITY_5_3_OR_NEWER
+        UnityEngine.PropertyAttribute
+#else
+        Attribute
+#endif
     {
         public readonly string name;
 
@@ -77,35 +36,34 @@ namespace ActionEditor
         }
     }
 
-    /// <summary>
-    /// 组内唯一性
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class UniqueTrackAttribute : Attribute
-    {
-    }
+
     /// <summary>
     /// 指定类型的图标
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
-    public class TrackIconAttribute : Attribute
+    public class IconAttribute : Attribute
     {
         public readonly string iconPath;
         public readonly Type fromType;
 
-        public TrackIconAttribute(string iconPath)
+        public IconAttribute(string iconPath)
         {
             this.iconPath = iconPath;
         }
 
-        public TrackIconAttribute(Type fromType)
+        public IconAttribute(Type fromType)
         {
             this.fromType = fromType;
         }
     }
 
     [AttributeUsage(AttributeTargets.Field)]
-    public class ReadOnlyAttribute : Attribute
+    public class ReadOnlyAttribute :
+#if UNITY_5_3_OR_NEWER
+        UnityEngine.PropertyAttribute
+#else
+        Attribute
+#endif
     {
 
     }

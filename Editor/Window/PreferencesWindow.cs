@@ -94,8 +94,8 @@ namespace ActionEditor
 
 
 
-            assetIndex = GUILayout.Toolbar(assetIndex, EditorEX.AssetNames.ToArray());
-            var assetName = EditorEX.AssetTypes[EditorEX.AssetNames[assetIndex]].FullName;
+            assetIndex = GUILayout.Toolbar(assetIndex, AppInternal.AssetNames.ToArray());
+            var assetName = AppInternal.AssetTypes[AppInternal.AssetNames[assetIndex]].FullName;
 
 
             var tracks = Prefs.data.tracks.Where(x => x.asset != null && x.asset.Contains(assetName));

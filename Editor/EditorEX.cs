@@ -7,12 +7,13 @@ using UnityEngine;
 
 namespace ActionEditor
 {
-    static class EditorEX
+
+    public static class EditorEX
     {
         private static readonly Dictionary<Type, Texture2D> _iconDictionary = new Dictionary<Type, Texture2D>();
         private static readonly Dictionary<Type, string> _nameDictionary = new Dictionary<Type, string>();
 
-        public static Texture2D GetIcon(this IDirectable track)
+        public static Texture2D GetIcon(this object track)
         {
             var type = track.GetType();
             if (_iconDictionary.TryGetValue(type, out var icon))
@@ -20,7 +21,7 @@ namespace ActionEditor
                 return icon;
             }
 
-            var att = track.GetType().GetCustomAttribute<TrackIconAttribute>(true);
+            var att = track.GetType().GetCustomAttribute<IconAttribute>(true);
 
             if (att != null)
             {
@@ -43,21 +44,6 @@ namespace ActionEditor
                 _iconDictionary[type] = icon;
             return icon;
         }
-
-        public static Color GetColor(this IDirectable track)
-        {
-            if (track is Clip)
-            {
-
-                return Prefs.data.clips.First(x => x.type == track.GetType().FullName).color;
-            }
-            else if (track is Track)
-            {
-                return Prefs.data.tracks.First(x => x.type == track.GetType().FullName).color;
-
-            }
-            return Color.white;
-        }
         public static string GetTypeName(Type type)
         {
 
@@ -68,59 +54,6 @@ namespace ActionEditor
             return _nameDictionary[type];
         }
         public static string GetTypeName(this object track) => GetTypeName(track.GetType());
-
-        public static bool CanAddTrack(this Group group, Track track)
-        {
-
-            if (track == null) return false;
-            var type = track.GetType();
-            if (type == null || !type.IsSubclassOf(typeof(Track)) || type.IsAbstract) return false;
-            if (type.IsDefined(typeof(UniqueTrackAttribute), true) &&
-                group.ExistSameTypeTrack(type))
-                return false;
-            var attachAtt = type.GetCustomAttribute<AttachableAttribute>(true);
-            if (attachAtt == null || attachAtt.Types == null || attachAtt.Types.All(t => t != group.GetType())) return false;
-
-            return true;
-        }
-
-        public static float ViewTime(this Asset asset) => asset.ViewTimeMax - asset.ViewTimeMin;
-
-        public static float SnapTime(this Asset asset, float time) => Mathf.Round(time / Prefs.SnapInterval) * Prefs.SnapInterval;
-
-        public static float TimeToPos(this Asset asset, float time, float width) => (time - asset.ViewTimeMin) / asset.ViewTime() * width;
-
-        public static float PosToTime(this Asset asset, float pos, float width) => pos / width * asset.ViewTime() + asset.ViewTimeMin;
-
-        public static float WidthToTime(this Asset asset, float pos, float width) => pos / width * asset.ViewTime();
-
-        public static void TryMatchSubClipLength(this ILengthMatchAble subClipContainable)
-        {
-            subClipContainable.Length = subClipContainable.MatchAbleLength;
-        }
-
-        public static T DeepCopy<T>(this T directable) where T : class, IDirectable
-        {
-            BufferWriter writer = new BufferWriter();
-            writer.WriteObject(directable);
-            BufferReader reader = new BufferReader(writer.GetValidBuffer());
-
-            T t = reader.ReadObject<T>();
-        
-            //directable.BeforeSerialize();
-
-            //copy.AfterDeserialize();
-            return t;
-        }
-
-
-
-
-
-
-
-
-
         public static void DrawDashedLine(float x, float startY, float endY, Color color)
         {
             Handles.BeginGUI();
@@ -153,13 +86,6 @@ namespace ActionEditor
             return AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes());
 
         }
-
-
-        /// <summary>
-        /// 获取类型所有子类型
-        /// </summary>
-        /// <param name="type"></param>
-        /// <returns></returns>
         public static Type[] GetImplementationsOf(Type type)
         {
             if (type.IsInterface)
@@ -176,20 +102,10 @@ namespace ActionEditor
             public string name;
             //public string category;
             public Type[] attachableTypes;
-            public bool isUnique;
+            //public bool isUnique;
         }
 
-        //public static void BoldSeparator()
-        //{
-        //    var tex = Styles.WhiteTexture;
-        //    var lastRect = GUILayoutUtility.GetLastRect();
-        //    GUILayout.Space(14);
-        //    GUI.color = new Color(0, 0, 0, 0.25f);
-        //    GUI.DrawTexture(new Rect(0, lastRect.yMax + 6, Screen.width, 4), tex);
-        //    GUI.DrawTexture(new Rect(0, lastRect.yMax + 6, Screen.width, 1), tex);
-        //    GUI.DrawTexture(new Rect(0, lastRect.yMax + 9, Screen.width, 1), tex);
-        //    GUI.color = Color.white;
-        //}
+
 
 
 
@@ -247,7 +163,7 @@ namespace ActionEditor
                     info.attachableTypes = attachAtt.Types;
                 }
 
-                info.isUnique = type.IsDefined(typeof(UniqueTrackAttribute), true);
+                //info.isUnique = type.IsDefined(typeof(UniqueTrackAttribute), true);
 
                 infos.Add(info);
             }
@@ -258,25 +174,82 @@ namespace ActionEditor
 
 
 
-        public static readonly Dictionary<string, Type> AssetTypes = new Dictionary<string, Type>();
-        public static readonly List<string> AssetNames = new List<string>();
+        public static Editor CreateEditor(object target) => DrawerObject.CreateEditor(target);
 
 
-        public static void InitializeAssetTypes()
+        [CustomPropertyDrawer(typeof(ReadOnlyAttribute))]
+        public class ReadOnlyPropertyDrawer : PropertyDrawer
         {
-            AssetTypes.Clear();
-
-
-            AssetNames.Clear();
-            var types = EditorEX.GetImplementationsOf(typeof(Asset));
-            foreach (var t in types)
+            public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
             {
-                var typeName = GetTypeName(t);
-                AssetTypes[typeName] = t;
-                AssetNames.Add(typeName);
+                using (new EditorGUI.DisabledScope(true))
+                    EditorGUI.PropertyField(position, property, label);
+            }
+        }
+        [CustomPropertyDrawer(typeof(NameAttribute))]
+        public class NamePropertyDrawer : PropertyDrawer
+        {
+            public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+            {
+                var value = this.attribute as NameAttribute;
+                EditorGUI.PropertyField(position, property, new GUIContent(value.name));
             }
         }
 
 
+
+        class DrawerObject : UnityEngine.ScriptableObject
+        {
+            public static Editor CreateEditor(object target)
+            {
+                sto = sto ?? DrawerObject.CreateInstance<DrawerObject>();
+                sto.hideFlags = HideFlags.DontSave;
+                sto.obj = target;
+                if (editor == null) editor = Editor.CreateEditor(sto);
+                return editor;
+            }
+            [SerializeReference]
+            public object obj;
+            private static DrawerObject sto;
+            private static Editor editor;
+        }
+        [CustomEditor(typeof(DrawerObject))]
+        class DrawerObjectEditor : Editor
+        {
+            public static List<SerializedProperty> GetDirectChildProperties(SerializedProperty parentProp)
+            {
+                List<SerializedProperty> childProps = new List<SerializedProperty>();
+                if (parentProp == null || !parentProp.hasChildren) return childProps;
+
+                // 重置到第一个子属性
+                SerializedProperty childProp = parentProp.Copy();
+                bool hasNext = childProp.Next(true);
+
+                while (hasNext)
+                {
+                    // 终止条件：遍历到当前父属性的同级属性时，停止遍历
+                    if (childProp.propertyPath == parentProp.propertyPath)
+                    {
+                        break;
+                    }
+
+                    childProps.Add(childProp.Copy()); // 必须Copy！否则后续Next会改变当前引用
+                    hasNext = childProp.Next(false);
+                }
+                return childProps;
+            }
+            public override void OnInspectorGUI()
+            {
+                this.serializedObject.Update();
+                var p = this.serializedObject.FindProperty(nameof(DrawerObject.obj));
+                var children = GetDirectChildProperties(p);
+
+                foreach (var item in children)
+                {
+                    EditorGUILayout.PropertyField(item);
+                }
+                this.serializedObject.ApplyModifiedProperties();
+            }
+        }
     }
 }
