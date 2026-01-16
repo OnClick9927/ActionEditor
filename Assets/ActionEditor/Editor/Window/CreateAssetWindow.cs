@@ -101,7 +101,7 @@ namespace ActionEditor
                 var inst = Activator.CreateInstance(t) as Asset;
                 if (inst != null)
                 {
-                    var json = inst.Serialize();
+                    var json = inst.ToBytes();
                     System.IO.File.WriteAllBytes(path, json);
                     AssetDatabase.Refresh();
                     AppInternal.OnObjectPickerConfig(path);

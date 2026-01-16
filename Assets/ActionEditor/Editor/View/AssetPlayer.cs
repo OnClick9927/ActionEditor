@@ -54,7 +54,7 @@ namespace ActionEditor
             {
                 if (Asset != null)
                 {
-                    return Asset.Length;
+                    return ((IAction)Asset).Length;
                 }
 
                 return 0;

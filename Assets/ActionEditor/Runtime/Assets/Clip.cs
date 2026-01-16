@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace ActionEditor
 {
     [Serializable]
-    public abstract class Clip : DirectableBase, IClip
+    public abstract class Clip : SegmentBase, IClip
     {
 
 
@@ -26,7 +26,7 @@ namespace ActionEditor
 
         public abstract bool IsValid { get; }
 
-        public sealed override IEnumerable<IDirectable> Children => null;
+        public sealed override IEnumerable<ISegment> Children => null;
 
 
         public sealed override float StartTime
@@ -36,7 +36,7 @@ namespace ActionEditor
             {
                 if (Math.Abs(startTime - value) > 0.0001f)
                 {
-                    startTime = IDirectableExtensions.Max(value, 0);
+                    startTime = SegmentExtensions.Max(value, 0);
                 }
             }
         }
@@ -48,7 +48,7 @@ namespace ActionEditor
             {
                 if (Math.Abs(StartTime + Length - value) > 0.0001f)
                 {
-                    Length = IDirectableExtensions.Max(value - StartTime, 0);
+                    Length = SegmentExtensions.Max(value - StartTime, 0);
                     this.AsBlendAble()?.ValidBlend();
 
                 }

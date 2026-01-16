@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace ActionEditor
 {
-    public static class IDirectableExtensions
+    public static class SegmentExtensions
     {
 
   
@@ -26,10 +26,10 @@ namespace ActionEditor
 
             return value;
         }
-        public static float ToLocalTime(this IDirectable directable, float time) => Clamp(time - directable.StartTime, 0, directable.Length);
+        public static float ToLocalTime(this ISegment directable, float time) => Clamp(time - directable.StartTime, 0, directable.Length);
 
 
-        public static float ToLocalTimeUnclamped(this IDirectable directable, float time)
+        public static float ToLocalTimeUnclamped(this ISegment directable, float time)
         {
             return time - directable.StartTime;
         }
@@ -82,7 +82,7 @@ namespace ActionEditor
             return true;
         }
 
-        public static bool CanValidTime(this IClip clip, IDirectable parent, float startTime, float endTime)
+        public static bool CanValidTime(this IClip clip, ISegment parent, float startTime, float endTime)
         {
             var prevDirectable = clip.GetPreviousSibling(parent);
             var nextDirectable = clip.GetNextSibling(parent);
@@ -132,7 +132,7 @@ namespace ActionEditor
 
         public static IClip GetPreviousSibling(this IClip clip) => GetPreviousSibling(clip, clip.Parent);
 
-        public static IClip GetPreviousSibling(this IClip clip, IDirectable parent)
+        public static IClip GetPreviousSibling(this IClip clip, ISegment parent)
         {
             if (parent != null)
             {
@@ -145,7 +145,7 @@ namespace ActionEditor
 
         public static IClip GetNextSibling(this IClip clip) => GetNextSibling(clip, clip.Parent);
 
-        public static IClip GetNextSibling(this IClip clip, IDirectable parent)
+        public static IClip GetNextSibling(this IClip clip, ISegment parent)
         {
             if (parent != null)
             {

@@ -40,16 +40,16 @@ namespace ActionEditor
 
         public static void EditAsset(string path) => AppInternal.OnObjectPickerConfig(path);
         public static void SaveAsset() => AppInternal.SaveAsset();
-        public static void Select(params IDirectable[] objs) => AppInternal.Select(objs);
-        public static bool IsSelect(IDirectable directable) => AppInternal.IsSelect(directable);
-        public static IDirectable[] SelectItems => AppInternal.SelectItems;
+        public static void Select(params ISegment[] objs) => AppInternal.Select(objs);
+        public static bool IsSelect(ISegment directable) => AppInternal.IsSelect(directable);
+        public static ISegment[] SelectItems => AppInternal.SelectItems;
 
 
-        public static IDirectable FistSelect => SelectItems.Length > 0 ? SelectItems.First() : null;
+        public static ISegment FistSelect => SelectItems.Length > 0 ? SelectItems.First() : null;
 
 
-        public static void CopyOrCutAsset(IDirectable asset, bool cut) => AppInternal.SetCopyAsset(asset, cut);
-        public static void PasteCopyTo(IDirectable target) => AppInternal.PasteCopyTo(target);
+        public static void CopyOrCutAsset(ISegment asset, bool cut) => AppInternal.SetCopyAsset(asset, cut);
+        public static void PasteCopyTo(ISegment target) => AppInternal.PasteCopyTo(target);
 
  
 

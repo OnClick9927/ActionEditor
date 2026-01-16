@@ -50,7 +50,7 @@ namespace ActionEditor
             var text = File.ReadAllBytes(path);
             try
             {
-                var asset = Asset.Deserialize(typeof(Asset), text);
+                var asset = Asset.FromBytes(typeof(Asset), text);
                 asset.Validate();
                 _asset = asset;
             }
@@ -70,7 +70,7 @@ namespace ActionEditor
             var path = assetPath;
             if (string.IsNullOrEmpty(path)) return;
             OnSave?.Invoke();
-            System.IO.File.WriteAllBytes(path, AssetData.Serialize());
+            System.IO.File.WriteAllBytes(path, AssetData.ToBytes());
             var text = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             EditorUtility.SetDirty(text);
@@ -127,18 +127,18 @@ namespace ActionEditor
 
         #region Copy&Cut
 
-        public static IDirectable CopyAsset { get; set; }
+        public static ISegment CopyAsset { get; set; }
         public static bool IsCut { get; set; }
 
 
-        public static void SetCopyAsset(IDirectable asset, bool cut)
+        public static void SetCopyAsset(ISegment asset, bool cut)
         {
             CopyAsset = asset;
             IsCut = cut;
         }
 
 
-        public static void PasteCopyTo(IDirectable target)
+        public static void PasteCopyTo(ISegment target)
         {
             if (target is Track track)
             {
@@ -185,15 +185,15 @@ namespace ActionEditor
 
         #region Select
 
-        public static IDirectable[] SelectItems => _selectList.ToArray();
+        public static ISegment[] SelectItems => _selectList.ToArray();
         public static int SelectCount => _selectList.Count;
-        private static readonly List<IDirectable> _selectList = new List<IDirectable>();
+        private static readonly List<ISegment> _selectList = new List<ISegment>();
 
-        public static IDirectable FistSelect => _selectList.Count > 0 ? _selectList.First() : null;
+        public static ISegment FistSelect => _selectList.Count > 0 ? _selectList.First() : null;
 
         public static bool CanMultipleSelect { get; set; }
 
-        public static void Select(params IDirectable[] objs)
+        public static void Select(params ISegment[] objs)
         {
             var change = false;
             if ((objs == null || objs.Length == 0) && _selectList.Count != 0)
@@ -239,7 +239,7 @@ namespace ActionEditor
             //}
         }
 
-        public static bool IsSelect(IDirectable directable)
+        public static bool IsSelect(ISegment directable)
         {
             return _selectList.Contains(directable);
         }
@@ -344,7 +344,7 @@ namespace ActionEditor
 
             if (IsPause) return;
 
-            if (_player.CurrentTime >= AppInternal.AssetData.Length)
+            if (_player.CurrentTime >= ((IAction)AppInternal.AssetData).Length)
             {
                 _player.Sample(0);
                 _player.Sample(delta);
@@ -372,7 +372,7 @@ namespace ActionEditor
                 path = $"{path}.{Asset.FileEx}";
                 if (path != AppInternal.assetPath)
                 {
-                    var txt = AppInternal.AssetData.Serialize();
+                    var txt = AppInternal.AssetData.ToBytes();
                     File.WriteAllBytes(path, txt);
                     AssetDatabase.Refresh();
                 }
@@ -471,7 +471,7 @@ namespace ActionEditor
                     {
                         var track = ss[i] as Clip;
                         Track group = track.Parent as Track;
-                        group.DeleteAction(track);
+                        group.DeleteClip(track);
                     }
                 }
                 AppInternal.Select();
@@ -500,7 +500,7 @@ namespace ActionEditor
                 AssetNames.Add(typeName);
             }
         }
-        public static Color GetColor(this IDirectable track)
+        public static Color GetColor(this ISegment track)
         {
             if (track is Clip)
             {

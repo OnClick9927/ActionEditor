@@ -16,12 +16,12 @@ namespace ActionEditor
         private float lastTargetStartTime;
         public ActonEditorView target { get; private set; }
         //float IDirectableTimePointer.time => directable.StartTime;
-        private ActionEditor.IDirectable directable => target.target as IDirectable;
+        private ActionEditor.ISegment directable => target.target as ISegment;
         public StartTimePointer(ActonEditorView target)
         {
             this.target = target;
             triggered = false;
-            lastTargetStartTime = (target.target as IDirectable).StartTime;
+            lastTargetStartTime = (target.target as ISegment).StartTime;
         }
 
         void IDirectableTimePointer.TriggerForward(float currentTime, float previousTime)
@@ -73,7 +73,7 @@ namespace ActionEditor
         private bool triggered;
         public ActonEditorView target { get; private set; }
         //float IDirectableTimePointer.time => directable.EndTime;
-        private ActionEditor.IDirectable directable => target.target as IDirectable;
+        private ActionEditor.ISegment directable => target.target as ISegment;
 
         public EndTimePointer(ActonEditorView target)
         {

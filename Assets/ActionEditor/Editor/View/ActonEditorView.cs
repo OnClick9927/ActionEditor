@@ -119,9 +119,9 @@ namespace ActionEditor
             var editor = EditorEX.CreateEditor(target);
 
 
-            if (target is IDirectable)
+            if (target is ISegment)
             {
-                var action = target as IDirectable;
+                var action = target as ISegment;
                 using (new EditorGUI.DisabledScope(action.IsLocked))
                 {
                     editor.OnInspectorGUI();

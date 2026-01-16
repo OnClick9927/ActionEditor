@@ -10,7 +10,7 @@ namespace ActionEditor
 
     [Serializable]
     [Attachable(typeof(Group))]
-    public abstract class Track : DirectableBase, IDirectable
+    public abstract class Track : SegmentBase, ISegment
     {
 
 
@@ -48,7 +48,7 @@ namespace ActionEditor
 
         public Group Group => Parent as Group;
 
-        public sealed override IEnumerable<IDirectable> Children => clips;
+        public sealed override IEnumerable<ISegment> Children => clips;
         //public override bool IsCollapsed
         //{
         //    get => Parent != null && Parent.IsCollapsed;
@@ -70,12 +70,12 @@ namespace ActionEditor
             set { }
         }
 
-        public T AddClip<T>(float time) where T : Clip
+        internal T AddClip<T>(float time) where T : Clip
         {
             return (T)AddClip(typeof(T), time);
         }
 
-        public Clip AddClip(Type type, float time)
+        internal Clip AddClip(Type type, float time)
         {
 
 
@@ -93,7 +93,7 @@ namespace ActionEditor
                 //newAction.PostCreate(this);
 
                 var nextAction = Clips.FirstOrDefault(a => a.StartTime > newAction.StartTime);
-                if (nextAction != null) newAction.EndTime = IDirectableExtensions.Min(newAction.EndTime, nextAction.StartTime);
+                if (nextAction != null) newAction.EndTime = SegmentExtensions.Min(newAction.EndTime, nextAction.StartTime);
 
                 Root.Validate();
                 // DirectorUtility.selectedObject = newAction;
@@ -102,14 +102,14 @@ namespace ActionEditor
             return newAction;
         }
 
-        public Clip AddClip(Clip clip)
+        internal Clip AddClip(Clip clip)
         {
             if (clip != null && clip.CanValidTime(this, clip.StartTime, clip.EndTime))
             {
                 // if (!clip.CanAdd(this)) return null;
                 if (clip.Parent != null && clip.Parent is Track track)
                 {
-                    track.DeleteAction(clip);
+                    track.DeleteClip(clip);
                 }
 
                 Clips.Add(clip);
@@ -119,7 +119,7 @@ namespace ActionEditor
             return clip;
         }
 
-        public void DeleteAction(Clip action)
+        internal void DeleteClip(Clip action)
         {
             Clips.Remove(action);
             Root.Validate();

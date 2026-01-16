@@ -44,7 +44,7 @@ namespace ActionEditor
             if (asset == null) return;
             var width = AppInternal.Width;
 
-            var x = asset.TimeToPos(asset.Length, width);
+            var x = asset.TimeToPos(((IAction)asset).Length, width);
             var stepRect = new Rect(Position.x, Position.y + (Styles.HeaderHeight - 4), x, 4);
             GUI.color = Styles.TimeStepRectColor;
             GUI.DrawTexture(stepRect, Styles.WhiteTexture);
@@ -104,7 +104,7 @@ namespace ActionEditor
         {
             var width = AppInternal.Width;
             var height = Styles.PlayControlHeight - Styles.HeaderHeight;
-            var x = asset.TimeToPos(asset.Length, width);
+            var x = asset.TimeToPos(((IAction)asset).Length, width);
             
             GUI.color = Styles.EndPointerColor;
             GUI.DrawTexture(new Rect(x - 2, Position.y, 5, height), Styles.WhiteTexture);
@@ -266,7 +266,7 @@ namespace ActionEditor
             var time = asset.PosToTime(mousePosition.x, AppInternal.Width);
             AssetPlayer.Inst.CurrentTime = asset.SnapTime(time);
             AssetPlayer.Inst.CurrentTime =
-                Mathf.Clamp(AssetPlayer.Inst.CurrentTime, 0 + float.Epsilon, asset.Length - float.Epsilon);
+                Mathf.Clamp(AssetPlayer.Inst.CurrentTime, 0 + float.Epsilon, ((IAction)asset).Length - float.Epsilon);
             AppInternal.Play();
             AppInternal.Pause();
             Window.Repaint();

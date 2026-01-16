@@ -8,11 +8,11 @@ namespace ActionEditor
         float EndTime { get; }
     }
 
-    public interface IDirectable : IAction
+    public interface ISegment : IAction
     {
         Asset Root { get; }
-        IDirectable Parent { get; }
-        IEnumerable<IDirectable> Children { get; }
+        ISegment Parent { get; }
+        IEnumerable<ISegment> Children { get; }
 
         //string Name { get; set; }
 
@@ -22,13 +22,13 @@ namespace ActionEditor
 
 
 
-        void Validate(Asset root, IDirectable parent);
+        //void Validate(Asset root, ISegment parent);
         //void AfterDeserialize();
 
         //void BeforeSerialize();
     }
 
-    public interface IClip : IDirectable { }
+    public interface IClip : ISegment { }
     public interface IResizeAble : IClip { }
     public interface IBlendAble : IClip
     {

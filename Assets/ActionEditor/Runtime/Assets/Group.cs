@@ -6,7 +6,7 @@ using System.Linq;
 namespace ActionEditor
 {
     [Serializable]
-    public abstract class Group : DirectableBase
+    public abstract class Group : SegmentBase
     {
 
 
@@ -47,16 +47,16 @@ namespace ActionEditor
                 }
             }
         }
-        public sealed override IEnumerable<IDirectable> Children => Tracks;
+        public sealed override IEnumerable<ISegment> Children => Tracks;
 
 
         //public bool IsCollapsed { get => isCollapsed; set => isCollapsed = value; }
         public override float StartTime { get => 0; set { } }
-        public override float EndTime { get => Root.Length; set { } }
+        public override float EndTime { get => ((IAction)Root).Length; set { } }
         public sealed override float Length { get => EndTime - StartTime; set { } }
-        public bool ExistSameTypeTrack(Type type) => Tracks.FirstOrDefault(t => t.GetType() == type) != null;
+        //public bool ExistSameTypeTrack(Type type) => Tracks.FirstOrDefault(t => t.GetType() == type) != null;
 
-        public T AddTrack<T>(T track) where T : Track
+        internal T AddTrack<T>(T track) where T : Track
         {
             if (track != null)
             {
@@ -75,9 +75,9 @@ namespace ActionEditor
 
             return track;
         }
-        public T AddTrack<T>(string _name = null) where T : Track => (T)AddTrack(typeof(T), _name);
+        internal T AddTrack<T>(string _name = null) where T : Track => (T)AddTrack(typeof(T), _name);
 
-        public Track AddTrack(Type type, string _name = null)
+        internal Track AddTrack(Type type, string _name = null)
         {
             var newTrack = Activator.CreateInstance(type);
             if (newTrack is Track track)
@@ -94,7 +94,7 @@ namespace ActionEditor
             return null;
         }
 
-        public int InsertTrack<T>(T track, int index) where T : Track
+        internal int InsertTrack<T>(T track, int index) where T : Track
         {
             if (tracks.Contains(track))
             {
@@ -116,13 +116,13 @@ namespace ActionEditor
             return index;
         }
 
-        public void DeleteTrack(Track track)
+        internal void DeleteTrack(Track track)
         {
             Tracks.Remove(track);
             Root?.Validate();
         }
 
-        public int GetTrackIndex(Track track) => tracks.FindIndex(t => t == track);
+        internal int GetTrackIndex(Track track) => tracks.FindIndex(t => t == track);
 
 
 
