@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Name("特效轨道")]
-    [TrackIcon(typeof(ParticleSystem))]
+    [Icon(typeof(ParticleSystem))]
     [Attachable(typeof(TestGroup))]
 
     public class EffectTrack : Track

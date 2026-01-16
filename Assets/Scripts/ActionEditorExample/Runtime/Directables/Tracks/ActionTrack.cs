@@ -5,7 +5,7 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Name("行为轨道")]
-    [TrackIcon(typeof(Transform))]
+    [Icon(typeof(Transform))]
     [Attachable(typeof(TestGroup))]
     public class ActionTrack : Track
     {

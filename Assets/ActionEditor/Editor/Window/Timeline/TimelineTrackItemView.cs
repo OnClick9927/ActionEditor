@@ -224,8 +224,8 @@ namespace ActionEditor
                     continue;
                 }
 
-                var canAdd = !info.isUnique ||
-                             (group.Tracks.Find(track => track.GetType() == info.type) == null);
+                var canAdd = /*!info.isUnique ||*/
+                             true;
                 if (group.IsLocked)
                 {
                     canAdd = false;

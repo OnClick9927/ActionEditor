@@ -18,20 +18,6 @@ namespace ActionEditor
 
         [Buffer] private List<Track> tracks = new List<Track>();
 
-        protected override void ReadField(string id, BufferReader reader)
-        {
-            if (id == nameof(tracks))
-                tracks = reader.ReadList(reader.ReadObject<Track>);
-
-        }
-        protected override void WriteField(string id, BufferWriter writer)
-        {
-            if (id == nameof(tracks))
-
-                writer.WriteList(tracks, writer.WriteObject);
-
-        }
-
 
 
         public List<Track> Tracks

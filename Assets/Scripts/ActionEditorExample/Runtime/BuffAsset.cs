@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 namespace ActionEditor
 {
@@ -6,22 +7,16 @@ namespace ActionEditor
     [Serializable]
     public class BuffAsset : Asset
     {
-        public class TestBuff : IBufferObject
+        [System.Serializable]
+        public class TestBuff 
         {
             public int text;
             public int text2;
 
-            void IBufferObject.ReadField(string id, BufferReader reader)
-            {
-
-            }
-
-            void IBufferObject.WriteField(string id, BufferWriter writer)
-            {
-
-            }
+ 
         }
         [Name("测试")]
+        [ReadOnly]
         public string test;
         [Name("测试")]
         [Buffer("das")]
@@ -29,18 +24,9 @@ namespace ActionEditor
         public double test3;
 
         public TestBuff buff = new TestBuff();
-        protected override void ReadField(string id, BufferReader reader)
-        {
-            base.ReadField(id, reader);
-            if (id == nameof(buff))
-                buff = reader.ReadObject<TestBuff>();
-        }
-        protected override void WriteField(string id, BufferWriter writer)
-        {
-            base.WriteField(id, writer);
-            if (id == nameof(buff))
-                writer.WriteObject<TestBuff>(buff);
-        }
+        public List<int> gaga = new List<int>();
+        public string[] strs = new string[1] { "xx"};
+
     }
 #if UNITY_EDITOR
     [CustomActionView(typeof(BuffAsset))]

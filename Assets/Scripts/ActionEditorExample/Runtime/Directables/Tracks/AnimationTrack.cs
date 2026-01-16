@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ActionEditor
 {
     [Name("动画轨道")]
-    [TrackIcon(typeof(AnimationClip))]
+    [Icon(typeof(AnimationClip))]
     [Attachable(typeof(TestGroup))]
 
     public class AnimationTrack : Track

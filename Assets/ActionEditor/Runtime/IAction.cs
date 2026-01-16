@@ -2,7 +2,7 @@
 
 namespace ActionEditor
 {
-    public interface IAction:IBufferObject {
+    public interface IAction {
         float Length { get; set; }
         float StartTime { get; }
         float EndTime { get; }
