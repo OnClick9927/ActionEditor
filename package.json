@@ -1,0 +1,9 @@
+{
+  "name": "com.woo.actionnodes",
+  "displayName": "NodeGraph",
+  "version": "1.0.0",
+  "unity": "2019.4",
+  "description": "ActionEditor.Nodes",
+  "type": "library"
+
+}
