@@ -167,6 +167,15 @@ namespace ActionEditor
 
                     });
                 }
+                if (AppInternal.AssetData != null)
+                {
+                    GUILayout.BeginVertical(EditorStyles.helpBox);
+                    if (GUILayout.Button(EditorGUIUtility.IconContent("d_Folder Icon"), EditorStyles.iconButton))
+                    {
+                        EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(App.assetPath));
+                    }
+                    GUILayout.EndVertical();
+                }
             }
             ActonEditorView.GetEditor(AppInternal.AssetData)?.OnAssetHeaderGUI();
 

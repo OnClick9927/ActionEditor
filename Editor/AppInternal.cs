@@ -54,9 +54,10 @@ namespace ActionEditor
                 asset.Validate();
                 _asset = asset;
             }
-            catch (Exception)
+            catch (Exception e)
             {
                 _asset = null;
+                UnityEngine.Debug.LogException(e);
                 return;
             }
             EditorPrefs.SetString(key, path);
@@ -519,15 +520,16 @@ namespace ActionEditor
         {
 
             if (track == null) return false;
-            var type = track.GetType();
-            if (type == null || !type.IsSubclassOf(typeof(Track)) || type.IsAbstract) return false;
-            //if (type.IsDefined(typeof(UniqueTrackAttribute), true) &&
-            //    group.ExistSameTypeTrack(type))
-            //    return false;
-            var attachAtt = type.GetCustomAttribute<AttachableAttribute>(true);
-            if (attachAtt == null || attachAtt.Types == null || attachAtt.Types.All(t => t != group.GetType())) return false;
+            return EditorEX.CanAttachTo(track.GetType(), group.GetType());
+            //var type = track.GetType();
+            //if (type == null || !type.IsSubclassOf(typeof(Track)) || type.IsAbstract) return false;
+            ////if (type.IsDefined(typeof(UniqueTrackAttribute), true) &&
+            ////    group.ExistSameTypeTrack(type))
+            ////    return false;
+            //var attachAtt = type.GetCustomAttribute<AttachableAttribute>(true);
+            //if (attachAtt == null || attachAtt.Types == null || attachAtt.Types.All(t => t != group.GetType())) return false;
 
-            return true;
+            //return true;
         }
 
         public static float ViewTime(this Asset asset) => asset.ViewTimeMax - asset.ViewTimeMin;
