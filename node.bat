@@ -13,7 +13,7 @@ for /f "tokens=1,2* delims=:," %%a in (Assets/ActionEditor.Nodes/package.json) d
 
 set version=%version: =%
 echo on
-git subtree split --prefix=Assets/ActionEditor.Nodes --branch upm
+git subtree split --prefix=Assets/ActionEditor.Nodes --branch upm_node
 git push origin upm_node:upm_node
 git tag %version% upm
 git push origin upm_node --tags
