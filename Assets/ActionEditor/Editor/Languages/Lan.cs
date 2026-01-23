@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace ActionEditor
 {
-    class Lan
+    internal class Lan
     {
         #region 静态
 

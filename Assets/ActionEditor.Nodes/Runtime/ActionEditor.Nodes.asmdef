@@ -1,0 +1,16 @@
+{
+    "name": "ActionEditor.Nodes",
+    "rootNamespace": "",
+    "references": [
+        "GUID:2f5d7ff7639293b4bbbea67c608851e6"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

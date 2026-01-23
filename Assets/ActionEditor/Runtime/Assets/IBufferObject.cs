@@ -8,8 +8,7 @@ using System.Text;
 namespace ActionEditor
 {
 
-    [AttributeUsage(AttributeTargets.Field)]
-    public class BufferIgnoreAttribute : System.Attribute { }
+
     [AttributeUsage(AttributeTargets.Field)]
     public class BufferAttribute : System.Attribute
     {
@@ -52,7 +51,7 @@ namespace ActionEditor
             public void AddField(FieldInfo field)
             {
 
-                if (field.IsDefined(typeof(BufferIgnoreAttribute))) return;
+                if (field.IsDefined(typeof(System.NonSerializedAttribute))) return;
                 fields = fields ?? new List<Field>();
                 map = map ?? new Dictionary<string, Field>();
                 var attr = field.GetCustomAttribute<BufferAttribute>();

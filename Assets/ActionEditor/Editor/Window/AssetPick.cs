@@ -13,7 +13,7 @@ namespace ActionEditor
         Tiled,
         Folder,
     }
-    class AssetPick : AdvancedDropdown
+    public class AssetPick : AdvancedDropdown
     {
         private string[] paths;
         private Action<UnityEngine.Object> itemSelectedCallback;
@@ -40,10 +40,10 @@ namespace ActionEditor
             pick.Show(rect);
             return pick;
         }
-      
+
         protected override void ItemSelected(AdvancedDropdownItem item)
         {
-       
+
             EditorWindow.focusedWindow.Close();
 
             itemSelectedCallback?.Invoke(EditorUtility.InstanceIDToObject(item.id));

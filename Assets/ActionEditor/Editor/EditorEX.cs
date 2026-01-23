@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,6 +13,55 @@ namespace ActionEditor
     {
         private static readonly Dictionary<Type, Texture2D> _iconDictionary = new Dictionary<Type, Texture2D>();
         private static readonly Dictionary<Type, string> _nameDictionary = new Dictionary<Type, string>();
+        private static Dictionary<Type, UnityEngine.Object> scriptObjs = new Dictionary<Type, UnityEngine.Object>();
+
+        public static void DrawPingScript(Type type)
+        {
+            if (!scriptObjs.TryGetValue(type, out var obj))
+            {
+                var path = EditorEX.LocateScript(type);
+                obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                scriptObjs[type] = obj;
+            }
+            if (obj != null)
+            {
+                GUILayout.Space(10);
+                GUI.enabled = false;
+                EditorGUILayout.ObjectField("", obj, obj.GetType(), false);
+                GUI.enabled = true;
+                GUILayout.Space(10);
+            }
+        }
+        public static string LocateScript(Type targetType)
+        {
+
+            if (targetType == null)
+                return string.Empty;
+
+            string fullTypeName = targetType.FullName;
+            string className = targetType.Name;
+
+            string[] csGuids = AssetDatabase.FindAssets("t:Script");
+
+            foreach (string guid in csGuids)
+            {
+                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+
+                if (!assetPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string fileName = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+                if (fileName.Equals(className, StringComparison.OrdinalIgnoreCase))
+                    return assetPath;
+
+                string fileContent = System.IO.File.ReadAllText(assetPath);
+                string pattern = $@"\b(class|struct|enum)\s+{Regex.Escape(className)}\b";
+                if (Regex.IsMatch(fileContent, pattern, RegexOptions.IgnoreCase))
+                    return assetPath;
+
+            }
+
+            return string.Empty;
+        }
 
         public static Texture2D GetIcon(this object track)
         {
@@ -173,6 +223,16 @@ namespace ActionEditor
         }
 
 
+        public static bool CanAttachTo(Type type, Type attachTo)
+        {
+
+            if (type == null || type.IsAbstract) return false;
+
+            var attachAtt = type.GetCustomAttribute<AttachableAttribute>(true);
+            if (attachAtt == null || attachAtt.Types == null || attachAtt.Types.All(t => t != attachTo)) return false;
+
+            return true;
+        }
 
         public static Editor CreateEditor(object target) => DrawerObject.CreateEditor(target);
 
@@ -216,6 +276,7 @@ namespace ActionEditor
         [CustomEditor(typeof(DrawerObject))]
         class DrawerObjectEditor : Editor
         {
+
             public static List<SerializedProperty> GetDirectChildProperties(SerializedProperty parentProp)
             {
                 List<SerializedProperty> childProps = new List<SerializedProperty>();
@@ -239,16 +300,21 @@ namespace ActionEditor
                 }
                 return childProps;
             }
+            private Vector2 scroll;
             public override void OnInspectorGUI()
             {
                 this.serializedObject.Update();
                 var p = this.serializedObject.FindProperty(nameof(DrawerObject.obj));
                 var children = GetDirectChildProperties(p);
-
+                scroll = GUILayout.BeginScrollView(scroll);
+                GUILayout.BeginVertical();
                 foreach (var item in children)
                 {
                     EditorGUILayout.PropertyField(item);
+                    //GUILayout.Space(2);
                 }
+                GUILayout.EndVertical();
+                GUILayout.EndScrollView();
                 this.serializedObject.ApplyModifiedProperties();
             }
         }

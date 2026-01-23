@@ -1,11 +1,28 @@
 ﻿using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
+using UnityEditor.Callbacks;
 using UnityEngine;
 
 namespace ActionEditor
 {
     class ActionEditorWindow : EditorWindow
     {
+        [OnOpenAsset(1)]
+        private static bool OnOpenAsset(int instanceID, int line)
+        {
+            var path = AssetDatabase.GetAssetPath(instanceID);
+            if (path.EndsWith(Asset.FileEx))
+            {
+                AppInternal.OnObjectPickerConfig(path);
+                if (AppInternal.AssetData!=null)
+                {
+                    OpenDirectorWindow();
+                    return true;
+                }
+            }
+            return false;
+        }
         [MenuItem("Tools/Action Editor", priority = 0)]
         public static void OpenDirectorWindow()
         {
