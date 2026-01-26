@@ -21,13 +21,11 @@ public class NpcNode : GraphNode<NpcNodeData>
         });
         mainContainer.Add(textField);
 
-        var inputPort = GeneratePort(Direction.Input, typeof(string), Port.Capacity.Single);
-        inputPort.portName = "Input";
-        inputContainer.Add(inputPort);
+        var inputPort = GeneratePort(Direction.Input, typeof(string), Port.Capacity.Single, "Input");
+ 
 
-        var outputPort = GeneratePort(Direction.Output, typeof(string), Port.Capacity.Multi);
-        outputPort.portName = "Output";
-        outputContainer.Add(outputPort);
+        var outputPort = GeneratePort(Direction.Output, typeof(string), Port.Capacity.Multi, "Output");
+     
 
         RefreshExpandedState();
         RefreshPorts();
@@ -53,14 +51,12 @@ public class MyNode : GraphNode<MyData>
         });
         mainContainer.Add(intField);
 
-        var inputPort = GeneratePort(Direction.Input, typeof(int));
-        inputPort.portName = "Input";
-        inputContainer.Add(inputPort);
+        var inputPort = GeneratePort(Direction.Input, typeof(int),name: "Input");
+    
        
 
-        var outputPort = GeneratePort(Direction.Output, typeof(int));
-        outputPort.portName = "Output";
-        outputContainer.Add(outputPort);
+        var outputPort = GeneratePort(Direction.Output, typeof(int),name: "Output");
+
 
         RefreshExpandedState();
         RefreshPorts();

@@ -16,9 +16,17 @@ namespace ActionEditor.Nodes
         public sealed override string NodeName => EditorEX.GetTypeName(typeof(T));
 
 
-        protected Port GeneratePort(Direction portDir, Type type, Port.Capacity capacity = Port.Capacity.Single, Orientation orientation = Orientation.Horizontal)
+        protected Port GeneratePort(Direction portDir, Type type, Port.Capacity capacity = Port.Capacity.Single, string name = "")
         {
-            return GraphPort.Create(orientation, portDir, capacity, type);
+            var port = GraphPort.Create(Orientation.Horizontal, portDir, capacity, type);
+            if (string.IsNullOrEmpty(name))
+                name = type.Name;
+            port.name = name;
+            if (portDir == Direction.Input)
+                this.inputContainer.Add(port);
+            else
+                this.outputContainer.Add(port);
+            return port;
         }
         public override void OnInspectorGUI()
         {
@@ -33,6 +41,7 @@ namespace ActionEditor.Nodes
 
         public override void OnCreated(NodeGraphView view)
         {
+            this.style.minWidth = 200f;
             base.OnCreated(view);
             dot = new Image();
             dot.style.position = Position.Absolute;

@@ -18,10 +18,11 @@ namespace ActionEditor.Nodes
 
         internal void Read(List<ConnectionData> connections, List<GroupData> groups, List<NodeData> nodes)
         {
+            
             this.connections.Clear();
             this.groups.Clear();
             this.nodes.Clear();
-            this.connections.AddRange(connections);
+            this.connections.AddRange(connections.Where(x => x != null));
             this.nodes.AddRange(nodes);
             this.groups.AddRange(groups);
 
