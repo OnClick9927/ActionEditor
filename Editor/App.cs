@@ -104,7 +104,7 @@ namespace ActionEditor.Nodes
 
         internal static void Update()
         {
-            
+
             if (view != null)
             {
                 view.Update();
@@ -154,7 +154,7 @@ namespace ActionEditor.Nodes
             if (_asset == null || view == null) return;
             _asset.position = view.viewTransform.position;
             _asset.scale = view.viewTransform.scale;
-            _asset.Read(view.connections.FindAll(x => x.input.node != null).ConvertAll(x => Connection2Data(x)),
+            _asset.Read(view.connections.ConvertAll(x => Connection2Data(x)),
                          view.groups.ConvertAll(x => Group2Data(x)),
                          view.nodes.ConvertAll(x => Node2Data(x)));
             File.WriteAllBytes(openPath, _asset.ToBytes());
@@ -311,8 +311,11 @@ namespace ActionEditor.Nodes
         {
             GraphPort output = connection.output;
             GraphPort input = connection.input;
-            GraphNode outputNode = output.node as GraphNode;
-            GraphNode inputNode = input.node as GraphNode;
+            if (input == null || output == null) return null;
+            GraphNode outputNode = output.node;
+            GraphNode inputNode = input.node;
+            if (outputNode == null || inputNode == null) return null;
+
             return new ConnectionData
             {
                 outNodeGuid = outputNode.GUID,
