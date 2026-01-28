@@ -107,7 +107,7 @@ namespace ActionEditor.Nodes
             return tree;
         }
 
-
+ 
     }
 
 
@@ -340,6 +340,9 @@ namespace ActionEditor.Nodes
 
         }
         public virtual void Update()
+        {
+        }
+        public virtual void OnFootGUI()
         {
         }
         public virtual void OnHeaderGUI()

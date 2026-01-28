@@ -21,7 +21,8 @@ namespace ActionEditor.Nodes
             var port = GraphPort.Create(Orientation.Horizontal, portDir, capacity, type);
             if (string.IsNullOrEmpty(name))
                 name = type.Name;
-            port.name = name;
+
+            port.portName = name;
             if (portDir == Direction.Input)
                 this.inputContainer.Add(port);
             else
@@ -41,7 +42,7 @@ namespace ActionEditor.Nodes
 
         public override void OnCreated(NodeGraphView view)
         {
-            this.style.minWidth = 200f;
+            this.style.minWidth = 120;
             base.OnCreated(view);
             dot = new Image();
             dot.style.position = Position.Absolute;
