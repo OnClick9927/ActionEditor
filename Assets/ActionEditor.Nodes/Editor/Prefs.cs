@@ -61,11 +61,11 @@ namespace ActionEditor.Nodes
                 {
                     var find = nodes.Find(x => x.type == meta.type.FullName);
                     if (find == null)
-                    {
+                    {                        
                         find = new ColorPref
                         {
                             type = meta.type.FullName,
-                            color = Color.white,
+                            color = UnityEngine.Random.ColorHSV(0.2f,0.8f),
                         };
                         nodes.Add(find);
 

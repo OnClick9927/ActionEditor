@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -95,10 +96,22 @@ namespace ActionEditor
 
 
             assetIndex = GUILayout.Toolbar(assetIndex, AppInternal.AssetNames.ToArray());
-            var assetName = AppInternal.AssetTypes[AppInternal.AssetNames[assetIndex]].FullName;
+            var temp = AppInternal.AssetTypes[AppInternal.AssetNames[assetIndex]];
+
+            assetNames.Clear();
+            while (temp != typeof(object))
+            {
+                assetNames.Add(temp.FullName);
+                temp = temp.BaseType;
+            }
 
 
-            var tracks = Prefs.data.tracks.Where(x => x.asset != null && x.asset.Contains(assetName));
+            //var assetName = App.AssetTypes[App.AssetNames[assetIndex]].FullName;
+
+
+            var tracks = Prefs.data.tracks.Where(x => x.attach != null && x.attach.Intersect(assetNames).Any());
+
+            //var tracks = Prefs.data.tracks.Where(x => x.asset != null && x.asset.Contains(assetName));
             foreach (var track in tracks)
             {
                 GUILayout.BeginVertical(EditorStyles.helpBox);
@@ -130,5 +143,6 @@ namespace ActionEditor
         private static ActionEditorWindow window;
         private Vector2 scroll;
         private int assetIndex;
+        private List<string> assetNames=new List<string>();
     }
 }

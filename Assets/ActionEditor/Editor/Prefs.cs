@@ -69,7 +69,7 @@ namespace ActionEditor
                         find = new ColorPref
                         {
                             type = meta.type.FullName,
-                            color = Color.white,
+                            color = UnityEngine.Random.ColorHSV(0.2f, 0.8f),
                         };
                         clips.Add(find);
 

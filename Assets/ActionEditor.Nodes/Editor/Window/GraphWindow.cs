@@ -1,9 +1,11 @@
 ﻿using ActionEditor;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEditor.Experimental.GraphView;
+using UnityEditor.Graphs;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -33,6 +35,18 @@ namespace ActionEditor.Nodes
         [MenuItem("Tools/NodeGraph")]
         private static void OpenWindow() => GetWindow<GraphWindow>();
 
+        private void OnFootGUI()
+        {
+            GUILayout.BeginHorizontal(EditorStyles.toolbar);
+            if (view != null)
+            {
+                GUILayout.Label($"{Lan.ins.HeaderLastSaveTime} {App.LastSaveTime.ToString("HH:mm:ss.ff")}");
+            }
+            GUILayout.FlexibleSpace();
+            view?.OnFootGUI();
+
+            GUILayout.EndHorizontal();
+        }
         private void OnToolBarGUI()
         {
             GUILayout.BeginHorizontal();
@@ -112,7 +126,7 @@ namespace ActionEditor.Nodes
 
         private NodeGraphView view;
         private VisualElement left;
-        private Label saveTime;
+        //private Label saveTime;
         private GridView grid;
         private TwoPaneSplitView split;
         IMGUIContainer right;
@@ -142,6 +156,7 @@ namespace ActionEditor.Nodes
             split.fixedPaneIndex = 1;
             split.fixedPaneInitialDimension = 300;
             split.style.top = 20;
+            split.style.bottom = 20;
 
 
 
@@ -151,16 +166,22 @@ namespace ActionEditor.Nodes
             header.style.left = header.style.right = header.style.top = header.style.bottom = 0;
             _toolBar.Add(header);
             rootVisualElement.Add(_toolBar);
-            saveTime = new Label();
-            saveTime.style.position = new StyleEnum<Position>(Position.Absolute);
-            saveTime.style.left = 20;
-            saveTime.style.fontSize = 20;
-            saveTime.style.color = (Color.blue / 2 + Color.cyan);
-            saveTime.style.bottom = 20;
-            this.rootVisualElement.Add(saveTime); ;
+
+            var foot = new IMGUIContainer(OnFootGUI);
+            foot.style.position = Position.Absolute;
+            foot.style.bottom = foot.style.right = foot.style.left = 0;
+            rootVisualElement.Add(foot);
+
+            //saveTime = new Label();
+            //saveTime.style.position = new StyleEnum<Position>(Position.Absolute);
+            //saveTime.style.left = 20;
+            //saveTime.style.fontSize = 20;
+            //saveTime.style.color = (Color.blue / 2 + Color.cyan);
+            //saveTime.style.bottom = 20;
+            //this.rootVisualElement.Add(saveTime); ;
             App.OnWindowEnable();
         }
- 
+
         private void Update()
         {
             split.visible = this.view != null;
@@ -168,12 +189,10 @@ namespace ActionEditor.Nodes
             right.style.minWidth = this.view == null ? 0 : 250;
             if (view == null)
             {
-                if (saveTime != null)
-                    saveTime.text = string.Empty;
+
             }
             else
             {
-                saveTime.text = $"{Lan.ins.HeaderLastSaveTime} {App.LastSaveTime.ToString("HH:mm:ss.ff")}";
                 App.Update();
             }
         }

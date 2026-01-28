@@ -267,10 +267,10 @@ namespace ActionEditor.Nodes
 
         public static GraphConnection CreateConnection(ConnectionData data)
         {
-            var input = view.ports.Find(x => x.node.GUID == data.InNodeGuid
+            var input = view.ports.Find(x => x.node.GUID == data.InNodeGuid && x.direction == Direction.Input
                                     && x.portName == data.InPortName
                                     && x.portType.FullName == data.inPortType);
-            var output = view.ports.Find(x => x.node.GUID == data.outNodeGuid
+            var output = view.ports.Find(x => x.node.GUID == data.outNodeGuid && x.direction == Direction.Output
                                     && x.portName == data.outputPortName
                                     && x.portType.FullName == data.outPortType);
             if (input != null && output != null)

@@ -21,6 +21,7 @@ namespace ActionEditor.Nodes
         }
 
         public override Vector2 GetWindowSize() => win_size;
+        System.Collections.Generic.List<string> assetNames = new System.Collections.Generic.List<string>();
 
         public override void OnGUI(Rect rect)
         {
@@ -79,10 +80,20 @@ namespace ActionEditor.Nodes
 
 
             assetIndex = GUILayout.Toolbar(assetIndex, App.AssetNames.ToArray());
-            var assetName = App.AssetTypes[App.AssetNames[assetIndex]].FullName;
+            var assetType = App.AssetTypes[App.AssetNames[assetIndex]];
+            var temp = assetType;
+            assetNames.Clear();
+            while (temp!=typeof(object))
+            {
+                assetNames.Add(temp.FullName);
+                temp = temp.BaseType;
+            }
 
 
-            var nodes = Prefs.data.nodes.Where(x => x.attach != null && x.attach.Contains(assetName));
+            //var assetName = App.AssetTypes[App.AssetNames[assetIndex]].FullName;
+
+
+            var nodes = Prefs.data.nodes.Where(x => x.attach != null && x.attach.Intersect(assetNames).Any());
             foreach (var node in nodes)
                 node.color = EditorGUILayout.ColorField(EditorEX.GetTypeName(node.GetRealType()), node.color);
             GUILayout.EndScrollView();
