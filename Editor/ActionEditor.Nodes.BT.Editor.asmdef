@@ -1,0 +1,21 @@
+{
+    "name": "ActionEditor.Nodes.BT.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:5efa947a593531747909be4ea70674ab",
+        "GUID:5d37c28857144204a9093b39b216c7a9",
+        "GUID:1b44b11c29288a54eb60b24ee6b42f29",
+        "GUID:01cbad5e2c6f25a4f9eab807601ea5f5"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
