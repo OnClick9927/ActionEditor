@@ -52,68 +52,56 @@ namespace ActionEditor.Nodes
             for (int i = 0; i < nodeTypes.Count; i++)
             {
                 var type = nodeTypes[i];
+                var dataType = App.GetNodeDataType(type);
+                NodeAttribute attr = dataType.GetCustomAttribute(typeof(NodeAttribute)) as NodeAttribute;
+                var name = EditorEX.GetTypeName(dataType);
+                var path = $"{(attr != null ? attr.group : "Other")}/{EditorEX.GetTypeName(dataType)}";
+                var sp = path.Split('/');
 
-                NodeAttribute attr = App.GetNodeDataType(type).GetCustomAttribute(typeof(NodeAttribute)) as NodeAttribute;
-                if (attr == null)
+                for (int j = 0; j < sp.Length; j++)
                 {
-                    var entry = new SearchTreeEntry(new GUIContent(type.FullName))
+                    if (sp.Length - 1 == j)
                     {
-                        level = 1,
-                        userData = type
-                    };
-                    tree.Add(entry);
-                }
-                else
-                {
-                    var path = attr.path;
-                    var sp = path.Split('/');
-
-                    for (int j = 0; j < sp.Length; j++)
-                    {
-                        if (sp.Length - 1 == j)
+                        if (tree.Find(x => x.name == sp[j] && x.level == j + 1) == null)
                         {
-                            if (tree.Find(x => x.name == sp[j] && x.level == j + 1) == null)
+                            var entry = new SearchTreeEntry(new GUIContent(sp[j]))
                             {
-                                var entry = new SearchTreeEntry(new GUIContent(sp[j]))
-                                {
-                                    level = j + 1,
-                                    userData = type
-                                };
-                                tree.Add(entry);
-                            }
-                            else
-                            {
-                                throw new Exception($"Same Node path : {path}");
-                            }
+                                level = j + 1,
+                                userData = type
+                            };
+                            tree.Add(entry);
                         }
                         else
                         {
-                            if (tree.Find(x => x.name == sp[j] && x.level == j + 1) == null)
-                            {
-                                var entry = new SearchTreeGroupEntry(new GUIContent(sp[j]), j + 1);
-                                tree.Add(entry);
-                            }
+                            throw new Exception($"Same Node path : {path}");
                         }
                     }
-
+                    else
+                    {
+                        if (tree.Find(x => x.name == sp[j] && x.level == j + 1) == null)
+                        {
+                            var entry = new SearchTreeGroupEntry(new GUIContent(sp[j]), j + 1);
+                            tree.Add(entry);
+                        }
+                    }
                 }
             }
 
             tree.Add(new SearchTreeEntry(new GUIContent("Group"))
             {
                 level = 1,
-                userData = typeof(GroupData)
+                userData = typeof(GroupData),
             });
             return tree;
         }
 
- 
+
     }
 
 
     partial class NodeGraphView
     {
-      
+
     }
 
     public abstract partial class NodeGraphView : GraphView
@@ -208,7 +196,7 @@ namespace ActionEditor.Nodes
 
             GUILayout.Space(2);
             object target = this.selection.FirstOrDefault();
-            if (target is GraphConnection)
+            if (target is Edge)
                 target = null;
             if (target == null)
             {
@@ -249,7 +237,7 @@ namespace ActionEditor.Nodes
 
 
 
-     
+
         private MiniMap minimap;
         private void CreateMiniMap()
         {
@@ -262,7 +250,7 @@ namespace ActionEditor.Nodes
             minimap.style.top = 0;
             minimap.style.right = 0;
             minimap.contentContainer.Clear();
-            
+
             this.Add(minimap);
         }
         public virtual void Load(GraphAsset data)
@@ -301,9 +289,8 @@ namespace ActionEditor.Nodes
 
         public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
         {
-            if (evt.target is GraphConnection)
+            if (evt.target is Edge con)
             {
-                GraphConnection con = (GraphConnection)evt.target;
                 evt.menu.AppendAction("Delete", (x) =>
                 {
                     this.DeleteElements(new List<GraphElement>() { con });
@@ -328,7 +315,7 @@ namespace ActionEditor.Nodes
         protected virtual void OnDragging(MouseMoveEvent evt) { }
 
         protected virtual void OnDragEnd(EventBase evt) { }
-  
+
         protected abstract bool OnCheckCouldLink(GraphNode startNode, GraphNode endNode, GraphPort start, GraphPort end);
         public abstract void OnSelectNode(GraphNode obj);
         protected abstract void AfterCreateNode(GraphElement element);
@@ -341,6 +328,11 @@ namespace ActionEditor.Nodes
         }
         public virtual void Update()
         {
+            for (int i = 0; this.connections.Count > i; i++)
+            {
+                var con = connections[i] as GraphConnection;
+                con.UpdateFlow();
+            }
         }
         public virtual void OnFootGUI()
         {

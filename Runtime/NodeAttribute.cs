@@ -5,11 +5,11 @@ namespace ActionEditor.Nodes
     [AttributeUsage(AttributeTargets.Class)]
     public class NodeAttribute : System.Attribute
     {
-        public string path;
+        public string group;
 
         public NodeAttribute(string path)
         {
-            this.path = path;
+            this.group = path;
         }
     }
 }
