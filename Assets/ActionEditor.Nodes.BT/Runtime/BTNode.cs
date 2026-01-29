@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
+    [System.Serializable]
     public abstract class BTNode : NodeData
     {
         public enum State
@@ -12,7 +13,7 @@ namespace ActionEditor.Nodes.BT
         }
         protected Blackboard blackBoard { get; private set; }
         internal BTNode parent { get; private set; }
-        internal BTComposite composite { get; private set; }
+      
         public State state { get; private set; }
         internal State Update()
         {
@@ -47,21 +48,7 @@ namespace ActionEditor.Nodes.BT
         {
             this.blackBoard = blackBord;
             this.parent = parent;
-            FindParentComposite();
             return result;
-        }
-        private void FindParentComposite()
-        {
-            var _node = parent;
-            while (_node != null)
-            {
-                if (_node is BTComposite)
-                {
-                    composite = _node as BTComposite;
-                    break;
-                }
-                _node = _node.parent;
-            }
         }
 
     }

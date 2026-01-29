@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("成功"), Attachable(typeof(BTTree)), Node("装饰/成功")]
+    [Name("成功"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate)]
 
     public class BTSuccess : BTDecorate
     {

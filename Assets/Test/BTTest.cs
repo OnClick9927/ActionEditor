@@ -1,39 +1,55 @@
-using System.Collections;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 namespace ActionEditor.Nodes.BT
 {
+    public class TestView : BTTreeView<TestBT>
+    {
 
+    }
+    class BTTestConditionView : BTConditionView<BTTestCondition> { }
+    class BTRsetView : BTActionView<BTRset> { }
+    class BTWorkView : BTActionView<BTWork> { }
 
-    [System.Serializable]
     public class TestBlackBorad : Blackboard
     {
-        public int value;
+        public float Money;
     }
     public class TestBT : BT.BTTree
     {
         public override Blackboard blackBoard => _blackboard;
         [Buffer] private TestBlackBorad _blackboard = new TestBlackBorad();
     }
+    [Attachable(typeof(TestBT)), Node(BTNodeTypes.Condition),Name("≤‚ ‘Ãıº˛")]
     class BTTestCondition : BTCondition
     {
         protected override bool Condition()
-        {
-            return Input.GetKeyDown(KeyCode.Space);
+        {          
+            return (blackBoard as TestBlackBorad).Money<50;
         }
 
 
     }
+    [Attachable(typeof(TestBT)), Node(BTNodeTypes.Action)]
+
     class BTRset : BTWaitTime
     {
-        public BTRset() : base(100)
+
+        protected override State OnUpdate()
         {
+            (blackBoard as TestBlackBorad).Money-=Time.deltaTime*5;
+            return base.OnUpdate();
         }
     }
+    [System.Serializable, Attachable(typeof(TestBT)), Node(BTNodeTypes.Action)]
+
     class BTWork : BTWaitTime
     {
-        public BTWork() : base(10)
+   
+        protected override State OnUpdate()
         {
+            (blackBoard as TestBlackBorad).Money += Time.deltaTime*10;
+            return base.OnUpdate();
         }
     }
     class BTWaitTime : BTAction
@@ -42,12 +58,9 @@ namespace ActionEditor.Nodes.BT
         {
             Debug.Log($"{GetType()} OnAbort");
         }
-        private float time;
+        public float time=10;
         private float end;
-        public BTWaitTime(float time)
-        {
-            this.time = time;
-        }
+  
 
         protected override void OnStart()
         {
@@ -65,7 +78,15 @@ namespace ActionEditor.Nodes.BT
     public class BTTest : MonoBehaviour
     {
         private BTTree tree;
+        public TextAsset txt;
         void Start()
+        {
+            tree = TestBT.FromBytes(typeof(TestBT), txt.bytes) as TestBT;
+
+            tree.PrepareForRuntime();
+            tree.SetAsInstance();
+        }
+        void GG()
         {
             tree = new TestBT();
             tree.root = new BTRoot()
@@ -101,9 +122,7 @@ namespace ActionEditor.Nodes.BT
                 }
 
             };
-            tree.PrepareForRuntime();
         }
-
         // Update is called once per frame
         void Update()
         {

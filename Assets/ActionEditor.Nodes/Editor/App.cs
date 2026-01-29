@@ -154,19 +154,41 @@ namespace ActionEditor.Nodes
             if (_asset == null || view == null) return;
             _asset.position = view.viewTransform.position;
             _asset.scale = view.viewTransform.scale;
-            _asset.Read(view.connections.ConvertAll(x => Connection2Data(x)),
+            var connections = view.connections;
+            connections.RemoveAll(x => x.output == null || x.input == null);
+
+            connections.Sort((a, b) =>
+            {
+                if (a.input.node == b.input.node)
+                {
+                    return a.output.node.GetPosition().center.y
+                    .CompareTo(b.output.node.GetPosition().center.y);
+                }
+                else if (a.output.node == b.output.node)
+                {
+                    return a.input.node.GetPosition().center.y
+                    .CompareTo(b.input.node.GetPosition().center.y);
+                }
+
+                return 0;
+            });
+
+
+
+            asset.Read(connections.ConvertAll(x => Connection2Data(x)),
                          view.groups.ConvertAll(x => Group2Data(x)),
                          view.nodes.ConvertAll(x => Node2Data(x)));
             File.WriteAllBytes(openPath, _asset.ToBytes());
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             _lastSaveTime = DateTime.Now;
+            window.Repaint();
         }
 
 
 
 
-        public static GraphConnection ConnectPort(GraphPort a, GraphPort b)
+        public static Edge ConnectPort(GraphPort a, GraphPort b)
         {
             GraphPort input = a.direction == Direction.Input ? a : b;
             GraphPort output = a.direction == Direction.Output ? a : b;
@@ -197,8 +219,7 @@ namespace ActionEditor.Nodes
             var groups = src.Where(x => x is GraphGroup).Select(x => x as GraphGroup).ToList();
             var nodes = src.Where(x => x is GraphNode).Select(x => x as GraphNode).ToList();
 
-            var connectedPorts = src.Where(x => x is GraphConnection)
-                .Select(x => x as GraphConnection)
+            var connectedPorts = src.Select(x => x as Edge).Where(x => x != null)
                 .Where(x => nodes.Contains(x.output.node) && nodes.Contains(x.input.node))
                 .ToList();
             var datas = nodes.ConvertAll(x => App.Node2Data(x).DeepCopyByBuffer());
@@ -265,7 +286,7 @@ namespace ActionEditor.Nodes
         }
 
 
-        public static GraphConnection CreateConnection(ConnectionData data)
+        public static Edge CreateConnection(ConnectionData data)
         {
             var input = view.ports.Find(x => x.node.GUID == data.InNodeGuid && x.direction == Direction.Input
                                     && x.portName == data.InPortName
@@ -307,23 +328,24 @@ namespace ActionEditor.Nodes
             data.position = group.GetPosition();
             return data;
         }
-        public static ConnectionData Connection2Data(GraphConnection connection)
+        public static ConnectionData Connection2Data(Edge edge)
         {
-            GraphPort output = connection.output;
-            GraphPort input = connection.input;
-            if (input == null || output == null) return null;
-            GraphNode outputNode = output.node;
-            GraphNode inputNode = input.node;
+            //var connection = edge as GraphConnection;
+            //GraphPort output = connection.output;
+            //GraphPort input = connection.input;
+            if (edge.input == null || edge.output == null) return null;
+            GraphNode outputNode = edge.output.node as GraphNode;
+            GraphNode inputNode = edge.input.node as GraphNode;
             if (outputNode == null || inputNode == null) return null;
 
             return new ConnectionData
             {
                 outNodeGuid = outputNode.GUID,
-                outputPortName = output.portName,
-                outPortType = output.portType.FullName,
-                inPortType = input.portType.FullName,
+                outputPortName = edge.output.portName,
+                outPortType = edge.output.portType.FullName,
+                inPortType = edge.input.portType.FullName,
                 InNodeGuid = inputNode.GUID,
-                InPortName = input.portName
+                InPortName = edge.input.portName
             };
         }
 

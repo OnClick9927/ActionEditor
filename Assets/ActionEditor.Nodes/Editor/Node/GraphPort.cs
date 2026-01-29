@@ -25,8 +25,9 @@ namespace ActionEditor.Nodes
 
             public void OnDropOutsidePort(Edge edge, Vector2 position)
             {
-                GraphConnection con = edge as GraphConnection;
-                GraphPort port = con.output != null ? con.output : con.input;
+                //var con = edge as GraphConnection;
+                var _port = edge.output != null ? edge.output : edge.input;
+                var port = _port as GraphPort;
                 port.node.view.OpenSearchPop(port, Vector2.zero);
             }
 

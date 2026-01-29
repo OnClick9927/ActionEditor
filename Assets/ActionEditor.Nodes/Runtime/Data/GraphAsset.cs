@@ -8,6 +8,12 @@ namespace ActionEditor.Nodes
 
     public abstract class GraphAsset
     {
+
+        public GraphAsset()
+        {
+            guid = Guid.NewGuid().ToString();
+        }
+        [ReadOnly]public string guid;
         public const string FileEx = "graph.bytes";
         [ReadOnly][Buffer] internal V4 position = new V4();
         [ReadOnly][Buffer] internal V4 scale = new V4() { x = 1, z = 1, w = 1, y = 1 };
@@ -15,10 +21,22 @@ namespace ActionEditor.Nodes
         [ReadOnly] public List<ConnectionData> connections = new List<ConnectionData>();
         [ReadOnly] public List<GroupData> groups = new List<GroupData>();
         [ReadOnly] public List<NodeData> nodes = new List<NodeData>();
+        private Dictionary<string, NodeData> nodeDic;
+        public NodeData FindNode(string guid)
+        {
+            nodeDic = nodeDic ?? new Dictionary<string, NodeData>();
+            if (!nodeDic.TryGetValue(guid, out var result))
+            {
+                result = this.nodes.FirstOrDefault(x => x.guid == guid);
+                nodeDic.Add(guid, result);
+            }
+            return result;
+        }
+        public T FindNode<T>(string guid) where T : NodeData => FindNode(guid) as T;
 
         internal void Read(List<ConnectionData> connections, List<GroupData> groups, List<NodeData> nodes)
         {
-            
+
             this.connections.Clear();
             this.groups.Clear();
             this.nodes.Clear();
@@ -55,10 +73,9 @@ namespace ActionEditor.Nodes
             return result;
         }
 
-        public void PrepareForRuntime()
+        public virtual void PrepareForRuntime()
         {
-            var nodeDic = nodes.ToDictionary(x => x.guid);
-
+            nodeDic = nodes.ToDictionary(x => x.guid);
             for (int i = 0; i < connections.Count; i++)
             {
                 var conn = connections[i];
@@ -69,11 +86,11 @@ namespace ActionEditor.Nodes
 
                 out_p.connections.Add(conn);
                 in_p.connections.Add(conn);
-                conn.output=out_p;
-                conn.input=in_p;
+                conn.output = out_p;
+                conn.input = in_p;
 
 
-         
+
 
             }
 

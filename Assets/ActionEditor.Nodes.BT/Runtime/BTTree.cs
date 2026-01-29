@@ -1,21 +1,10 @@
 using System.Collections.Generic;
-using System.Linq;
 namespace ActionEditor.Nodes.BT
 {
     [System.Serializable, Name("ÐÐÎªÊ÷")]
     public abstract class BTTree : GraphAsset
     {
-        private Dictionary<string, BTNode> dic = new Dictionary<string, BTNode>();
-        public BTNode FindNode(string guid)
-        {
-            if (dic.TryGetValue(guid, out var result))
-            {
-                result = this.nodes.FirstOrDefault(x => x.guid == guid) as BTNode;
-                dic.Add(guid, result);
-            }
-            return result;
-        }
-        public static BTTree instance { get;private set; }
+        public static BTTree instance { get; private set; }
         public void SetAsInstance() => instance = this;
         public static void ClearInstance() => instance = null;
 
@@ -23,47 +12,34 @@ namespace ActionEditor.Nodes.BT
 
         [System.NonSerialized] public BTRoot root;
         [System.NonSerialized] private List<BTComposite> aborted = new List<BTComposite>();
-        [System.NonSerialized] private List<BTCondition> coditions;
-        private void AbortLowerPriority(BTComposite composite)
-        {
-            if (composite.state == BTNode.State.Running) return;
-            if (aborted.Contains(composite)) return;
-            var temp = composite;
-            while (temp != null)
-            {
-                if (temp.abortType == BTComposite.AbortType.Both || temp.abortType == BTComposite.AbortType.LowerPriority)
-                {
-                    composite = temp;
-                    if (!aborted.Contains(composite))
-                        aborted.Add(composite);
-                }
-                else
-                    break;
-                temp = temp.composite;
-            }
-            composite.Abort();
-        }
+        [System.NonSerialized] private List<BTCondition> abort_coditions;
+
+
+
+
+
         public BTNode.State Update()
         {
             aborted.Clear();
-            for (int i = 0; i < coditions.Count; i++)
+            for (int i = 0; i < abort_coditions.Count; i++)
             {
-                var condition = coditions[i];
-                if (condition.state == BTNode.State.Success) continue;
-                if (condition.Update() != BTNode.State.Success) continue;
-                var composite = condition.composite;
-                if (composite == null) continue;
-
-                if (composite.abortType == BTComposite.AbortType.Both || composite.abortType == BTComposite.AbortType.LowerPriority)
-                    AbortLowerPriority(composite);
-                if (composite.abortType == BTComposite.AbortType.Both || composite.abortType == BTComposite.AbortType.Self)
-                    composite.Abort();
+                var condition = abort_coditions[i];
+                if (condition.composite.abortType == BTComposite.AbortType.Both || condition.composite.abortType == BTComposite.AbortType.LowerPriority)
+                {
+                    if (condition.composite.state != BTNode.State.Running && condition.Update() == BTNode.State.Success)
+                        condition.lowerAbortComposite.Abort();
+                }
+                if (condition.composite.abortType == BTComposite.AbortType.Both || condition.composite.abortType == BTComposite.AbortType.Self)
+                {
+                    if (condition.composite.state == BTNode.State.Running && condition.Update() == BTNode.State.Success)
+                        condition.composite.Abort();
+                }
             }
 
             return root.Update();
         }
         public void Abort() => root.Abort();
-        public new void PrepareForRuntime()
+        public override void PrepareForRuntime()
         {
             base.PrepareForRuntime();
 
@@ -92,7 +68,7 @@ namespace ActionEditor.Nodes.BT
                         composite.children = new List<BTNode>();
                         for (int j = 0; j < connections.Count; j++)
                         {
-                            composite.children.Add(connections[i].input.node as BTNode);
+                            composite.children.Add(connections[j].input.node as BTNode);
                         }
                     }
 
@@ -100,7 +76,7 @@ namespace ActionEditor.Nodes.BT
             }
 
 
-            coditions = root.Init(blackBoard, null, new List<BTCondition>());
+            abort_coditions = root.Init(blackBoard, null, new List<BTCondition>());
         }
 
     }
