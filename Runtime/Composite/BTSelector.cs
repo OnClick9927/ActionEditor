@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("选择"), Attachable(typeof(BTTree)), Node("组合/选择")]
+    [Name("选择"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite)]
 
     public class BTSelector : BTComposite
     {

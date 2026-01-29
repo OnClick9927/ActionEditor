@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("Ê§°Ü"), Attachable(typeof(BTTree)), Node("×°ÊÎ/Ê§°Ü")]
+    [ Name("Ê§°Ü"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate)]
 
     public class BTFailure : BTDecorate
     {

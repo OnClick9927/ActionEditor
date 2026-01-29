@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("重复"), Attachable(typeof(BTTree)), Node("装饰/重复")]
+    [ Name("重复"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate)]
 
     public class BTRepeat : BTDecorate
     {

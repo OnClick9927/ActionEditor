@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("取反"), Attachable(typeof(BTTree)), Node("装饰/取反")]
+    [ Name("取反"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate)]
 
     public class BTInverter : BTDecorate
     {

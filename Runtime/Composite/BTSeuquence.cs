@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("序列"), Attachable(typeof(BTTree)), Node("组合/序列")]
+    [ Name("序列"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite)]
     public class BTSeuquence : BTComposite
     {
         protected override State OnUpdate()
