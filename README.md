@@ -3,7 +3,7 @@
 * 类Timeline 编辑器，只有Editor，RT 自己扩展
 * ActionEditor.Nodes（ https://github.com/OnClick9927/ActionEditor.git#upm_node）
 * 节点编辑器，用于技能、行为树
-* ActionBT（ https://github.com/OnClick9927/ActionEditor.git#upm_bt）
+* ActionBT（ https://github.com/OnClick9927/ActionEditor.git#upm_bt ）
 * 行为树
 * 运行时均可脱离UNITY
 
