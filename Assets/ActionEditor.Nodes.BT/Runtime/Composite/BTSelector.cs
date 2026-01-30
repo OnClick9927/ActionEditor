@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [Name("Ñ¡Ôñ"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite)]
+    [Name("Ñ¡Ôñ"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Selector")]
 
     public class BTSelector : BTComposite
     {

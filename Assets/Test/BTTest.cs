@@ -101,7 +101,7 @@ namespace ActionEditor.Nodes.BT
 
                         children = new List<BTNode>()
                         {
-                            new BTSeuquence()
+                            new BTSequence()
                             {
                                 abortType = BTComposite.AbortType.Both,
                                 children = new List<BTNode>()

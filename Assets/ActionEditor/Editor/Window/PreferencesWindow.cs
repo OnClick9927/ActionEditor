@@ -40,7 +40,6 @@ namespace ActionEditor
             GUILayout.EndHorizontal();
             GUILayout.Space(2);
 
-            scroll = GUILayout.BeginScrollView(scroll);
             var lan = EditorEX.CleanPopup<string>(Lan.ins.Language, Lan.Language,
                 Lan.AllLanguages.Keys.ToList());
 
@@ -94,6 +93,8 @@ namespace ActionEditor
             GUILayout.Space(5);
 
 
+            if (AppInternal.AssetNames.Count == 0) return;
+            scroll = GUILayout.BeginScrollView(scroll);
 
             assetIndex = GUILayout.Toolbar(assetIndex, AppInternal.AssetNames.ToArray());
             var temp = AppInternal.AssetTypes[AppInternal.AssetNames[assetIndex]];
@@ -143,6 +144,6 @@ namespace ActionEditor
         private static ActionEditorWindow window;
         private Vector2 scroll;
         private int assetIndex;
-        private List<string> assetNames=new List<string>();
+        private List<string> assetNames = new List<string>();
     }
 }

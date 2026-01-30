@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [Name("并行"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite)]
+    [Name("并行"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Parallel")]
 
     public class BTParallel : BTComposite
     {

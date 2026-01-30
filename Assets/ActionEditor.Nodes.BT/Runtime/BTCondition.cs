@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
+    [Icon("Conditional")]
     public abstract class BTCondition : BTNode
     {
         internal BTComposite composite { get; private set; }
@@ -9,6 +10,7 @@ namespace ActionEditor.Nodes.BT
         protected sealed override void OnAbort() { }
         internal sealed override List<BTCondition> Init(Blackboard blackBord, BTNode parent, List<BTCondition> result)
         {
+
             base.Init(blackBord, parent, result);
             FindParentComposite();
             if (composite != null || composite.abortType != BTComposite.AbortType.None)

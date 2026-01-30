@@ -90,8 +90,7 @@ namespace ActionEditor
 
             }
 
-            if (icon != null)
-                _iconDictionary[type] = icon;
+            _iconDictionary[type] = icon;
             return icon;
         }
         public static string GetTypeName(Type type)
