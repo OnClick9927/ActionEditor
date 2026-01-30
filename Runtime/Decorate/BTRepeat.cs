@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [ Name("÷ÿ∏¥"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate)]
+    [ Name("÷ÿ∏¥"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Repeater")]
 
     public class BTRepeat : BTDecorate
     {

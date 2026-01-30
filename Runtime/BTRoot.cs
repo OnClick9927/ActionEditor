@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("根节点"),Attachable(typeof(BTTree))]
+    [System.Serializable, Name("根节点"),Attachable(typeof(BTTree)),Icon("Entry")]
     public class BTRoot : BTNode
     {
         [System.NonSerialized] public BTNode child;

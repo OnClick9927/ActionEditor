@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [ Name("取反"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate)]
+    [ Name("取反"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Inverter")]
 
     public class BTInverter : BTDecorate
     {

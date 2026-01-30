@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
@@ -12,6 +11,7 @@ namespace ActionEditor.Nodes.BT
 
     public class BTTreeView<T> : Nodes.NodeGraphView<T> where T : BTTree
     {
+        protected BTTree runningTree { get; private set; }
 
         private static int _Runing_BlackBoard = -1;
         private static float _height = -1;
@@ -53,8 +53,11 @@ namespace ActionEditor.Nodes.BT
                 EditorPrefs.SetFloat($"{typeof(BTTreeView<>).FullName}.{nameof(height)}", value);
             }
         }
-        internal static void DrawBlackBord(bool run, Blackboard blackboard, float maxheight)
+        internal static void DrawBlackBord(BTTreeView<T> view, float maxheight)
         {
+            var run = Runing_BlackBoard && view.runningTree != null;
+            var blackboard = run ? view.runningTree.blackBoard : view.graph.blackBoard;
+
             GUI.color = Color.black;
             GUILayout.Box("", GUILayout.Height(30), GUILayout.ExpandWidth(true));
             GUI.color = Color.white;
@@ -115,16 +118,38 @@ namespace ActionEditor.Nodes.BT
             GUILayout.BeginVertical(GUILayout.Height(height));
             base.OnInspectorGUI();
             GUILayout.EndVertical();
-            if (Runing_BlackBoard && BTTree.instance != null && App.asset.guid == BTTree.instance.guid)
-                DrawBlackBord(true, BTTree.instance.blackBoard, position.height);
-            else
-                DrawBlackBord(false, graph.blackBoard, position.height);
+            DrawBlackBord(this, position.height);
             GUILayout.Space(2);
         }
+
+
+
+
+
 
         public override void Load(GraphAsset data)
         {
             base.Load(data);
+            BTTree_onInstanceChanged(BTTree.instance);
+            BTTree.onInstanceChanged -= BTTree_onInstanceChanged;
+
+            BTTree.onInstanceChanged += BTTree_onInstanceChanged;
+        }
+        private void BTTree_onInstanceChanged(BTTree tree)
+        {
+            if (tree != null && tree.guid != this.graph.guid)
+                tree = null;
+            this.runningTree = tree;
+            OnBTTreeChanged(tree);
+
+            for (int i = 0; this.nodes.Count > i; i++)
+            {
+                var node = this.nodes[i] as IBTNodeView;
+                node.OnBTTreeChanged(tree);
+            }
+        }
+        protected virtual void OnBTTreeChanged(BTTree tree)
+        {
 
         }
         public override void OnSelectNode(GraphNode obj)

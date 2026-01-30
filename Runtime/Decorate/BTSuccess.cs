@@ -1,6 +1,6 @@
 namespace ActionEditor.Nodes.BT
 {
-    [Name("成功"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate)]
+    [Name("成功"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Success")]
 
     public class BTSuccess : BTDecorate
     {

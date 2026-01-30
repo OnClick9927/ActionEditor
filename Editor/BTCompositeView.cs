@@ -5,7 +5,7 @@ using UnityEngine.UIElements;
 
 namespace ActionEditor.Nodes.BT
 {
-    class SequenceView : BTCompositeView<BTSeuquence> { }
+    class SequenceView : BTCompositeView<BTSequence> { }
     class SelectorView : BTCompositeView<BTSelector> { }
     class ParallelView : BTCompositeView<BTParallel> { }
     public class BTCompositeView<T> : BTNodeView<T> where T : BTComposite, new()

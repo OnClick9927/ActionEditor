@@ -1,10 +1,23 @@
+using System;
 using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
     [System.Serializable, Name("ÐÐÎªÊ÷")]
     public abstract class BTTree : GraphAsset
     {
-        public static BTTree instance { get; private set; }
+        public static event Action<BTTree> onInstanceChanged;
+        private static BTTree _instance;
+        public static BTTree instance
+        {
+            get { return _instance; }
+            private set
+            {
+                if (_instance != value)
+                    _instance = value;
+                onInstanceChanged?.Invoke(value);
+            }
+
+        }
         public void SetAsInstance() => instance = this;
         public static void ClearInstance() => instance = null;
 

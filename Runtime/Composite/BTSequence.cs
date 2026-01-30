@@ -1,7 +1,7 @@
 namespace ActionEditor.Nodes.BT
 {
-    [ Name("ађСа"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite)]
-    public class BTSeuquence : BTComposite
+    [ Name("ађСа"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Sequence")]
+    public class BTSequence : BTComposite
     {
         protected override State OnUpdate()
         {
