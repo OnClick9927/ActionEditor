@@ -1,5 +1,4 @@
-﻿using ActionEditor;
-using System.Linq;
+﻿using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,9 +11,7 @@ namespace ActionEditor.Nodes
         {
             
 
-            if (window == null)
-                window = Resources.FindObjectsOfTypeAll<GraphWindow>().FirstOrDefault();
-            win_size.y = window.position.height - 20;
+            win_size.y = App.window.position.height - 20;
             rect.x = rect.x - win_size.x + rect.width;
             //_myRect = rect;
             UnityEditor.PopupWindow.Show(rect, new PreferencesWindow());
@@ -39,7 +36,6 @@ namespace ActionEditor.Nodes
             GUILayout.EndHorizontal();
             GUILayout.Space(2);
 
-            scroll = GUILayout.BeginScrollView(scroll);
 
             Prefs.pickListType = (AssetPickListType)EditorGUILayout.EnumPopup(Lan.ins.AssetPickListType, Prefs.pickListType);
 
@@ -78,7 +74,8 @@ namespace ActionEditor.Nodes
             GUILayout.Space(5);
 
 
-
+            if (App.AssetNames.Length == 0) return;
+            scroll = GUILayout.BeginScrollView(scroll);
             assetIndex = GUILayout.Toolbar(assetIndex, App.AssetNames.ToArray());
             var assetType = App.AssetTypes[App.AssetNames[assetIndex]];
             var temp = assetType;
@@ -100,13 +97,14 @@ namespace ActionEditor.Nodes
             if (EditorGUI.EndChangeCheck())
             {
 
-                if (window == null)
-                    window = Resources.FindObjectsOfTypeAll<GraphWindow>().FirstOrDefault();
-                window.Repaint();
+                //if (window == null)
+                //    window = App.window;
+                App.UpdateGraphColor();
+                App.window.Repaint();
             }
         }
 
-        private static GraphWindow window;
+        //private static GraphWindow window;
         private Vector2 scroll;
         private int assetIndex;
     }

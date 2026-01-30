@@ -95,7 +95,13 @@ namespace ActionEditor.Nodes
             return tree;
         }
 
-
+        internal void UpdateGraphColor()
+        {
+           for (int i = 0; i < nodes.Count; i++)
+            {
+                nodes[i].SetTitleColor();
+            }
+        }
     }
 
 

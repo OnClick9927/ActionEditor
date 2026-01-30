@@ -1,5 +1,4 @@
-﻿using ActionEditor;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -42,34 +41,40 @@ namespace ActionEditor.Nodes
 
         public override void OnCreated(NodeGraphView view)
         {
-            this.style.minWidth = 120;
             base.OnCreated(view);
+
             dot = new Image();
             dot.style.position = Position.Absolute;
-            dot.style.top = 10;
-            dot.style.right = 10;
-            dot.style.width = dot.style.height = 20;
+            dot.style.top = 5;
+            dot.style.right = 5;
+            dot.style.width = dot.style.height = 22;
             dot.style.unityBackgroundImageTintColor = Color.white;
+            style.minWidth = Mathf.Max(150, NodeName.Sum(c => c >= '\u4e00' && c <= '\u9fff' ? 1.6f : 1) * 30);
+            var find = this.data.GetIcon();
+            noIcon = find == null;
+            dot.style.backgroundImage = find;
+            if (find == null)
+            {
+                dot.style.backgroundImage = EditorGUIUtility.IconContent("d_editicon.sml").image as Texture2D;
+            }
             this.titleContainer.Add(dot);
+
         }
-        private bool selected_last;
+        bool noIcon;
+        internal sealed override void SetTitleColor()
+        {
+            this.titleContainer.style.backgroundColor = new StyleColor(this.data.GetColor());
+        }
         public override void OnUpdate()
         {
-            if (selected != selected_last)
-            {
-                if (!selected)
-                    dot.style.backgroundImage = null;
-            }
-
+            if (!selected)
+                dot.style.unityBackgroundImageTintColor = noIcon ? Color.clear : Color.white;
             if (selected && this.view.selection.FirstOrDefault() == this)
             {
                 var value = EditorApplication.timeSinceStartup - Mathf.FloorToInt((float)EditorApplication.timeSinceStartup);
-                value = value / 0.1;
-                var index = Mathf.Max(Mathf.FloorToInt((float)value), 0);
-                dot.style.backgroundImage = EditorGUIUtility.IconContent($"WaitSpin0{index}").image as Texture2D;
+                dot.style.unityBackgroundImageTintColor = Color.white.WithAlpha((float)value);
+
             }
-            this.titleContainer.style.backgroundColor = new StyleColor(this.data.GetColor());
-            selected_last = selected;
         }
 
     }
@@ -100,10 +105,10 @@ namespace ActionEditor.Nodes
             label.style.unityFontStyleAndWeight = FontStyle.Bold;
             this.titleContainer.Add(label);
 
-
+            SetTitleColor();
             this.view = view;
         }
-
+        internal abstract void SetTitleColor();
 
 
         public sealed override void OnSelected()
