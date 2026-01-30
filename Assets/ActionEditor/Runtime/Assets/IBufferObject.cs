@@ -433,6 +433,7 @@ namespace ActionEditor
             var typeName = ReadUTF8();
             var assemblyName = ReadUTF8();
             Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
+            if (type == null) return null;
             T t = (T)Activator.CreateInstance(type);
 
             var typeField = TypeHelper.GetTypeFields(type);
