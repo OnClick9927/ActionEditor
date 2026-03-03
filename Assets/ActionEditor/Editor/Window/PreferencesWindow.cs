@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -22,7 +23,46 @@ namespace ActionEditor
         }
 
         public override Vector2 GetWindowSize() => win_size;
+        private static List<string> assetNames = new List<string>();
 
+        static Dictionary<Type, List<Prefs.SerializedData.ColorPref>> assetTackMaps = new Dictionary<Type, List<Prefs.SerializedData.ColorPref>>();
+        private static List<Prefs.SerializedData.ColorPref> GetAssetTrackNames(Type assetType)
+        {
+            if (!assetTackMaps.TryGetValue(assetType,out var result))
+            {
+                assetNames.Clear();
+                var temp = assetType;
+                while (temp != typeof(object))
+                {
+                    assetNames.Add(temp.FullName);
+                    temp = temp.BaseType;
+                }
+
+                //var assetName = App.AssetTypes[App.AssetNames[assetIndex]].FullName;
+
+                result = Prefs.data.tracks
+                    .Where(x => x.attach != null)
+                    .ToDictionary(x => x)
+                    .Where(x =>
+                    {
+                        var attachs = x.Value.attach.Select(x => EditorEX.GetAllTypes().First(y => y.Name == x));
+                        foreach (var item in attachs)
+                        {
+                            var names = EditorEX.GetTypeMetaDerivedFrom(item).SelectMany(x => x.attachableTypes.Select(x => x.Name));
+                            if (names.Intersect(assetNames).Any())
+                            {
+                                return true;
+                            }
+                        }
+                        return false;
+
+                    })
+                    .Select(x => x.Key)
+                    .ToList();
+                assetTackMaps.Add(assetType, result);
+            }
+            return result;
+        }
         public override void OnGUI(Rect rect)
         {
 
@@ -99,20 +139,9 @@ namespace ActionEditor
             assetIndex = GUILayout.Toolbar(assetIndex, AppInternal.AssetNames.ToArray());
             var temp = AppInternal.AssetTypes[AppInternal.AssetNames[assetIndex]];
 
-            assetNames.Clear();
-            while (temp != typeof(object))
-            {
-                assetNames.Add(temp.FullName);
-                temp = temp.BaseType;
-            }
 
 
-            //var assetName = App.AssetTypes[App.AssetNames[assetIndex]].FullName;
-
-
-            var tracks = Prefs.data.tracks.Where(x => x.attach != null && x.attach.Intersect(assetNames).Any());
-
-            //var tracks = Prefs.data.tracks.Where(x => x.asset != null && x.asset.Contains(assetName));
+            var tracks = GetAssetTrackNames(temp);
             foreach (var track in tracks)
             {
                 GUILayout.BeginVertical(EditorStyles.helpBox);
@@ -144,6 +173,5 @@ namespace ActionEditor
         private static ActionEditorWindow window;
         private Vector2 scroll;
         private int assetIndex;
-        private List<string> assetNames = new List<string>();
     }
 }
