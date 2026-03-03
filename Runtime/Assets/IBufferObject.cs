@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -204,6 +205,13 @@ namespace ActionEditor
                 return result;
             return src;
         }
+
+
+
+
+
+
+
     }
 
 
@@ -697,24 +705,7 @@ namespace ActionEditor
 
     public abstract class BuffConverter
     {
-        private static Dictionary<Type, Type> _nmap = new Dictionary<Type, Type>()
-        {
-
-            { typeof(byte),typeof(ByteConverter)},
-            {typeof(bool),typeof(BoolConverter) },
-            { typeof(char),typeof(CharConverter) },
-            { typeof(short),typeof(ShortConverter)},
-            { typeof(ushort),typeof(UShortConverter)},
-            { typeof(int),typeof(IntConverter)},
-            { typeof(uint),typeof(UIntConverter)},
-            { typeof(long),typeof(LongConverter)},
-            { typeof(ulong),typeof(ULongConverter)},
-            { typeof(float),typeof(FloatConverter)},
-            { typeof(double),typeof(DoubleConverter)},
-            { typeof(string),typeof(StringConverter)},
-            { typeof(DateTime),typeof(DateTimeConverter)},
-            { typeof(TimeSpan),typeof(TimeSpanConverter)},
-        };
+        private static Dictionary<Type, Type> _nmap;
 
         private static Dictionary<Type, Type> _fgenmap = new Dictionary<Type, Type>()
         {
@@ -722,9 +713,27 @@ namespace ActionEditor
 
         };
         private static Dictionary<Type, BuffConverter> map = new Dictionary<Type, BuffConverter>();
-        public static event Func<Type, BuffConverter> OnGetConverter;
         private static BuffConverter Create(Type type)
         {
+            if (_nmap == null)
+            {
+                _nmap = new Dictionary<Type, Type>();
+                var types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes()).Where(x =>
+                    {
+                        return !x.IsAbstract && x.BaseType != null && x.BaseType.IsGenericType && typeof(BuffConverter).IsAssignableFrom(x);
+                    });
+                foreach (var item in types)
+                {
+                    var args = item.BaseType.GetGenericArguments();
+                    if (args.Length == 1)
+                    {
+                        _nmap.Add(args[0], item);
+                    }
+                }
+
+            }
+
+
             if (_nmap.TryGetValue(type, out var target))
                 return Activator.CreateInstance(target) as BuffConverter;
             if (type.IsEnum)
@@ -741,8 +750,6 @@ namespace ActionEditor
                     }
                 }
             }
-            var result = OnGetConverter?.Invoke(type);
-            if (result != null) return result;
             if (!type.IsValueType && !type.IsGenericType)
                 return Activator.CreateInstance(typeof(ObjectConverter<>).MakeGenericType(type)) as BuffConverter;
             return null;
