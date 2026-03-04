@@ -12,7 +12,7 @@ namespace ActionEditor.Nodes.BT
         }
 
         public AbortType abortType;
-        [System.NonSerialized] public List<BTNode> children;
+        public List<BTNode> children { get; internal set; }
         public int current { get; protected set; }
         protected override void OnStart()
         {

@@ -23,7 +23,7 @@ namespace ActionEditor.Nodes.BT
 
         public abstract Blackboard blackBoard { get; }
 
-        [System.NonSerialized] public BTRoot root;
+        public BTRoot root { get; internal set; }
         [System.NonSerialized] private List<BTComposite> aborted = new List<BTComposite>();
         [System.NonSerialized] private List<BTCondition> abort_coditions;
 
