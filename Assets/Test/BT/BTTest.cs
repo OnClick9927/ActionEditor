@@ -82,46 +82,8 @@ namespace ActionEditor.Nodes.BT
         void Start()
         {
             tree = TestBT.FromBytes(typeof(TestBT), txt.bytes) as TestBT;
-
             tree.PrepareForRuntime();
             tree.SetAsInstance();
-        }
-        void GG()
-        {
-            tree = new TestBT();
-            tree.root = new BTRoot()
-            {
-
-
-                child = new BTRepeat()
-                {
-                    child = new BTSelector()
-                    {
-                        abortType = BTComposite.AbortType.Both,
-
-                        children = new List<BTNode>()
-                        {
-                            new BTSequence()
-                            {
-                                abortType = BTComposite.AbortType.Both,
-                                children = new List<BTNode>()
-                                {
-                                    //new BTInvert()
-                                    //{
-                                    //    child=new BTTestCondition()
-                                    //},
-
-                                    new BTTestCondition(),
-                                    new BTWork()
-                                }
-                            },
-                            new BTRset()
-                        }
-                    }
-
-                }
-
-            };
         }
         // Update is called once per frame
         void Update()

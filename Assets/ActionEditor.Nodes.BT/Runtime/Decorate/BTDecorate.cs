@@ -3,7 +3,7 @@ namespace ActionEditor.Nodes.BT
 {
     public abstract class BTDecorate : BTNode
     {
-        [System.NonSerialized] public BTNode child;
+        public BTNode child { get; internal set; }
         protected sealed override void OnAbort() => child.Abort();
         internal sealed override List<BTCondition> Init(Blackboard blackBord, BTNode parent, List<BTCondition> result)
         {

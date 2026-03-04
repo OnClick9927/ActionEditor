@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("根节点"),Attachable(typeof(BTTree)),Icon("Entry")]
+    [System.Serializable, Name("根节点"), Attachable(typeof(BTTree)), Icon("Entry")]
     public class BTRoot : BTNode
     {
-        [System.NonSerialized] public BTNode child;
-        internal override List<BTCondition> Init(Blackboard blackBord,BTNode parent, List<BTCondition> result)
+        public BTNode child { get; internal set; }
+        internal override List<BTCondition> Init(Blackboard blackBord, BTNode parent, List<BTCondition> result)
         {
             base.Init(blackBord, parent, result);
             if (child == null)

@@ -239,8 +239,9 @@ namespace ActionEditor.Nodes
                 var find = groupDatas.Where(x => x.nodes.Contains(oldGuid));
                 foreach (var _find in find)
                 {
-                    _find.nodes.Remove(oldGuid);
-                    _find.nodes.Add(newGuid);
+                    var _nodes=_find.nodes as List<string>;
+                    _nodes.Remove(oldGuid);
+                    _nodes.Add(newGuid);
                 }
                 var find_in = conDatas.FindAll(x => x.InNodeGuid == oldGuid);
                 for (int i = 0; i < find_in.Count; i++)
