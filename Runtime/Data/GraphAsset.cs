@@ -13,14 +13,17 @@ namespace ActionEditor.Nodes
         {
             guid = Guid.NewGuid().ToString();
         }
-        [ReadOnly]public string guid;
+        [ReadOnly] public string guid;
         public const string FileEx = "graph.bytes";
         [ReadOnly][Buffer] internal V4 position = new V4();
         [ReadOnly][Buffer] internal V4 scale = new V4() { x = 1, z = 1, w = 1, y = 1 };
+        [ReadOnly, Buffer(nameof(connections))] private List<ConnectionData> _connections = new List<ConnectionData>();
+        [ReadOnly, Buffer(nameof(groups))] private List<GroupData> _groups = new List<GroupData>();
+        [ReadOnly, Buffer(nameof(nodes))] private List<NodeData> _nodes = new List<NodeData>();
 
-        [ReadOnly] public List<ConnectionData> connections = new List<ConnectionData>();
-        [ReadOnly] public List<GroupData> groups = new List<GroupData>();
-        [ReadOnly] public List<NodeData> nodes = new List<NodeData>();
+        public IReadOnlyList<ConnectionData> connections => _connections;
+        public IReadOnlyList<GroupData> groups => _groups;
+        public IReadOnlyList<NodeData> nodes => _nodes;
         private Dictionary<string, NodeData> nodeDic;
         public NodeData FindNode(string guid)
         {
@@ -37,12 +40,12 @@ namespace ActionEditor.Nodes
         internal void Read(List<ConnectionData> connections, List<GroupData> groups, List<NodeData> nodes)
         {
 
-            this.connections.Clear();
-            this.groups.Clear();
-            this.nodes.Clear();
-            this.connections.AddRange(connections.Where(x => x != null));
-            this.nodes.AddRange(nodes);
-            this.groups.AddRange(groups);
+            this._connections.Clear();
+            this._groups.Clear();
+            this._nodes.Clear();
+            this._connections.AddRange(connections.Where(x => x != null));
+            this._nodes.AddRange(nodes);
+            this._groups.AddRange(groups);
 
         }
         public byte[] ToBytes() => BuffConverter.ToBytes(this);
@@ -56,7 +59,7 @@ namespace ActionEditor.Nodes
 
         private PortData CreateNodePort(NodeData node, string type, string name, PortDirection direction)
         {
-            var ports = direction == PortDirection.In ? node.inPorts : node.outPorts;
+            var ports = (direction == PortDirection.In ? node.inPorts : node.outPorts) as List<PortData>;
 
             PortData result = ports.Find(x => x.name == name && x.direction == direction && x.type == type);
             if (result == null)

@@ -12,7 +12,7 @@ namespace ActionEditor.Nodes
         public string outputPortName;
         public string InPortName;
 
-        [System.NonSerialized] public PortData output;
-        [System.NonSerialized] public PortData input;
+        public PortData output { get; internal set; }
+        public PortData input { get; internal set; }
     }
 }

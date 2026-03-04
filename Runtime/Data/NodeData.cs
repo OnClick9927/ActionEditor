@@ -14,8 +14,11 @@ namespace ActionEditor.Nodes
             guid = Guid.NewGuid().ToString();
         }
 
-        [System.NonSerialized] public List<PortData> inPorts = new List<PortData>();
-        [System.NonSerialized] public List<PortData> outPorts = new List<PortData>();
+        private List<PortData> _inPorts = new List<PortData>();
+        private List<PortData> _outPorts = new List<PortData>();
+
+        public IReadOnlyList<PortData> inPorts => _inPorts;
+        public IReadOnlyList<PortData> outPorts => _outPorts;
 
 
     }
