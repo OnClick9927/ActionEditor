@@ -4,6 +4,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using UnityEngine;
+using static ActionEditor.TypeHelper.TypeFields;
 
 
 namespace ActionEditor
@@ -436,10 +438,21 @@ namespace ActionEditor
                 }
             }
         }
+
+
+        private string[] metas;
         public T ReadObject<T>() where T : class
         {
-            var typeName = ReadUTF8();
-            var assemblyName = ReadUTF8();
+            if (metas == null)
+                metas = ReadArray<string>((r) => r.ReadUTF8());
+
+
+            //var typeName = ReadUTF8();
+            //var assemblyName = ReadUTF8();
+
+            var typeName = metas[ReadInt32()];
+            var assemblyName = metas[ReadInt32()];
+
             Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
             if (type == null) return null;
             T t = (T)Activator.CreateInstance(type);
@@ -458,11 +471,15 @@ namespace ActionEditor
                 }
                 //if (id == BufferReader.ObjEndFlag)
                 //    break;
-                var id = this.ReadUTF8();
-                var TypeName = this.ReadUTF8();
+                //var fieldName = this.ReadUTF8();
+                //var TypeName = this.ReadUTF8();
+
+                var fieldName = metas[this.ReadInt32()];
+                var TypeName = metas[this.ReadInt32()];
+
                 TypeName = TypeHelper.GetRealTypeName(TypeName);
 
-                var field = typeField.FindField(id);
+                var field = typeField.FindField(fieldName);
                 if (field != null && field.field.FieldType.FullName != TypeName)
                 {
                     field = null;
@@ -653,16 +670,72 @@ namespace ActionEditor
             }
         }
         public void WriteByteArray(byte[] values) => WriteArray(values, (_, value) => { WriteByte(value); });
-        public void WriteUTF8(string value) => WriteByteArray(string.IsNullOrEmpty(value) ? null : Encoding.UTF8.GetBytes(value));
+        public void WriteUTF8(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                WriteByteArray(null);
 
+            else
+                WriteByteArray(Encoding.UTF8.GetBytes(value));
+        }
+
+
+        private Dictionary<string, int> metas;
+        private int _index_meta = 0;
+        private void AddToMeta(string meta)
+        {
+            if (metas.ContainsKey(meta)) return;
+            metas.Add(meta, _index_meta++);
+        }
+
+        public void CollectMetas(object value)
+        {
+            if (value == null) return;
+
+            var type = value.GetType();
+            AddToMeta(type.FullName);
+            AddToMeta(type.Assembly.FullName);
+            var fields = TypeHelper.GetTypeFields(type).GetFields();
+            for (int i = 0; i < fields.Count; i++)
+            {
+                var field = fields[i];
+                var fieldValue = field.field.GetValue(value);
+                if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
+
+
+                var fieldType = field.field.FieldType;
+                var fieldName = field.name;
+                var fieldTypeName = TypeHelper.GetTypeName(fieldType);
+                AddToMeta(fieldName);
+                AddToMeta(fieldTypeName);
+
+
+                var convert = BuffConverter.GetConverter(fieldType);
+                convert.CollectMetas(this, fieldValue);
+                //WriteBytes(BufferReader.FieldEndFlag);
+            }
+
+        }
 
         public void WriteObject<T>(T value) where T : class
         {
             var type = value.GetType();
             if (value is IBufferObject buff)
                 buff.BeforeWriteField();
-            WriteUTF8(type.FullName);
-            WriteUTF8(type.Assembly.FullName);
+            if (metas == null)
+            {
+                metas = new();
+                CollectMetas(value);
+                //var list = metas.Keys.ToList();
+                WriteArray(metas.Keys.ToArray(), (w, val) => w.WriteUTF8(val));
+                //Console.WriteLine(list);
+            }
+
+            WriteInt32(metas[type.FullName]);
+            WriteInt32(metas[type.Assembly.FullName]);
+
+            //WriteUTF8(type.FullName);
+            //WriteUTF8(type.Assembly.FullName);
 
             var fields = TypeHelper.GetTypeFields(type).GetFields();
             for (int i = 0; i < fields.Count; i++)
@@ -673,9 +746,12 @@ namespace ActionEditor
                 WriteBytes(BufferReader.FieldBeginFlag);
 
 
-                WriteUTF8(field.name);
                 var fieldType = field.field.FieldType;
-                WriteUTF8(TypeHelper.GetTypeName(fieldType));
+                //WriteUTF8(field.name);
+                //WriteUTF8(TypeHelper.GetTypeName(fieldType));
+                WriteInt32(metas[field.name]);
+                WriteInt32(metas[TypeHelper.GetTypeName(fieldType)]);
+
 
                 BuffConverter convert = null;
                 try
@@ -771,6 +847,7 @@ namespace ActionEditor
 
         public abstract object Read(BufferReader reader, Type type);
         public abstract void Write(BufferWriter writer, object value);
+        internal abstract void CollectMetas(BufferWriter writer, object value);
         public static byte[] ToBytes(object obj)
         {
             var type = obj.GetType();
@@ -794,6 +871,9 @@ namespace ActionEditor
         public abstract T OnRead(BufferReader reader, Type type);
         public sealed override object Read(BufferReader reader, Type type) => OnRead(reader, type);
         public sealed override void Write(BufferWriter writer, object value) => OnWrite(writer, (T)value);
+        protected virtual void OnCollectMetas(BufferWriter writer, T value) { }
+
+        internal sealed override void CollectMetas(BufferWriter writer, object value) => OnCollectMetas(writer, (T)value);
     }
 
     class ByteConverter : BuffConverter<byte>
@@ -895,6 +975,7 @@ namespace ActionEditor
     {
         public override T OnRead(BufferReader reader, Type type) => reader.ReadObject<T>();
         public override void OnWrite(BufferWriter writer, T value) => writer.WriteObject(value);
+        protected override void OnCollectMetas(BufferWriter writer, T value) => writer.CollectMetas(value);
     }
     class ListConverter<T> : BuffConverter<List<T>>
     {
@@ -904,7 +985,14 @@ namespace ActionEditor
 
         public override List<T> OnRead(BufferReader reader, Type type) => reader.ReadList(ReadOnce);
         public override void OnWrite(BufferWriter writer, List<T> value) => writer.WriteList(value, WriteOnce);
-
+        protected override void OnCollectMetas(BufferWriter writer, List<T> value)
+        {
+            for (var i = 0; i < value.Count; i++)
+            {
+                var t = value[i];
+                converter.CollectMetas(writer, t);
+            }
+        }
 
     }
     class ArrayConverter<T> : BuffConverter<T[]>
@@ -916,6 +1004,14 @@ namespace ActionEditor
         private T ReadOnce(BufferReader reader) => converter.OnRead(reader, typeof(T));
 
         public override void OnWrite(BufferWriter writer, T[] value) => writer.WriteArray(value, WriteOnce);
+        protected override void OnCollectMetas(BufferWriter writer, T[] value)
+        {
+            for (var i = 0; i < value.Length; i++)
+            {
+                var t = value[i];
+                converter.CollectMetas(writer, t);
+            }
+        }
     }
 
 
