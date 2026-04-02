@@ -124,7 +124,17 @@ namespace ActionEditor.Nodes.BT
 
 
 
-
+        public override UpdateType updateType
+        {
+            get
+            {
+                if (this.runningTree != null)
+                {
+                    return UpdateType.Update;
+                }
+                return base.updateType;
+            }
+        }
 
 
         public override void Load(GraphAsset data)
