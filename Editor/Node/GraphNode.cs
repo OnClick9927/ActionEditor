@@ -49,7 +49,7 @@ namespace ActionEditor.Nodes
             foreach (var item in result)
             {
                 var attr = item.GetCustomAttribute<NodePortAttribute>();
-                GeneratePort((Direction)attr.direction, item.FieldType, attr.single ? Port.Capacity.Single : Port.Capacity.Multi, item.Name);
+                GeneratePort((Direction)attr.direction, attr.type == null ? item.FieldType : attr.type, attr.single ? Port.Capacity.Single : Port.Capacity.Multi, item.Name);
             }
         }
 
