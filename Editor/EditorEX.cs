@@ -95,7 +95,7 @@ namespace ActionEditor
         }
         public static string GetTypeName(Type type)
         {
-
+            if (type == null) return string.Empty;
             if (_nameDictionary.TryGetValue(type, out var name))
                 return name;
             var nameAttribute = type.GetCustomAttribute<NameAttribute>();
