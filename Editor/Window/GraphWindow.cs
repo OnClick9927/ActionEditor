@@ -178,21 +178,27 @@ namespace ActionEditor.Nodes
             //this.rootVisualElement.Add(saveTime); ;
             App.OnWindowEnable();
         }
-
-        private void Update()
+        private void _update()
         {
             split.visible = this.view != null;
             split.fixedPaneInitialDimension = this.view == null ? 0 : split.fixedPaneInitialDimension;
             right.style.minWidth = this.view == null ? 0 : 250;
-            if (view == null)
-            {
-
-            }
-            else
+            if (view != null)
             {
                 App.Update();
                 Repaint();
             }
+        }
+        private void Update()
+        {
+            if (App.updateType == NodeGraphView.UpdateType.Update) _update();
+        }
+        private void OnInspectorUpdate()
+        {
+
+            if (App.updateType == NodeGraphView.UpdateType.Inspector) _update();
+
+
         }
         private void DrawInspector() => view?.DrawInspector();
         private void OnDisable() => App.OnWindowDisable();
