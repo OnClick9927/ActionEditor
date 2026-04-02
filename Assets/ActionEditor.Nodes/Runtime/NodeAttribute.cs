@@ -7,9 +7,9 @@ namespace ActionEditor.Nodes
     {
         public string group;
 
-        public NodeAttribute(string path)
+        public NodeAttribute(string group)
         {
-            this.group = path;
+            this.group = group;
         }
     }
 }

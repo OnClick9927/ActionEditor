@@ -178,8 +178,7 @@ namespace ActionEditor.Nodes
             //this.rootVisualElement.Add(saveTime); ;
             App.OnWindowEnable();
         }
-
-        private void Update()
+        private void OnInspectorUpdate()
         {
             split.visible = this.view != null;
             split.fixedPaneInitialDimension = this.view == null ? 0 : split.fixedPaneInitialDimension;
@@ -192,6 +191,10 @@ namespace ActionEditor.Nodes
             {
                 App.Update();
             }
+        }
+        private void Update()
+        {
+           
         }
         private void DrawInspector() => view?.DrawInspector();
         private void OnDisable() => App.OnWindowDisable();

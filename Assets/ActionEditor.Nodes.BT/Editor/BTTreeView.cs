@@ -175,8 +175,8 @@ namespace ActionEditor.Nodes.BT
         GraphPort port;
         protected override List<Type> FitterNodeTypes(List<Type> src, GraphElement element)
         {
-            src.RemoveAll(x => !EditorEX.CanAttachTo(App.GetNodeDataType(x), typeof(BTTree))
-            && !EditorEX.CanAttachTo(App.GetNodeDataType(x), typeof(T))
+            src.RemoveAll(x => !EditorEX.CanAttachTo(x, typeof(BTTree))
+            && !EditorEX.CanAttachTo(x, typeof(T))
             );
             if (element is GraphPort port)
             {

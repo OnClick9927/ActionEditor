@@ -47,15 +47,17 @@ namespace ActionEditor.Nodes
             {
                 new SearchTreeGroupEntry(new GUIContent("Nodes"), 0),
             };
-            var nodeTypes = this.FitterNodeTypes(App.GetNodeEditorTypes(), context_target);
+            var nodeTypes = this.FitterNodeTypes(App.GetNodeTypes(), context_target);
+
 
             for (int i = 0; i < nodeTypes.Count; i++)
             {
                 var type = nodeTypes[i];
-                var dataType = App.GetNodeDataType(type);
+                var dataType = type;
                 NodeAttribute attr = dataType.GetCustomAttribute(typeof(NodeAttribute)) as NodeAttribute;
                 var name = EditorEX.GetTypeName(dataType);
-                var path = $"{(attr != null ? attr.group : "Other")}/{EditorEX.GetTypeName(dataType)}";
+                var path = $"{(attr != null  ? attr.group : "Other")}/{EditorEX.GetTypeName(dataType)}";
+
                 var sp = path.Split('/');
 
                 for (int j = 0; j < sp.Length; j++)
@@ -67,7 +69,7 @@ namespace ActionEditor.Nodes
                             var entry = new SearchTreeEntry(new GUIContent(sp[j]))
                             {
                                 level = j + 1,
-                                userData = type
+                                userData = dataType
                             };
                             tree.Add(entry);
                         }
@@ -218,7 +220,7 @@ namespace ActionEditor.Nodes
                 if (target is GraphNode node)
                 {
 
-                    var dataType = App.GetNodeDataType(node.GetType());
+                    var dataType = node.Data.GetType();
                     EditorEX.DrawPingScript(dataType);
                     var title = EditorEX.GetTypeName(dataType);
                     EditorGUILayout.LabelField(title, _style, GUILayout.Height(30));

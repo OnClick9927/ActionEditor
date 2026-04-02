@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using UnityEngine;
 namespace ActionEditor.Nodes.BT
 {
+
     public class TestView : BTTreeView<TestBT>
     {
 
     }
-    class BTTestConditionView : BTConditionView<BTTestCondition> { }
-    class BTRsetView : BTActionView<BTRset> { }
-    class BTWorkView : BTActionView<BTWork> { }
+
 
     public class TestBlackBorad : Blackboard
     {
@@ -20,12 +19,12 @@ namespace ActionEditor.Nodes.BT
         public override Blackboard blackBoard => _blackboard;
         [Buffer] private TestBlackBorad _blackboard = new TestBlackBorad();
     }
-    [Attachable(typeof(TestBT)), Node(BTNodeTypes.Condition),Name("测试条件")]
+    [Attachable(typeof(TestBT)), Node(BTNodeTypes.Condition), Name("测试条件")]
     class BTTestCondition : BTCondition
     {
         protected override bool Condition()
-        {          
-            return (blackBoard as TestBlackBorad).Money<50;
+        {
+            return (blackBoard as TestBlackBorad).Money < 50;
         }
 
 
@@ -37,7 +36,7 @@ namespace ActionEditor.Nodes.BT
 
         protected override State OnUpdate()
         {
-            (blackBoard as TestBlackBorad).Money-=Time.deltaTime*5;
+            (blackBoard as TestBlackBorad).Money -= Time.deltaTime * 5;
             return base.OnUpdate();
         }
     }
@@ -45,22 +44,23 @@ namespace ActionEditor.Nodes.BT
 
     class BTWork : BTWaitTime
     {
-   
+
         protected override State OnUpdate()
         {
-            (blackBoard as TestBlackBorad).Money += Time.deltaTime*10;
+            (blackBoard as TestBlackBorad).Money += Time.deltaTime * 10;
             return base.OnUpdate();
         }
     }
+   
     class BTWaitTime : BTAction
     {
         protected override void OnAbort()
         {
             Debug.Log($"{GetType()} OnAbort");
         }
-        public float time=10;
+        public float time = 10;
         private float end;
-  
+
 
         protected override void OnStart()
         {
