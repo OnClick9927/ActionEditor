@@ -60,6 +60,7 @@ namespace ActionEditor.Nodes
                 name = type.Name;
 
             port.portName = name;
+            port.portColor=Prefs.GetColor(type);
             if (portDir == Direction.Input)
                 this.inputContainer.Add(port);
             else
@@ -114,7 +115,7 @@ namespace ActionEditor.Nodes
             }
             this.titleContainer.Add(dot);
         }
-        internal void SetTitleColor()
+         void SetTitleColor()
         {
             this.titleContainer.style.backgroundColor = new StyleColor(this.Data.GetColor());
 
