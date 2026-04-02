@@ -12,14 +12,20 @@ namespace ActionEditor.Nodes
     {
         public static readonly string CONFIG_PATH =
             $"{Application.dataPath}/Editor/NodeGraph.txt";
-        public static Color GetColor(this NodeData track)
+        public static Color GetColor(this object track)
         {
+            Type type;
+            if (track is Type)
+                type = track as Type;
+            else
+                type = track.GetType();
             if (track is NodeData)
             {
 
-                return Prefs.data.nodes.First(x => x.type == track.GetType().FullName).color;
+                return Prefs.data.nodes.First(x => x.type == type.FullName).color;
             }
-            return Color.white;
+            return Prefs.data.GetColor(type);
+
         }
 
 
@@ -52,20 +58,36 @@ namespace ActionEditor.Nodes
             }
 
             public List<ColorPref> nodes = new List<ColorPref>();
-
+            public List<ColorPref> other = new List<ColorPref>();
+            public Color GetColor(Type type)
+            {
+                var find = other.FirstOrDefault(x => x.GetRealType() == type);
+                if (find == null)
+                {
+                    find = new ColorPref()
+                    {
+                        type = type.FullName,
+                        color = UnityEngine.Random.ColorHSV()
+                    };
+                    other.Add(find);
+                    Save();
+                }
+                return find.color;
+            }
             public void valid()
             {
                 var metas = EditorEX.GetTypeMetaDerivedFrom(typeof(NodeData));
                 nodes.RemoveAll(x => !metas.Any(y => y.type.FullName == x.type));
+                other.RemoveAll(x => x.GetRealType() == null);
                 foreach (var meta in metas)
                 {
                     var find = nodes.Find(x => x.type == meta.type.FullName);
                     if (find == null)
-                    {                        
+                    {
                         find = new ColorPref
                         {
                             type = meta.type.FullName,
-                            color = UnityEngine.Random.ColorHSV(0.2f,0.8f),
+                            color = UnityEngine.Random.ColorHSV(0.2f, 0.8f),
                         };
                         nodes.Add(find);
 

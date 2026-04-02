@@ -390,11 +390,11 @@ namespace ActionEditor.Nodes
             };
         }
 
-        internal static void UpdateGraphColor()
-        {
-            if (view == null) return;
-            view.UpdateGraphColor();
-        }
+        //internal static void UpdateGraphColor()
+        //{
+        //    if (view == null) return;
+        //    view.UpdateGraphColor();
+        //}
     }
 
 }
