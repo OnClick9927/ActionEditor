@@ -48,11 +48,15 @@ namespace ActionEditor.Nodes
                 public string type;
                 public Color color;
                 public List<string> attach;
+                [NonSerialized] private bool _null;
                 Type _type;
                 public Type GetRealType()
                 {
-                    if (_type == null)
-                        _type = EditorEX.GetAllTypes().First(x => x.FullName == type);
+                    if (!_null && _type == null)
+                    {
+                        _type = EditorEX.GetAllTypes().FirstOrDefault(x => x.FullName == type);
+                        _null = _type == null;
+                    }
                     return _type;
                 }
             }
