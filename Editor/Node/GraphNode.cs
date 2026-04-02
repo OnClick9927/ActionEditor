@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
+using static UnityEditor.Experimental.GraphView.Port;
 
 namespace ActionEditor.Nodes
 {
@@ -15,23 +16,10 @@ namespace ActionEditor.Nodes
         public NodeData data;
         public override string GUID => data.guid;
         public sealed override string NodeName => EditorEX.GetTypeName(data);
-        static Dictionary<Type, FieldInfo[]> fields = new ();
         public override void OnCreated(NodeGraphView view)
         {
             base.OnCreated(view);
-            var type = data.GetType();
-            if (!GraphNodeDefault.fields.TryGetValue(type, out var result))
-            {
-            result = type
-                    .GetFields(BindingFlags.Static|BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                    .Where(x => x.IsDefined(typeof(NodePortAttribute))).ToArray();
-                GraphNodeDefault.fields.Add(type, result);
-            }
-            foreach (var item in result)
-            {
-                var attr = item.GetCustomAttribute<NodePortAttribute>();
-                GeneratePort((Direction)attr.direction, item.FieldType, attr.single ? Port.Capacity.Single : Port.Capacity.Multi, item.Name);
-            }
+            GeneratePorts(data.GetType());
 
 
         }
@@ -47,6 +35,24 @@ namespace ActionEditor.Nodes
     }
     public abstract class GraphNode : Node
     {
+        static Dictionary<Type, FieldInfo[]> fields = new();
+
+        protected void GeneratePorts(Type type)
+        {
+            if (!GraphNode.fields.TryGetValue(type, out var result))
+            {
+                result = type
+                        .GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                        .Where(x => x.IsDefined(typeof(NodePortAttribute))).ToArray();
+                GraphNode.fields.Add(type, result);
+            }
+            foreach (var item in result)
+            {
+                var attr = item.GetCustomAttribute<NodePortAttribute>();
+                GeneratePort((Direction)attr.direction, item.FieldType, attr.single ? Port.Capacity.Single : Port.Capacity.Multi, item.Name);
+            }
+        }
+
         protected Port GeneratePort(Direction portDir, Type type, Port.Capacity capacity = Port.Capacity.Single, string name = "")
         {
             var port = GraphPort.Create(Orientation.Horizontal, portDir, capacity, type);
