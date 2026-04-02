@@ -15,7 +15,7 @@ set version=%version: =%
 echo on
 git subtree split --prefix=Assets/ActionEditor.Nodes --branch upm_node
 git push origin upm_node:upm_node
-git tag %version% upm
+git tag %version% upm_node
 git push origin upm_node --tags
 set cur=%~dp0
 
