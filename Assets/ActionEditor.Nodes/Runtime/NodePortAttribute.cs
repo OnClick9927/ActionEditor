@@ -13,6 +13,7 @@ namespace ActionEditor.Nodes
             Output
         }
         public bool single;
+        public Type type;
         public NodePortAttribute(Direction direction, bool single = true)
         {
             this.direction = direction;
