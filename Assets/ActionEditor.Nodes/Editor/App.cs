@@ -132,13 +132,10 @@ namespace ActionEditor.Nodes
 
         public static Type GetNodeEditorType(Type node) => nodeDic[node];
         //public static Type GetNodeDataType(Type node) => nodeDic_Reverse[node];
-
-
-
+        public static NodeGraphView.UpdateType updateType => view != null ? view.updateType : NodeGraphView.UpdateType.Inspector;
 
         internal static void Update()
         {
-
             if (view != null)
             {
                 view.Update();
@@ -149,6 +146,8 @@ namespace ActionEditor.Nodes
             }
             TryAutoSave();
         }
+
+
         private static void TryAutoSave()
         {
             var timespan = DateTime.Now - _lastSaveTime;
@@ -389,6 +388,8 @@ namespace ActionEditor.Nodes
                 InPortName = edge.input.portName
             };
         }
+
+
 
         //internal static void UpdateGraphColor()
         //{

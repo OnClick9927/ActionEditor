@@ -171,6 +171,11 @@ namespace ActionEditor.Nodes
 
     public abstract partial class NodeGraphView : GraphView
     {
+        public enum UpdateType
+        {
+            Update,
+            Inspector
+        }
         protected GraphAsset graph;
         protected sealed override bool canCopySelection => false;
         protected sealed override bool canCutSelection => false;
@@ -216,7 +221,7 @@ namespace ActionEditor.Nodes
 
         }
 
-
+        public virtual UpdateType updateType { get { return UpdateType.Inspector; } }
         public void OpenSearchPop(VisualElement target, Vector2 position)
         {
             nodeCreationRequest?.Invoke(new NodeCreationContext
