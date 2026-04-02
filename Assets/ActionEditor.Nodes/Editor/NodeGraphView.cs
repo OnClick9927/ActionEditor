@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
+using static UnityEditor.LightingExplorerTableColumn;
 
 namespace ActionEditor.Nodes
 {
@@ -41,6 +42,66 @@ namespace ActionEditor.Nodes
             this.AfterCreateNode(element);
             return true;
         }
+
+        private class Node
+        {
+            public List<Node> children;
+            private Dictionary<string, Node> map;
+            public Type type;
+            public int depth = 0;
+            private int start_index;
+            public string name = "Root";
+            public Node parent;
+
+            public string key;
+            private Node AddChild(string name, string key)
+            {
+                children = children ?? new List<Node>();
+                map = map ?? new Dictionary<string, Node>();
+
+                if (map.TryGetValue(name, out var result))
+                {
+                    return result;
+                }
+                result = new Node()
+                {
+                    //root = root_node,
+                    name = name,
+                    parent = this,
+                    depth = this.depth + 1,
+                    start_index = start_index + name.Length + 1,
+                };
+                children.Add(result);
+                map[name] = result;
+                //root_map[result.id] = result;
+                return result;
+            }
+            public void ReadKey(string key, Type type)
+            {
+                var index = key.IndexOf('/', start_index);
+
+                if (index == -1)
+                {
+                    var childName = key.Substring(start_index);
+                    var child = AddChild(childName, key);
+                    child.key = key;
+                    child.type = type;
+                }
+                else
+                {
+                    var childName = key.Substring(start_index, index - start_index);
+                    var child = AddChild(childName, key);
+                    child.ReadKey(key, type);
+
+                }
+
+
+
+            }
+
+
+        }
+
         internal List<SearchTreeEntry> CreateSearchTree(SearchWindowContext context)
         {
             var tree = new List<SearchTreeEntry>
@@ -49,45 +110,44 @@ namespace ActionEditor.Nodes
             };
             var nodeTypes = this.FitterNodeTypes(App.GetNodeTypes(), context_target);
 
-
+            Node temp = new();
             for (int i = 0; i < nodeTypes.Count; i++)
             {
-                var type = nodeTypes[i];
-                var dataType = type;
+                var dataType = nodeTypes[i];
                 NodeAttribute attr = dataType.GetCustomAttribute(typeof(NodeAttribute)) as NodeAttribute;
                 var name = EditorEX.GetTypeName(dataType);
-                var path = $"{(attr != null  ? attr.group : "Other")}/{EditorEX.GetTypeName(dataType)}";
+                var path = $"{(attr != null ? attr.group : "Other")}/{EditorEX.GetTypeName(dataType)}";
 
-                var sp = path.Split('/');
+                temp.ReadKey(path, dataType);
 
-                for (int j = 0; j < sp.Length; j++)
+            }
+            Add(temp);
+            void Add(Node node)
+            {
+                if (node.children != null)
                 {
-                    if (sp.Length - 1 == j)
+                    if (node != temp)
                     {
-                        if (tree.Find(x => x.name == sp[j] && x.level == j + 1) == null)
-                        {
-                            var entry = new SearchTreeEntry(new GUIContent(sp[j]))
-                            {
-                                level = j + 1,
-                                userData = dataType
-                            };
-                            tree.Add(entry);
-                        }
-                        else
-                        {
-                            throw new Exception($"Same Node path : {path}");
-                        }
+                        var entry = new SearchTreeGroupEntry(new GUIContent(node.name), node.depth);
+                        tree.Add(entry);
                     }
-                    else
+                    for (int i = 0; i < node.children.Count; i++)
                     {
-                        if (tree.Find(x => x.name == sp[j] && x.level == j + 1) == null)
-                        {
-                            var entry = new SearchTreeGroupEntry(new GUIContent(sp[j]), j + 1);
-                            tree.Add(entry);
-                        }
+                        Add(node.children[i]);
                     }
                 }
+                else
+                {
+                    var entry = new SearchTreeEntry(new GUIContent(node.name))
+                    {
+                        level = node.depth,
+                        userData = node.type
+                    };
+                    tree.Add(entry);
+                }
             }
+
+
 
             tree.Add(new SearchTreeEntry(new GUIContent("Group"))
             {
@@ -99,7 +159,7 @@ namespace ActionEditor.Nodes
 
         internal void UpdateGraphColor()
         {
-           for (int i = 0; i < nodes.Count; i++)
+            for (int i = 0; i < nodes.Count; i++)
             {
                 nodes[i].SetTitleColor();
             }
@@ -107,10 +167,7 @@ namespace ActionEditor.Nodes
     }
 
 
-    partial class NodeGraphView
-    {
 
-    }
 
     public abstract partial class NodeGraphView : GraphView
     {
