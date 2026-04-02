@@ -14,7 +14,7 @@ namespace ActionEditor.Nodes
     public static class App
     {
         private static Dictionary<Type, Type> nodeDic = new Dictionary<Type, Type>();
-        private static Dictionary<Type, Type> nodeDic_Reverse = new Dictionary<Type, Type>();
+        //private static Dictionary<Type, Type> nodeDic_Reverse = new Dictionary<Type, Type>();
         internal static DateTime LastSaveTime => _lastSaveTime;
 
         private static DateTime _lastSaveTime = DateTime.Now;
@@ -76,13 +76,46 @@ namespace ActionEditor.Nodes
             AssetTypes = EditorEX.GetImplementationsOf(typeof(GraphAsset)).ToDictionary(x => x.Name, y => y);
             AssetNames = AssetTypes.Keys.ToArray();
 
-            var find = AppDomain.CurrentDomain.GetAssemblies()
-                             .SelectMany(item => item.GetTypes())
-                             .Where(item => !item.IsAbstract && item.IsSubclassOf(typeof(GraphNode)))
+            var types = AppDomain.CurrentDomain.GetAssemblies()
+                            .SelectMany(item => item.GetTypes()).Where(x => !x.IsAbstract);
+
+            var find = types
+
+                             .Where(item => item.IsSubclassOf(typeof(GraphNode)) && item.BaseType != typeof(GraphNode))
                              .Select(x => new { dataType = x.BaseType.GetGenericArguments()[0], node = x });
 
-            nodeDic = find.ToDictionary(x => x.dataType, x => x.node);
-            nodeDic_Reverse = find.ToDictionary(x => x.node, x => x.dataType);
+
+            nodeDic = find.ToDictionary(x => x.dataType.IsGenericParameter ? x.dataType.BaseType : x.dataType, x => x.node);
+            var result = types.Where(x => x.IsSubclassOf(typeof(NodeData)) && x != typeof(GroupData))
+                .Where(x => !nodeDic.ContainsKey(x)).ToList();
+
+            foreach (var item in result)
+            {
+                var temp = item;
+                while (true)
+                {
+                    if (temp != typeof(NodeData))
+                    {
+                        if (nodeDic.ContainsKey(temp))
+                        {
+                            nodeDic[item] = nodeDic[temp];
+                            break;
+                        }
+                        else
+                        {
+                            temp = temp.BaseType;
+                        }
+                    }
+                    else
+                    {
+                        nodeDic.Add(item, typeof(GraphNodeDefault));
+                        break;
+                    }
+                }
+            }
+
+
+            //nodeDic_Reverse = nodeDic.ToDictionary(x => x.Value, x => x.Key);
             OnObjectPickerConfig(PlayerPrefs.GetString(key));
 
         }
@@ -94,10 +127,11 @@ namespace ActionEditor.Nodes
 
 
 
-        public static List<Type> GetNodeEditorTypes() => nodeDic.Values.ToList();
+        //public static List<Type> GetNodeEditorTypes() => nodeDic.Values.ToList();
+        public static List<Type> GetNodeTypes() => nodeDic.Keys.ToList();
 
         public static Type GetNodeEditorType(Type node) => nodeDic[node];
-        public static Type GetNodeDataType(Type node) => nodeDic_Reverse[node];
+        //public static Type GetNodeDataType(Type node) => nodeDic_Reverse[node];
 
 
 
@@ -239,7 +273,7 @@ namespace ActionEditor.Nodes
                 var find = groupDatas.Where(x => x.nodes.Contains(oldGuid));
                 foreach (var _find in find)
                 {
-                    var _nodes=_find.nodes as List<string>;
+                    var _nodes = _find.nodes as List<string>;
                     _nodes.Remove(oldGuid);
                     _nodes.Add(newGuid);
                 }
@@ -265,19 +299,25 @@ namespace ActionEditor.Nodes
         public static void CreateElements(List<GraphElement> result, IEnumerable<NodeData> nodes, IEnumerable<GroupData> groups, IEnumerable<ConnectionData> cons)
         {
             foreach (var data in nodes)
-                result.Add(CreateNode(GetNodeEditorType(data.GetType()), data));
+                result.Add(CreateNode(data.GetType(), data));
             foreach (var item in cons)
                 result.Add(CreateConnection(item));
             foreach (var data in groups)
                 result.Add(CreateGroup(data));
         }
-        public static GraphNode CreateNode(Type nodeType, NodeData nodeData)
+        public static GraphNode CreateNode(Type dataType, NodeData nodeData)
         {
-            GraphNode node = Activator.CreateInstance(nodeType) as GraphNode;
-            if (nodeData == null)
-                nodeData = Activator.CreateInstance(App.GetNodeDataType(nodeType)) as NodeData;
+            GraphNode node = null;
+            var nodeType = GetNodeEditorType(dataType);
+            if (nodeType.IsGenericType)
+                nodeType = nodeType.MakeGenericType(dataType);
 
-            var field = nodeType.GetField(nameof(GraphNode<NodeData>.data));
+
+            node = Activator.CreateInstance(nodeType) as GraphNode;
+            if (nodeData == null)
+                nodeData = Activator.CreateInstance(dataType) as NodeData;
+
+            var field = node.GetType().GetField(nameof(GraphNode<NodeData>.data));
             field.SetValue(node, nodeData);
             node.SetPosition(nodeData.position);
             node.onSelected += view.OnSelectNode;

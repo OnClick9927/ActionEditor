@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
@@ -8,13 +9,44 @@ using UnityEngine.UIElements;
 
 namespace ActionEditor.Nodes
 {
+    class GraphNodeDefault : GraphNode
+    {
+        public sealed override NodeData Data => data;
+        public NodeData data;
+        public override string GUID => data.guid;
+        public sealed override string NodeName => EditorEX.GetTypeName(data);
+        static Dictionary<Type, FieldInfo[]> fields = new ();
+        public override void OnCreated(NodeGraphView view)
+        {
+            base.OnCreated(view);
+            var type = data.GetType();
+            if (!GraphNodeDefault.fields.TryGetValue(type, out var result))
+            {
+            result = type
+                    .GetFields(BindingFlags.Static|BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Where(x => x.IsDefined(typeof(NodePortAttribute))).ToArray();
+                GraphNodeDefault.fields.Add(type, result);
+            }
+            foreach (var item in result)
+            {
+                var attr = item.GetCustomAttribute<NodePortAttribute>();
+                GeneratePort((Direction)attr.direction, item.FieldType, attr.single ? Port.Capacity.Single : Port.Capacity.Multi, item.Name);
+            }
+
+
+        }
+
+    }
+
     public abstract class GraphNode<T> : GraphNode where T : NodeData, new()
     {
+        public sealed override NodeData Data => data;
         public T data;
         public override string GUID => data.guid;
         public sealed override string NodeName => EditorEX.GetTypeName(typeof(T));
-
-
+    }
+    public abstract class GraphNode : Node
+    {
         protected Port GeneratePort(Direction portDir, Type type, Port.Capacity capacity = Port.Capacity.Single, string name = "")
         {
             var port = GraphPort.Create(Orientation.Horizontal, portDir, capacity, type);
@@ -28,58 +60,9 @@ namespace ActionEditor.Nodes
                 this.outputContainer.Add(port);
             return port;
         }
-        public override void OnInspectorGUI()
-        {
-            DrawDefaultInspector();
-        }
-        protected void DrawDefaultInspector()
-        {
-            ActionEditor.EditorEX.CreateEditor(data).OnInspectorGUI();
 
-        }
-        private Image dot;
 
-        public override void OnCreated(NodeGraphView view)
-        {
-            base.OnCreated(view);
 
-            dot = new Image();
-            dot.style.position = Position.Absolute;
-            dot.style.top = 5;
-            dot.style.right = 5;
-            dot.style.width = dot.style.height = 22;
-            dot.style.unityBackgroundImageTintColor = Color.white;
-            style.minWidth = Mathf.Max(150, NodeName.Sum(c => c >= '\u4e00' && c <= '\u9fff' ? 1.6f : 1) * 30);
-            var find = this.data.GetIcon();
-            noIcon = find == null;
-            dot.style.backgroundImage = find;
-            if (find == null)
-            {
-                dot.style.backgroundImage = EditorGUIUtility.IconContent("d_editicon.sml").image as Texture2D;
-            }
-            this.titleContainer.Add(dot);
-
-        }
-        bool noIcon;
-        internal sealed override void SetTitleColor()
-        {
-            this.titleContainer.style.backgroundColor = new StyleColor(this.data.GetColor());
-        }
-        public override void OnUpdate()
-        {
-            if (!selected)
-                dot.style.unityBackgroundImageTintColor = noIcon ? Color.clear : Color.white;
-            if (selected && this.view.selection.FirstOrDefault() == this)
-            {
-                var value = EditorApplication.timeSinceStartup - Mathf.FloorToInt((float)EditorApplication.timeSinceStartup);
-                dot.style.unityBackgroundImageTintColor = Color.white.WithAlpha((float)value);
-
-            }
-        }
-
-    }
-    public abstract class GraphNode : Node
-    {
         public List<GraphConnection> connections => view.connections
                     .FindAll(x => x.output.node == this || x.input.node == this);
         public Action<GraphNode> onSelected;
@@ -87,9 +70,10 @@ namespace ActionEditor.Nodes
         public abstract string NodeName { get; }
         public NodeGraphView view { get; private set; }
         public List<GraphPort> ports { get { return this.view.ports.FindAll(x => x.node == this); } }
+        public abstract NodeData Data { get; }
 
-
-
+        private Image dot;
+        bool noIcon;
 
         public virtual void OnCreated(NodeGraphView view)
         {
@@ -107,8 +91,28 @@ namespace ActionEditor.Nodes
 
             SetTitleColor();
             this.view = view;
+
+            dot = new Image();
+            dot.style.position = Position.Absolute;
+            dot.style.top = 5;
+            dot.style.right = 5;
+            dot.style.width = dot.style.height = 22;
+            dot.style.unityBackgroundImageTintColor = Color.white;
+            style.minWidth = Mathf.Max(150, NodeName.Sum(c => c >= '\u4e00' && c <= '\u9fff' ? 1.6f : 1) * 30);
+            var find = this.Data.GetIcon();
+            noIcon = find == null;
+            dot.style.backgroundImage = find;
+            if (find == null)
+            {
+                dot.style.backgroundImage = EditorGUIUtility.IconContent("d_editicon.sml").image as Texture2D;
+            }
+            this.titleContainer.Add(dot);
         }
-        internal abstract void SetTitleColor();
+        internal void SetTitleColor()
+        {
+            this.titleContainer.style.backgroundColor = new StyleColor(this.Data.GetColor());
+
+        }
 
 
         public sealed override void OnSelected()
@@ -197,9 +201,26 @@ namespace ActionEditor.Nodes
         {
             view.groups.Find(x => x.containedNodes.Contains(this)).RemoveElement(this);
         }
+        public virtual void OnInspectorGUI()
+        {
+            DrawDefaultInspector();
+        }
+        protected void DrawDefaultInspector()
+        {
+            ActionEditor.EditorEX.CreateEditor(Data).OnInspectorGUI();
 
-        public abstract void OnInspectorGUI();
+        }
 
-        public abstract void OnUpdate();
+        public virtual void OnUpdate()
+        {
+            if (!selected)
+                dot.style.unityBackgroundImageTintColor = noIcon ? Color.clear : Color.white;
+            if (selected && this.view.selection.FirstOrDefault() == this)
+            {
+                var value = EditorApplication.timeSinceStartup - Mathf.FloorToInt((float)EditorApplication.timeSinceStartup);
+                dot.style.unityBackgroundImageTintColor = Color.white.WithAlpha((float)value);
+
+            }
+        }
     }
 }
