@@ -250,7 +250,11 @@ namespace ActionEditor
     {
         internal static byte[] FieldEndFlag = new byte[2] { 0, byte.MaxValue };
         internal static byte[] FieldBeginFlag = new byte[2] { byte.MaxValue, 0 };
-        internal static byte[] EndOfObjFlag = new byte[4] { 2, 0, 46, 46 };
+
+        internal static byte[] ObjBeginFlag = new byte[4] { 1, byte.MaxValue, 1, byte.MaxValue };
+        internal static byte[] ObjEndFlag = new byte[4] { byte.MaxValue, 1, byte.MaxValue, 1, };
+
+
         private readonly byte[] _buffer;
         private int _index = 0;
 
@@ -420,6 +424,24 @@ namespace ActionEditor
             }
             return true;
         }
+        private void MoveToObjectEnd()
+        {
+            var start = 0;
+            var end = 0;
+
+            for (int i = this._index; i < this._buffer.Length; i++)
+            {
+                if (EqualsBuffer(i, ObjEndFlag))
+                    end++;
+                else if (EqualsBuffer(i, ObjBeginFlag))
+                    start++;
+                if (end == start + 1)
+                {
+                    this._index = i + ObjEndFlag.Length;
+                    break;
+                }
+            }
+        }
         private void MoveToFieldEnd()
         {
             var start = 0;
@@ -454,19 +476,23 @@ namespace ActionEditor
             var assemblyName = metas[ReadInt32()];
 
             Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
-            if (type == null) return null;
+            if (type == null)
+            {
+                MoveToObjectEnd();
+                return null;
+            }
             T t = (T)Activator.CreateInstance(type);
-
+            this._index += ObjBeginFlag.Length;
             var typeField = TypeHelper.GetTypeFields(type);
             while (true)
             {
-                if (!EqualsBuffer(this._index, EndOfObjFlag))
+                if (!EqualsBuffer(this._index, ObjEndFlag))
                 {
                     this._index += FieldBeginFlag.Length;
                 }
                 else
                 {
-                    this._index += EndOfObjFlag.Length;
+                    this._index += ObjEndFlag.Length;
                     break;
                 }
                 //if (id == BufferReader.ObjEndFlag)
@@ -509,10 +535,8 @@ namespace ActionEditor
                 }
 
                 MoveToFieldEnd();
-
-
-
             }
+            //MoveToObjectEnd();
             if (t is IBufferObject buff)
                 buff.AfterReadField();
 
@@ -736,6 +760,7 @@ namespace ActionEditor
 
             //WriteUTF8(type.FullName);
             //WriteUTF8(type.Assembly.FullName);
+            WriteBytes(BufferReader.ObjBeginFlag);
 
             var fields = TypeHelper.GetTypeFields(type).GetFields();
             for (int i = 0; i < fields.Count; i++)
@@ -770,7 +795,7 @@ namespace ActionEditor
             }
 
 
-            WriteBytes(BufferReader.EndOfObjFlag);
+            WriteBytes(BufferReader.ObjEndFlag);
         }
 
     }
