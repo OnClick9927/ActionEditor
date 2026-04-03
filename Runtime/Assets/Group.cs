@@ -48,7 +48,11 @@ namespace ActionEditor
             }
         }
         public sealed override IEnumerable<ISegment> Children => Tracks;
-
+        internal override void Validate(Asset root, ISegment parent)
+        {
+            base.Validate(root, parent);
+            Tracks.RemoveAll(x => x == null);
+        }
 
         //public bool IsCollapsed { get => isCollapsed; set => isCollapsed = value; }
         public override float StartTime { get => 0; set { } }

@@ -52,14 +52,14 @@ namespace ActionEditor
         internal void Validate()
         {
             var t = 0f;
-
+            groups.RemoveAll(x => x == null);
             foreach (var group in groups)
             {
                 group.Validate(this, null);
                 foreach (var track in group.Children)
                 {
-                    var _tracks = track as SegmentBase;
-                    _tracks.Validate(this, group);
+                    var _track = track as SegmentBase;
+                    _track.Validate(this, group);
                     foreach (var clip in track.Children)
                     {
                         (clip as SegmentBase).Validate(this, track);
