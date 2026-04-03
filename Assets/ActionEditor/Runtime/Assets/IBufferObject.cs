@@ -395,6 +395,7 @@ namespace ActionEditor
         public List<T> ReadList<T>(Func<BufferReader, T> read)
         {
             ushort count = ReadUInt16();
+            
             List<T> values = new List<T>();
             for (int i = 0; i < count; i++)
                 values.Add(read(this));
@@ -474,15 +475,18 @@ namespace ActionEditor
 
             var typeName = metas[ReadInt32()];
             var assemblyName = metas[ReadInt32()];
-
+            if (typeName.Contains("BTWork"))
+            {
+                Console.WriteLine(  );
+            }
             Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
+            this._index += ObjBeginFlag.Length;
             if (type == null)
             {
                 MoveToObjectEnd();
                 return null;
             }
             T t = (T)Activator.CreateInstance(type);
-            this._index += ObjBeginFlag.Length;
             var typeField = TypeHelper.GetTypeFields(type);
             while (true)
             {

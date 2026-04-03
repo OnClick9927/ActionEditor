@@ -49,6 +49,12 @@ namespace ActionEditor
         public Group Group => Parent as Group;
 
         public sealed override IEnumerable<ISegment> Children => clips;
+        internal override void Validate(Asset root, ISegment parent)
+        {
+            base.Validate(root, parent);
+            clips.RemoveAll(x => x == null);
+
+        }
         //public override bool IsCollapsed
         //{
         //    get => Parent != null && Parent.IsCollapsed;

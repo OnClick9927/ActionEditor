@@ -24,6 +24,7 @@ namespace ActionEditor
         {
             this.root = root;
             this.parent = parent;
+           
         }
 
 
