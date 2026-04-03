@@ -53,6 +53,7 @@ namespace ActionEditor.Nodes
         public static GraphAsset FromBytes(Type type, byte[] buffer)
         {
             var asset = BuffConverter.ToObject(buffer, type) as GraphAsset;
+            asset.Valid();
             return asset;
         }
 
@@ -97,6 +98,11 @@ namespace ActionEditor.Nodes
 
             }
 
+        }
+
+        internal void Valid()
+        {
+            _nodes.RemoveAll(x => x == null);
         }
     }
 
