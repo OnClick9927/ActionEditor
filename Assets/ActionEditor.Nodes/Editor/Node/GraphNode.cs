@@ -212,10 +212,13 @@ namespace ActionEditor.Nodes
         {
             DrawDefaultInspector();
         }
+        private Vector2 scroll;
         protected void DrawDefaultInspector()
         {
-            ActionEditor.EditorEX.CreateEditor(Data).OnInspectorGUI();
+            scroll = GUILayout.BeginScrollView(scroll);
 
+            ActionEditor.EditorEX.CreateEditor(Data).OnInspectorGUI();
+            GUILayout.EndScrollView();
         }
 
         public virtual void OnUpdate()

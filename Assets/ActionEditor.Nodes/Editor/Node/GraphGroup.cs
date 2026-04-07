@@ -120,11 +120,13 @@ namespace ActionEditor.Nodes
         {
             this.RemoveElements(containedNodes);
         }
-
+        private Vector2 scroll;
         public void OnInspectorGUI()
         {
-            ActionEditor.EditorEX.CreateEditor(data).OnInspectorGUI();
+            scroll = GUILayout.BeginScrollView(scroll);
 
+            ActionEditor.EditorEX.CreateEditor(data).OnInspectorGUI();
+            GUILayout.EndScrollView();
         }
     }
 }

@@ -391,10 +391,13 @@ namespace ActionEditor.Nodes
         protected abstract void AfterCreateNode(GraphElement element);
         protected abstract List<Type> FitterNodeTypes(List<Type> src, GraphElement element);
 
+        Vector2 scroll;
         protected virtual void OnInspectorGUI()
         {
-            ActionEditor.EditorEX.CreateEditor(this.graph).OnInspectorGUI();
+            scroll = GUILayout.BeginScrollView(scroll);
 
+            ActionEditor.EditorEX.CreateEditor(this.graph).OnInspectorGUI();
+            GUILayout.EndScrollView();
         }
         public virtual void Update()
         {

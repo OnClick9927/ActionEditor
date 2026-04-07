@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace ActionEditor.Nodes.BT
 {
@@ -109,10 +110,17 @@ namespace ActionEditor.Nodes.BT
                 GUILayout.BeginVertical(EditorStyles.helpBox);
                 EditorEX.DrawPingScript(blackboard.GetType());
                 using (new UnityEditor.EditorGUI.DisabledScope(run))
-                    EditorEX.CreateEditor(blackboard).OnInspectorGUI();
+                {
+                    scroll = GUILayout.BeginScrollView(scroll);
+
+                EditorEX.CreateEditor(blackboard).OnInspectorGUI();
+                    GUILayout.EndScrollView();
+                }
                 GUILayout.EndVertical();
             }
         }
+        private static Vector2 scroll;
+
         protected override void OnInspectorGUI()
         {
             GUILayout.BeginVertical(GUILayout.Height(height));
