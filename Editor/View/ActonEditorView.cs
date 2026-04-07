@@ -108,6 +108,7 @@ namespace ActionEditor
 
         }
 
+        private Vector2 scroll;
         public virtual void OnInspectorGUI()
         {
             DrawDefaultInspector();
@@ -124,12 +125,18 @@ namespace ActionEditor
                 var action = target as ISegment;
                 using (new EditorGUI.DisabledScope(action.IsLocked))
                 {
+                    scroll = GUILayout.BeginScrollView(scroll);
                     editor.OnInspectorGUI();
+                    GUILayout.EndScrollView();
                 }
             }
             else
             {
+                scroll = GUILayout.BeginScrollView(scroll);
+
                 editor.OnInspectorGUI();
+                GUILayout.EndScrollView();
+
             }
 
 
