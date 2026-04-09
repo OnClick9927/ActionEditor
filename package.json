@@ -1,7 +1,7 @@
 {
   "name": "com.woo.actionnodes",
   "displayName": "ActionNodes",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "unity": "2019.4",
   "description": "ActionEditor.Nodes",
   "type": "library",
