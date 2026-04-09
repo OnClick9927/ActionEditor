@@ -60,7 +60,7 @@ namespace ActionEditor.Nodes
                 name = type.Name;
 
             port.portName = name;
-            port.portColor=Prefs.GetColor(type);
+            port.portColor = Prefs.GetColor(type);
             if (portDir == Direction.Input)
                 this.inputContainer.Add(port);
             else
@@ -114,11 +114,31 @@ namespace ActionEditor.Nodes
                 dot.style.backgroundImage = EditorGUIUtility.IconContent("d_editicon.sml").image as Texture2D;
             }
             this.titleContainer.Add(dot);
+            inspector = new IMGUIContainer(this._inspector);
+            inspector.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 1);
+            this.Add(inspector);
         }
-         void SetTitleColor()
+        private IMGUIContainer inspector;
+        private void _inspector()
+        {
+            if (!App.window.showInspector)
+            {
+                inspector.style.minWidth = 0;
+                return;
+            }
+            inspector.style.minWidth = GraphWindow.sp_width - 80;
+
+            EditorGUIUtility.labelWidth -= 80;
+            this.OnInspectorGUI();
+            EditorGUIUtility.labelWidth += 80;
+
+        }
+
+
+        void SetTitleColor()
         {
             this.titleContainer.style.backgroundColor = new StyleColor(this.Data.GetColor());
-
+         
         }
 
 
@@ -223,14 +243,14 @@ namespace ActionEditor.Nodes
 
         public virtual void OnUpdate()
         {
-            if (!selected)
-                dot.style.unityBackgroundImageTintColor = noIcon ? Color.clear : Color.white;
-            if (selected && this.view.selection.FirstOrDefault() == this)
-            {
-                var value = EditorApplication.timeSinceStartup - Mathf.FloorToInt((float)EditorApplication.timeSinceStartup);
-                dot.style.unityBackgroundImageTintColor = Color.white.WithAlpha((float)value);
+            //if (!selected)
+            //    dot.style.unityBackgroundImageTintColor = noIcon ? Color.clear : Color.white;
+            //if (selected && this.view.selection.FirstOrDefault() == this)
+            //{
+            //    var value = EditorApplication.timeSinceStartup - Mathf.FloorToInt((float)EditorApplication.timeSinceStartup);
+            //    dot.style.unityBackgroundImageTintColor = Color.white.WithAlpha((float)value);
 
-            }
+            //}
         }
     }
 }

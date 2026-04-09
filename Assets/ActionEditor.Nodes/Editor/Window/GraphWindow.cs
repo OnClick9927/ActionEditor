@@ -88,6 +88,8 @@ namespace ActionEditor.Nodes
                         EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(App.assetPath));
                     }
                     GUILayout.EndVertical();
+             
+
                 }
 
             }
@@ -100,11 +102,12 @@ namespace ActionEditor.Nodes
             GUILayout.FlexibleSpace();
             if (view != null)
             {
-                if (GUILayout.Button(EditorGUIUtility.TrIconContent("SaveAs")))
+                App.window.showInspector = GUILayout.Toggle(App.window.showInspector, EditorGUIUtility.TrIconContent("d_UnityEditor.InspectorWindow"), EditorStyles.toolbarButton);
+                if (GUILayout.Button(EditorGUIUtility.TrIconContent("SaveAs"),EditorStyles.toolbarButton))
                 {
                     App.SaveAs();
                 }
-                if (GUILayout.Button(EditorGUIUtility.TrIconContent("SaveActive")))
+                if (GUILayout.Button(EditorGUIUtility.TrIconContent("SaveActive"), EditorStyles.toolbarButton))
                 {
                     App.Save();
                 }
@@ -128,6 +131,7 @@ namespace ActionEditor.Nodes
         private TwoPaneSplitView split;
         IMGUIContainer right;
         public bool showMiniMap;
+        public bool showInspector;
 
         private void OnEnable()
         {
@@ -178,11 +182,13 @@ namespace ActionEditor.Nodes
             //this.rootVisualElement.Add(saveTime); ;
             App.OnWindowEnable();
         }
+        internal static float sp_width = 0;
         private void _update()
         {
             split.visible = this.view != null;
             split.fixedPaneInitialDimension = this.view == null ? 0 : split.fixedPaneInitialDimension;
             right.style.minWidth = this.view == null ? 0 : 250;
+            sp_width = split.fixedPane.style.width.value.value;
             if (view != null)
             {
                 App.Update();

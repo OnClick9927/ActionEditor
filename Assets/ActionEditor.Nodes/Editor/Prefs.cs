@@ -19,7 +19,7 @@ namespace ActionEditor.Nodes
                 type = track as Type;
             else
                 type = track.GetType();
-            if (track is NodeData)
+            if (track is NodeData )
             {
 
                 return Prefs.data.nodes.First(x => x.type == type.FullName).color;
