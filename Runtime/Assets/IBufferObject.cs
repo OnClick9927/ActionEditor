@@ -4,8 +4,6 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using UnityEngine;
-using static ActionEditor.TypeHelper.TypeFields;
 
 
 namespace ActionEditor
@@ -73,23 +71,23 @@ namespace ActionEditor
         {
             if (map.TryGetValue(type, out var typefield)) return typefield;
             var _type = type;
+            typefield = new TypeFields(type);
+            TypeHelper.map[type] = typefield;
             while (true)
             {
                 var fields = _type.GetFields(BindingFlags.Public
                  | BindingFlags.NonPublic
                  | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-                typefield = typefield ?? new TypeFields(type);
                 for (int i = 0; i < fields.Length; i++)
                 {
                     var _field = fields[i];
                     typefield.AddField(_field);
                 }
-                TypeHelper.map[_type] = typefield;
                 if (_type.BaseType == typeof(System.Object))
                     break;
                 _type = _type.BaseType;
             }
-            return TypeHelper.map[type];
+            return typefield;
         }
 
         public static bool IsSubclassOfGeneric(Type self, Type genericType)
@@ -395,7 +393,7 @@ namespace ActionEditor
         public List<T> ReadList<T>(Func<BufferReader, T> read)
         {
             ushort count = ReadUInt16();
-            
+
             List<T> values = new List<T>();
             for (int i = 0; i < count; i++)
                 values.Add(read(this));
@@ -477,7 +475,7 @@ namespace ActionEditor
             var assemblyName = metas[ReadInt32()];
             if (typeName.Contains("BTWork"))
             {
-                Console.WriteLine(  );
+                Console.WriteLine();
             }
             Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
             this._index += ObjBeginFlag.Length;
