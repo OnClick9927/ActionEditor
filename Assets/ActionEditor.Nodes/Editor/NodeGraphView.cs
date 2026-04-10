@@ -46,6 +46,7 @@ namespace ActionEditor.Nodes
         private class Node
         {
             public List<Node> children;
+            public int childCount => children == null ? 0 : children.Count;
             private Dictionary<string, Node> map;
             public Type type;
             public int depth = 0;
@@ -128,10 +129,13 @@ namespace ActionEditor.Nodes
                         var entry = new SearchTreeGroupEntry(new GUIContent(node.name), node.depth);
                         tree.Add(entry);
                     }
+
+                    node.children.Sort((a, b) => -a.childCount.CompareTo(b.childCount));
                     for (int i = 0; i < node.children.Count; i++)
                     {
-                        Add(node.children[i]);
+                            Add(node.children[i]);
                     }
+               
                 }
                 else
                 {
