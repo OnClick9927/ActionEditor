@@ -114,10 +114,7 @@ namespace ActionEditor.Nodes
             for (int i = 0; i < nodeTypes.Count; i++)
             {
                 var dataType = nodeTypes[i];
-                NodeAttribute attr = dataType.GetCustomAttribute(typeof(NodeAttribute)) as NodeAttribute;
-                var name = EditorEX.GetTypeName(dataType);
-                var path = $"{(attr != null ? attr.group : "Other")}/{EditorEX.GetTypeName(dataType)}";
-
+                var path = App.GetNodePath(dataType);
                 temp.ReadKey(path, dataType);
 
             }

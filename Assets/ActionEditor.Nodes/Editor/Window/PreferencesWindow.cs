@@ -59,7 +59,8 @@ namespace ActionEditor.Nodes
 
 
 
-
+            Prefs.NodePrettySpacing = EditorGUILayout.Vector2Field(
+               "NodePrettySpacing", Prefs.NodePrettySpacing);
 
             Prefs.autoSaveSeconds = EditorGUILayout.IntSlider(
                 new GUIContent(Lan.ins.AutoSaveTime), Prefs.autoSaveSeconds, 5,

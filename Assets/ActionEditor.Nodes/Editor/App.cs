@@ -389,7 +389,26 @@ namespace ActionEditor.Nodes
             };
         }
 
+        private static Dictionary<Type, string> node_paths = new();
+        public static string GetNodePath(Type dataType)
+        {
+            if (node_paths.TryGetValue(dataType, out var result))
+                return result;
+            NodeAttribute attr = dataType.GetCustomAttribute(typeof(NodeAttribute)) as NodeAttribute;
+            var name = EditorEX.GetTypeName(dataType);
+            string path = string.Empty;
+            if (attr == null || string.IsNullOrEmpty(attr.group))
+            {
+                path = $"{EditorEX.GetTypeName(dataType)}";
+            }
+            else
+            {
+                path = $"{attr.group}/{EditorEX.GetTypeName(dataType)}";
+            }
 
+            node_paths[dataType] = path;
+            return path;
+        }
 
         //internal static void UpdateGraphColor()
         //{

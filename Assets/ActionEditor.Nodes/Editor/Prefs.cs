@@ -39,7 +39,7 @@ namespace ActionEditor.Nodes
 
             public int AutoSaveSeconds = 10;
             public string SavePath = "Assets";
-
+            public Vector2 NodePrettySpacing = new Vector2(200,200);
 
 
             [System.Serializable]
@@ -101,7 +101,17 @@ namespace ActionEditor.Nodes
 
 
                 }
+                nodes.Sort((a, b) =>
+                {
 
+                    return App.GetNodePath(a.GetRealType())
+                    .CompareTo(App.GetNodePath(b.GetRealType()));
+                });
+                other.Sort((a, b) =>
+                {
+                    return EditorEX.GetTypeName(a.GetRealType())
+                    .CompareTo(EditorEX.GetTypeName(b.GetRealType()));
+                });
             }
 
 
@@ -143,7 +153,20 @@ namespace ActionEditor.Nodes
         public static readonly int[] frameRates = new int[] { 24, 25, 30, 60 };
 
 
+        public static Vector2 NodePrettySpacing
+        {
+            get => data.NodePrettySpacing;
+            set
+            {
+                if (data.NodePrettySpacing != value)
+                {
+                    data.NodePrettySpacing = value;
+                    //Save();
+                }
+            }
+        }
 
+        
         public static int autoSaveSeconds
         {
             get => data.AutoSaveSeconds;

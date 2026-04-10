@@ -138,7 +138,7 @@ namespace ActionEditor.Nodes
         void SetTitleColor()
         {
             this.titleContainer.style.backgroundColor = new StyleColor(this.Data.GetColor());
-         
+
         }
 
 
@@ -205,6 +205,13 @@ namespace ActionEditor.Nodes
 
             evt.menu.AppendAction("Disconnect all", DisconnectAll, DisconnectAllStatus);
             evt.menu.AppendAction("Remove From Group", RemoveFromGroup, RemoveFromGroupStatus);
+            evt.menu.AppendAction("Pretty Layout OutPuts", (e) =>
+            {
+
+                LayoutTree(this);
+            });
+
+
             evt.menu.AppendSeparator();
         }
 
@@ -252,5 +259,98 @@ namespace ActionEditor.Nodes
 
             //}
         }
+
+
+
+
+
+        //private static float NODE_WIDTH = 150f;
+
+
+        void LayoutTree(GraphNode root)
+        {
+            float HorizontalSpacing = Prefs.NodePrettySpacing.x; ;
+            float VerticalSpacing = Prefs.NodePrettySpacing.y; ;
+
+            Dictionary<string, List<GraphNode>> child_map = new Dictionary<string, List<GraphNode>>();
+            List<GraphNode> GetDirectChildren(GraphNode node)
+            {
+                if (!child_map.TryGetValue(node.GUID, out var result))
+                {
+                    result = node.ports.Where(x => x.direction == Direction.Output)
+                        .SelectMany(x => x.connections).Select(x => x.input.node as GraphNode).ToList();
+
+                    child_map[node.GUID] = result;
+                }
+                return result;
+            }
+            Dictionary<string, Vector2> pos_map = new Dictionary<string, Vector2>();
+
+            float LayoutTree(GraphNode node, float startX, float startY)
+            {
+
+                var NodeHeight = node.style.width.value.value;
+                var NodeWidth = node.style.height.value.value;
+                var children = GetDirectChildren(node);
+                if (children.Count == 0)
+                {
+                    pos_map[node.GUID] = new Vector2(startX, startY);
+                    //SetNodePosition(node, startX, startY);
+                    return startY + NodeHeight + VerticalSpacing;
+                }
+
+                float currentY = startY;
+                // 遍历子节点，递归布局，每个子树占用自己的高度，不重叠
+                foreach (var child in children)
+                {
+                    // 子节点放在父节点右侧
+                    float childX = startX + NodeWidth + HorizontalSpacing;
+
+                    // 递归布局子树，并返回下一个子节点应该开始的Y坐标
+                    currentY = LayoutTree(child, childX, currentY);
+                }
+
+                // 父节点垂直居中在所有子树中间
+                float totalChildrenHeight = currentY - startY;
+                float centerY = startY + totalChildrenHeight / 2 - NodeHeight;
+
+                var min = pos_map[children.First().GUID].y;
+                var max = pos_map[children.Last().GUID].y;
+
+
+                pos_map[node.GUID] = new Vector2(startX, (min + max) / 2);
+
+                //SetNodePosition(node, startX, centerY);
+
+                // 返回整棵子树占用的总高度（给父节点用）
+                return startY + totalChildrenHeight;
+            }
+
+
+            var pos = root.GetPosition();
+            //float rootY = root.GetPosition();
+            LayoutTree(this, pos.x, pos.y);
+            var y = pos_map[root.GUID].y - pos.y;
+            UpdateChildY(root);
+
+            void UpdateChildY(GraphNode node)
+            {
+                var pos = node.GetPosition();
+                pos.x = pos_map[node.GUID].x;
+                pos.y = pos_map[node.GUID].y - y;
+
+                node.SetPosition(pos);
+                var children = GetDirectChildren(node);
+                if (children.Count != 0)
+                {
+                    for (int i = 0; i < children.Count; i++)
+                    {
+                        UpdateChildY(children[i]);
+                    }
+                }
+            }
+        }
+
+
     }
 }
