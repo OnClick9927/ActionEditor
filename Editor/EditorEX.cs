@@ -65,13 +65,17 @@ namespace ActionEditor
 
         public static Texture2D GetIcon(this object track)
         {
-            var type = track.GetType();
+            Type type = null;
+            if(track is Type)
+                type=track as Type;
+            else
+                  type = track.GetType();
             if (_iconDictionary.TryGetValue(type, out var icon))
             {
                 return icon;
             }
 
-            var att = track.GetType().GetCustomAttribute<IconAttribute>(true);
+            var att = type.GetCustomAttribute<IconAttribute>(true);
 
             if (att != null)
             {
