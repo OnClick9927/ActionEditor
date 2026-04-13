@@ -140,8 +140,9 @@ namespace ActionEditor.Nodes
                 }
                 else
                 {
+                    Texture tx = EditorEX.GetIcon(node.type) ?? EditorGUIUtility.TrIconContent("sv_icon_dot0_pix16_gizmo").image;
                     var entry = new SearchTreeEntry(new GUIContent(node.name,
-                        EditorGUIUtility.TrIconContent("sv_icon_dot0_pix16_gizmo").image))
+                    tx))
                     {
                         level = node.depth,
                         userData = node.type
@@ -380,7 +381,7 @@ namespace ActionEditor.Nodes
                 evt.menu.AppendAction("Create Group", (x) =>
                 {
 
-                    var mousePosition = root.ChangeCoordinatesTo(root.parent,x.eventInfo.mousePosition);
+                    var mousePosition = root.ChangeCoordinatesTo(root.parent, x.eventInfo.mousePosition);
                     var graphMousePosition = this.contentViewContainer.WorldToLocal(mousePosition);
                     var element = App.CreateGroup(null);
                     element.SetPosition(new Rect(graphMousePosition, element.GetPosition().size));
