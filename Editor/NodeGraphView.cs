@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Remoting.Contexts;
+using System.Xml.Linq;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
@@ -29,16 +31,15 @@ namespace ActionEditor.Nodes
 
             GraphElement element;
             Type type = (Type)SearchTreeEntry.userData;
-            if (type == typeof(GroupData))
-            {
-                element = App.CreateGroup(null);
-                element.SetPosition(new Rect(graphMousePosition, element.GetPosition().size));
-            }
-            else
-            {
-                element = App.CreateNode((Type)SearchTreeEntry.userData, null);
-                element.SetPosition(new Rect(graphMousePosition, element.GetPosition().size));
-            }
+            //if (type == typeof(GroupData))
+            //{
+
+            //}
+            //else
+            //{
+            //}
+            element = App.CreateNode((Type)SearchTreeEntry.userData, null);
+            element.SetPosition(new Rect(graphMousePosition, element.GetPosition().size));
             this.AfterCreateNode(element);
             return true;
         }
@@ -133,9 +134,9 @@ namespace ActionEditor.Nodes
                     node.children.Sort((a, b) => -a.childCount.CompareTo(b.childCount));
                     for (int i = 0; i < node.children.Count; i++)
                     {
-                            Add(node.children[i]);
+                        Add(node.children[i]);
                     }
-               
+
                 }
                 else
                 {
@@ -150,11 +151,11 @@ namespace ActionEditor.Nodes
 
 
 
-            tree.Add(new SearchTreeEntry(new GUIContent("Group"))
-            {
-                level = 1,
-                userData = typeof(GroupData),
-            });
+            //tree.Add(new SearchTreeEntry(new GUIContent("Group"))
+            //{
+            //    level = 1,
+            //    userData = typeof(GroupData),
+            //});
             return tree;
         }
 
@@ -375,7 +376,20 @@ namespace ActionEditor.Nodes
                     OpenSearchPop(null, x.eventInfo.mousePosition + position.position);
 
                 }, DropdownMenuAction.AlwaysEnabled);
+                evt.menu.AppendAction("Create Group", (x) =>
+                {
+
+                    var mousePosition = root.ChangeCoordinatesTo(root.parent,x.eventInfo.mousePosition);
+                    var graphMousePosition = this.contentViewContainer.WorldToLocal(mousePosition);
+                    var element = App.CreateGroup(null);
+                    element.SetPosition(new Rect(graphMousePosition, element.GetPosition().size));
+                    //OpenSearchPop(null, x.eventInfo.mousePosition + position.position);
+
+                }, DropdownMenuAction.AlwaysEnabled);
                 evt.menu.AppendSeparator();
+
+
+
             }
             evt.menu.AppendAction("Delete Selection", (x) =>
             {
