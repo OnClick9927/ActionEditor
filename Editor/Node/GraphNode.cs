@@ -279,7 +279,10 @@ namespace ActionEditor.Nodes
                 {
                     result = node.ports.Where(x => x.direction == Direction.Output)
                         .SelectMany(x => x.connections).Select(x => x.input.node as GraphNode).ToList();
-
+                    result.Sort((a, b) =>
+                    {
+                        return a.GetPosition().y.CompareTo(b.GetPosition().y);
+                    });
                     child_map[node.GUID] = result;
                 }
                 return result;
@@ -289,8 +292,8 @@ namespace ActionEditor.Nodes
             float LayoutTree(GraphNode node, float startX, float startY)
             {
 
-                var NodeHeight = node.style.width.value.value;
-                var NodeWidth = node.style.height.value.value;
+                var NodeHeight = node.resolvedStyle.height;
+                var NodeWidth = node.resolvedStyle.width;
                 var children = GetDirectChildren(node);
                 if (children.Count == 0)
                 {
@@ -312,7 +315,7 @@ namespace ActionEditor.Nodes
 
                 // 父节点垂直居中在所有子树中间
                 float totalChildrenHeight = currentY - startY;
-                float centerY = startY + totalChildrenHeight / 2 - NodeHeight;
+                //float centerY = startY + totalChildrenHeight / 2 - NodeHeight;
 
                 var min = pos_map[children.First().GUID].y;
                 var max = pos_map[children.Last().GUID].y;
