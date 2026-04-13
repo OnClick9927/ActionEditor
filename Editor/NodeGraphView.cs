@@ -140,7 +140,8 @@ namespace ActionEditor.Nodes
                 }
                 else
                 {
-                    var entry = new SearchTreeEntry(new GUIContent(node.name))
+                    var entry = new SearchTreeEntry(new GUIContent(node.name,
+                        EditorGUIUtility.TrIconContent("sv_icon_dot0_pix16_gizmo").image))
                     {
                         level = node.depth,
                         userData = node.type
