@@ -79,8 +79,8 @@ namespace ActionEditor.Nodes
         public List<GraphPort> ports { get { return this.view.ports.FindAll(x => x.node == this); } }
         public abstract NodeData Data { get; }
 
-        private Image dot;
-        bool noIcon;
+        //private Image dot;
+        //bool noIcon;
 
         public virtual void OnCreated(NodeGraphView view)
         {
@@ -99,21 +99,20 @@ namespace ActionEditor.Nodes
             SetTitleColor();
             this.view = view;
 
-            dot = new Image();
-            dot.style.position = Position.Absolute;
-            dot.style.top = 5;
-            dot.style.right = 5;
-            dot.style.width = dot.style.height = 22;
-            dot.style.unityBackgroundImageTintColor = Color.white;
-            style.minWidth = Mathf.Max(150, NodeName.Sum(c => c >= '\u4e00' && c <= '\u9fff' ? 1.6f : 1) * 30);
             var find = this.Data.GetIcon();
-            noIcon = find == null;
-            dot.style.backgroundImage = find;
-            if (find == null)
+            if (find != null)
             {
-                dot.style.backgroundImage = EditorGUIUtility.IconContent("d_editicon.sml").image as Texture2D;
+                var dot = new Image();
+                dot.style.position = Position.Absolute;
+                dot.style.top = 5;
+                dot.style.right = 5;
+                dot.style.width = dot.style.height = 22;
+                dot.style.unityBackgroundImageTintColor = Color.white;
+                dot.style.backgroundImage = find;
+                this.titleContainer.Add(dot);
+                //icon = dot;
             }
-            this.titleContainer.Add(dot);
+            style.minWidth = Mathf.Max(150, NodeName.Sum(c => c >= '\u4e00' && c <= '\u9fff' ? 1.6f : 1) * 30);
             inspector = new IMGUIContainer(this._inspector);
             inspector.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 1);
             this.Add(inspector);
