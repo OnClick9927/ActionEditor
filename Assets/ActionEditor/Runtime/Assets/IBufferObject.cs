@@ -239,10 +239,8 @@ namespace ActionEditor
 
     public interface IBufferObject
     {
-        void WriteField(string id, BufferWriter writer);
-        void ReadField(string id, BufferReader reader);
-        void AfterReadField();
-        void BeforeWriteField();
+        void BeforeWriteBuffer();
+        void AfterReadBuffer();
     }
     public class BufferReader
     {
@@ -473,10 +471,6 @@ namespace ActionEditor
 
             var typeName = metas[ReadInt32()];
             var assemblyName = metas[ReadInt32()];
-            if (typeName.Contains("BTWork"))
-            {
-                Console.WriteLine();
-            }
             Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
             this._index += ObjBeginFlag.Length;
             if (type == null)
@@ -485,6 +479,7 @@ namespace ActionEditor
                 return null;
             }
             T t = (T)Activator.CreateInstance(type);
+
             var typeField = TypeHelper.GetTypeFields(type);
             while (true)
             {
@@ -528,8 +523,7 @@ namespace ActionEditor
                     }
                     catch (Exception)
                     {
-                        if (convert == null && t is IBufferObject _buff)
-                            _buff.ReadField(field.name, this);
+
                         throw;
                     }
 
@@ -540,7 +534,7 @@ namespace ActionEditor
             }
             //MoveToObjectEnd();
             if (t is IBufferObject buff)
-                buff.AfterReadField();
+                buff.AfterReadBuffer();
 
             return t;
         }
@@ -747,7 +741,7 @@ namespace ActionEditor
         {
             var type = value.GetType();
             if (value is IBufferObject buff)
-                buff.BeforeWriteField();
+                buff.BeforeWriteBuffer();
             if (metas == null)
             {
                 metas = new();
@@ -788,10 +782,7 @@ namespace ActionEditor
                 }
                 catch (Exception)
                 {
-                    if (convert == null && value is IBufferObject _buff)
-                        _buff.WriteField(field.name, this);
-                    else
-                        throw;
+                    throw;
                 }
                 WriteBytes(BufferReader.FieldEndFlag);
             }
@@ -810,17 +801,14 @@ namespace ActionEditor
     {
         private static Dictionary<Type, Type> _nmap;
 
-        private static Dictionary<Type, Type> _fgenmap = new Dictionary<Type, Type>()
-        {
-            { typeof(List<>), typeof(ListConverter<>) }
-
-        };
+        private static Dictionary<Type, Type> _fgenmap;
         private static Dictionary<Type, BuffConverter> map = new Dictionary<Type, BuffConverter>();
         private static BuffConverter Create(Type type)
         {
             if (_nmap == null)
             {
                 _nmap = new Dictionary<Type, Type>();
+                _fgenmap = new Dictionary<Type, Type>();
                 var types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes()).Where(x =>
                     {
                         return !x.IsAbstract && x.BaseType != null && x.BaseType.IsGenericType && typeof(BuffConverter).IsAssignableFrom(x);
@@ -830,7 +818,14 @@ namespace ActionEditor
                     var args = item.BaseType.GetGenericArguments();
                     if (args.Length == 1)
                     {
-                        _nmap.Add(args[0], item);
+                        var arg = args[0];
+                        if (arg.IsGenericType)
+                        {
+                            _fgenmap.Add(arg.GetGenericTypeDefinition(), item);
+                            Console.WriteLine();
+                        }
+                        else
+                            _nmap.Add(args[0], item);
                     }
                 }
 
@@ -847,7 +842,7 @@ namespace ActionEditor
             {
                 foreach (var item in _fgenmap.Keys)
                 {
-                    if (TypeHelper.IsSubclassOfGeneric(type, typeof(List<>)))
+                    if (TypeHelper.IsSubclassOfGeneric(type, item))
                     {
                         return Activator.CreateInstance(_fgenmap[item].MakeGenericType(type.GetGenericArguments())) as BuffConverter;
                     }
@@ -1042,4 +1037,60 @@ namespace ActionEditor
     }
 
 
+
+    class DictionaryConverter<Key, Value> : BuffConverter<Dictionary<Key, Value>>
+    {
+        static BuffConverter<Key> c_k = GetConverter<Key>();
+        static BuffConverter<Value> c_v = GetConverter<Value>();
+
+        public override Dictionary<Key, Value> OnRead(BufferReader reader, Type type)
+        {
+            var list_key = reader.ReadList(ReadOnce_Key);
+            var list_values = reader.ReadList(ReadOnce_Value);
+
+            var dic = new Dictionary<Key, Value>();
+            for (int i = 0; i < list_key.Count; i++)
+            {
+                dic.Add(list_key[i], list_values[i]);
+            }
+
+            return dic;
+
+        }
+
+        public override void OnWrite(BufferWriter writer, Dictionary<Key, Value> value)
+        {
+            var list_key = value.Keys.ToList();
+            var list_values = value.Values.ToList();
+
+            writer.WriteList(list_key, WriteOnce_Key);
+            writer.WriteList(list_values, WriteOnce_Value);
+
+        }
+
+
+
+        protected override void OnCollectMetas(BufferWriter writer, Dictionary<Key, Value> value)
+        {
+            foreach (var kv in value)
+            {
+                var k = kv.Key;
+                var v = kv.Value;
+                c_k.CollectMetas(writer, k);
+                c_v.CollectMetas(writer, v);
+            }
+            //base.OnCollectMetas(writer, value);
+        }
+        private Key ReadOnce_Key(BufferReader reader) => c_k.OnRead(reader, typeof(Key));
+        private void WriteOnce_Key(BufferWriter writer, Key t) => c_k.OnWrite(writer, t);
+        private Value ReadOnce_Value(BufferReader reader) => c_v.OnRead(reader, typeof(Value));
+        private void WriteOnce_Value(BufferWriter writer, Value value) => c_v.OnWrite(writer, value);
+
+
+    }
+
+
+
+
 }
+
