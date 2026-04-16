@@ -716,6 +716,7 @@ namespace ActionEditor
             AddToMeta(type.FullName);
             AddToMeta(type.Assembly.FullName);
             var fields = TypeHelper.GetTypeFields(type).GetFields();
+            if (fields == null) return;
             for (int i = 0; i < fields.Count; i++)
             {
                 var field = fields[i];
@@ -759,33 +760,35 @@ namespace ActionEditor
             WriteBytes(BufferReader.ObjBeginFlag);
 
             var fields = TypeHelper.GetTypeFields(type).GetFields();
-            for (int i = 0; i < fields.Count; i++)
-            {
-                var field = fields[i];
-                var fieldValue = field.field.GetValue(value);
-                if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
-                WriteBytes(BufferReader.FieldBeginFlag);
+            if (fields != null)
 
-
-                var fieldType = field.field.FieldType;
-                //WriteUTF8(field.name);
-                //WriteUTF8(TypeHelper.GetTypeName(fieldType));
-                WriteInt32(metas[field.name]);
-                WriteInt32(metas[TypeHelper.GetTypeName(fieldType)]);
-
-
-                BuffConverter convert = null;
-                try
+                for (int i = 0; i < fields.Count; i++)
                 {
-                    convert = BuffConverter.GetConverter(fieldType);
-                    convert.Write(this, fieldValue);
+                    var field = fields[i];
+                    var fieldValue = field.field.GetValue(value);
+                    if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
+                    WriteBytes(BufferReader.FieldBeginFlag);
+
+
+                    var fieldType = field.field.FieldType;
+                    //WriteUTF8(field.name);
+                    //WriteUTF8(TypeHelper.GetTypeName(fieldType));
+                    WriteInt32(metas[field.name]);
+                    WriteInt32(metas[TypeHelper.GetTypeName(fieldType)]);
+
+
+                    BuffConverter convert = null;
+                    try
+                    {
+                        convert = BuffConverter.GetConverter(fieldType);
+                        convert.Write(this, fieldValue);
+                    }
+                    catch (Exception)
+                    {
+                        throw;
+                    }
+                    WriteBytes(BufferReader.FieldEndFlag);
                 }
-                catch (Exception)
-                {
-                    throw;
-                }
-                WriteBytes(BufferReader.FieldEndFlag);
-            }
 
 
             WriteBytes(BufferReader.ObjEndFlag);
@@ -810,9 +813,9 @@ namespace ActionEditor
                 _nmap = new Dictionary<Type, Type>();
                 _fgenmap = new Dictionary<Type, Type>();
                 var types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes()).Where(x =>
-                    {
-                        return !x.IsAbstract && x.BaseType != null && x.BaseType.IsGenericType && typeof(BuffConverter).IsAssignableFrom(x);
-                    });
+                {
+                    return !x.IsAbstract && x.BaseType != null && x.BaseType.IsGenericType && typeof(BuffConverter).IsAssignableFrom(x);
+                });
                 foreach (var item in types)
                 {
                     var args = item.BaseType.GetGenericArguments();
