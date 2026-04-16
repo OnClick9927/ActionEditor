@@ -84,7 +84,10 @@ namespace ActionEditor
             }
         }
 
-
+        public virtual bool IsFileFitAsset(string path)
+        {
+            return true;
+        }
     }
 
 

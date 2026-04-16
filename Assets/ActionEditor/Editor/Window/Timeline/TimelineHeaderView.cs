@@ -163,7 +163,10 @@ namespace ActionEditor
                         GUIUtility.ExitGUI();
                     }, (x) =>
                     {
-                        return x.EndsWith(Asset.FileEx);
+                        if (App.AssetData == null)
+                            return x.EndsWith(Asset.FileEx);
+                        //return x.EndsWith(Asset.FileEx);
+                        return x.EndsWith(Asset.FileEx) && ActonEditorView.GetEditor(App.AssetData).IsFileFitAsset(x);
 
                     });
                 }

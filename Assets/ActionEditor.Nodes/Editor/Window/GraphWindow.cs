@@ -76,7 +76,9 @@ namespace ActionEditor.Nodes
                         GUIUtility.ExitGUI();
                     }, (x) =>
                     {
-                        return x.EndsWith(GraphAsset.FileEx);
+                        if (view == null)
+                            return x.EndsWith(GraphAsset.FileEx);
+                        return x.EndsWith(GraphAsset.FileEx) && view.IsFileFitAsset(x);
 
                     });
                 }
@@ -225,6 +227,8 @@ namespace ActionEditor.Nodes
             view = App.CreateView(left);
             left.visible = view != null;
             grid.visible = !left.visible;
+            if (view != null)
+                this.titleContent = new GUIContent(EditorEX.GetTypeName(App.asset));
         }
 
         private class GridView : GraphView

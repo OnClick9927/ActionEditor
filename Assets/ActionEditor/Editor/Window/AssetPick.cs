@@ -89,6 +89,7 @@ namespace ActionEditor
                 if (temps.Count == 0)
                 {
                     var obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                    if (!obj) return;
                     var now = new AdvancedDropdownItem(Path.GetFileNameWithoutExtension(name))
                     {
                         id = obj.GetInstanceID(),

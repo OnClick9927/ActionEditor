@@ -15,7 +15,7 @@ namespace ActionEditor
             if (path.EndsWith(Asset.FileEx))
             {
                 AppInternal.OnObjectPickerConfig(path);
-                if (AppInternal.AssetData!=null)
+                if (AppInternal.AssetData != null)
                 {
                     OpenDirectorWindow();
                     return true;
@@ -43,6 +43,8 @@ namespace ActionEditor
             minSize = new Vector2(500, 250);
             AppInternal.InitializeAssetTypes();
             _timelineView = this.CreateView<TimelineView>();
+            if (App.AssetData != null)
+                titleContent = new GUIContent(EditorEX.GetTypeName(App.AssetData));
         }
 
         void OnDisable()
