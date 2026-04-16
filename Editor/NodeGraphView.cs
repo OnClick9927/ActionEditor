@@ -161,6 +161,11 @@ namespace ActionEditor.Nodes
             return tree;
         }
 
+        public virtual bool IsFileFitAsset(string path)
+        {
+            return true;
+        }
+
         //internal void UpdateGraphColor()
         //{
         //    for (int i = 0; i < nodes.Count; i++)
