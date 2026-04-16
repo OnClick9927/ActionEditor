@@ -53,6 +53,8 @@ namespace ActionEditor
                 var asset = Asset.FromBytes(typeof(Asset), text);
                 asset.Validate();
                 _asset = asset;
+                if (Window && asset != null)
+                    Window.titleContent = new GUIContent(EditorEX.GetTypeName(asset));
             }
             catch (Exception e)
             {
