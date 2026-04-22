@@ -1,0 +1,42 @@
+﻿using System.Collections.Generic;
+
+namespace ActionEditor
+{
+    public interface IAction {
+        float Length { get; set; }
+        float StartTime { get; }
+        float EndTime { get; }
+    }
+
+    public interface ISegment : IAction
+    {
+        Asset Root { get; }
+        ISegment Parent { get; }
+        IEnumerable<ISegment> Children { get; }
+
+        //string Name { get; set; }
+
+        bool IsActive { get; set; }
+        //bool IsCollapsed { get; set; }
+        bool IsLocked { get; set; }
+
+
+
+        //void Validate(Asset root, ISegment parent);
+        //void AfterDeserialize();
+
+        //void BeforeSerialize();
+    }
+
+    public interface IClip : ISegment { }
+    public interface IResizeAble : IClip { }
+    public interface IBlendAble : IClip
+    {
+        float BlendIn { get; set; }
+        float BlendOut { get; set; }
+    }
+    public interface ILengthMatchAble : IClip
+    {
+        float MatchAbleLength { get; }
+    }
+}

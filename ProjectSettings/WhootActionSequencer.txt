@@ -1,0 +1,1 @@
+{"TimeStepMode":0,"SnapInterval":0.009999999776482582,"FrameRate":10,"AutoSaveSeconds":14,"MagnetSnapping":true,"TrackListLeftMargin":256.0}
