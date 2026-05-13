@@ -4,7 +4,7 @@ set version ="1"
 set branchName="upm_bt"
 
 REM 获取版本号
-for /f "tokens=1,2* delims=:," %%a in (Assets/ActionEditor.Nodes/package.json) do (
+for /f "tokens=1,2* delims=:," %%a in (Assets/ActionEditor.Nodes.BT/package.json) do (
     echo %%a| findstr %b% >nul && (
        set version=  %%b
     ) || (
