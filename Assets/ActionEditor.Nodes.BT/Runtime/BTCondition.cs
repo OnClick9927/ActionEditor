@@ -13,7 +13,7 @@ namespace ActionEditor.Nodes.BT
 
             base.Init(blackBord, parent, result);
             FindParentComposite();
-            if (composite != null || composite.abortType != BTComposite.AbortType.None)
+            if (composite != null && composite.abortType != BTComposite.AbortType.None)
                 result.Add(this);
             return result;
         }
