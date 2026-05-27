@@ -7,7 +7,7 @@ namespace ActionEditor
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property)]
     public class NameAttribute :
-#if UNITY_5_3_OR_NEWER
+#if UNITY_EDITOR
         UnityEngine.PropertyAttribute
 #else
         Attribute
@@ -59,7 +59,7 @@ namespace ActionEditor
 
     [AttributeUsage(AttributeTargets.Field)]
     public class ReadOnlyAttribute :
-#if UNITY_5_3_OR_NEWER
+#if UNITY_EDITOR
         UnityEngine.PropertyAttribute
 #else
         Attribute
