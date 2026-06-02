@@ -5,7 +5,6 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using static ActionEditor.TypeHelper.TypeFields;
 
 namespace ActionEditor
 {
@@ -344,18 +343,6 @@ namespace ActionEditor
             short value = (short)((_buffer[_index]) | (_buffer[_index + 1] << 8));
             _index += 2;
             return value;
-            //if (BitConverter.IsLittleEndian)
-            //{
-            //    short value = (short)((_buffer[_index]) | (_buffer[_index + 1] << 8));
-            //    _index += 2;
-            //    return value;
-            //}
-            //else
-            //{
-            //    short value = (short)((_buffer[_index] << 8) | (_buffer[_index + 1]));
-            //    _index += 2;
-            //    return value;
-            //}
         }
         public ushort ReadUInt16() => (ushort)ReadInt16();
         public float ReadFloat()
@@ -376,18 +363,6 @@ namespace ActionEditor
             int value = (_buffer[_index]) | (_buffer[_index + 1] << 8) | (_buffer[_index + 2] << 16) | (_buffer[_index + 3] << 24);
             _index += 4;
             return value;
-            //if (BitConverter.IsLittleEndian)
-            //{
-            //    int value = (_buffer[_index]) | (_buffer[_index + 1] << 8) | (_buffer[_index + 2] << 16) | (_buffer[_index + 3] << 24);
-            //    _index += 4;
-            //    return value;
-            //}
-            //else
-            //{
-            //    int value = (_buffer[_index] << 24) | (_buffer[_index + 1] << 16) | (_buffer[_index + 2] << 8) | (_buffer[_index + 3]);
-            //    _index += 4;
-            //    return value;
-            //}
         }
         public uint ReadUInt32()
         {
@@ -400,20 +375,6 @@ namespace ActionEditor
             int i2 = (_buffer[_index + 4]) | (_buffer[_index + 5] << 8) | (_buffer[_index + 6] << 16) | (_buffer[_index + 7] << 24);
             _index += 8;
             return (uint)i1 | ((long)i2 << 32);
-            //if (BitConverter.IsLittleEndian)
-            //{
-            //    int i1 = (_buffer[_index]) | (_buffer[_index + 1] << 8) | (_buffer[_index + 2] << 16) | (_buffer[_index + 3] << 24);
-            //    int i2 = (_buffer[_index + 4]) | (_buffer[_index + 5] << 8) | (_buffer[_index + 6] << 16) | (_buffer[_index + 7] << 24);
-            //    _index += 8;
-            //    return (uint)i1 | ((long)i2 << 32);
-            //}
-            //else
-            //{
-            //    int i1 = (_buffer[_index] << 24) | (_buffer[_index + 1] << 16) | (_buffer[_index + 2] << 8) | (_buffer[_index + 3]);
-            //    int i2 = (_buffer[_index + 4] << 24) | (_buffer[_index + 5] << 16) | (_buffer[_index + 6] << 8) | (_buffer[_index + 7]);
-            //    _index += 8;
-            //    return (uint)i2 | ((long)i1 << 32);
-            //}
         }
         public ulong ReadUInt64()
         {
