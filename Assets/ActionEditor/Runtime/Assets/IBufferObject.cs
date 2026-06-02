@@ -3,15 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using UnityEngine;
-
+using static ActionEditor.TypeHelper.TypeFields;
 
 namespace ActionEditor
 {
-
 
     [AttributeUsage(AttributeTargets.Field)]
     public class BufferAttribute : System.Attribute
@@ -30,7 +27,6 @@ namespace ActionEditor
             private Type type;
             public class Field
             {
-                //private readonly FieldAccessor field;
                 public readonly string name;
                 public Type FieldType;
                 public Type DeclaringType;
@@ -38,21 +34,34 @@ namespace ActionEditor
                 private Action<object, object> _setter;
                 private void Build(FieldInfo field)
                 {
-                    //Name = field.Name;
-                    // Getter
-                    var targetParam = Expression.Parameter(typeof(object), "target");
-                    var castTarget = Expression.Convert(targetParam, field.DeclaringType);
-                    var fieldExpr = Expression.Field(castTarget, field);
-                    var convertResult = Expression.Convert(fieldExpr, typeof(object));
-                    _getter = Expression.Lambda<Func<object, object>>(convertResult, targetParam).Compile();
 
-                    // Setter
+                    var targetParam = Expression.Parameter(typeof(object), "target");
                     var valueParam = Expression.Parameter(typeof(object), "value");
-                    var castValue = Expression.Convert(valueParam, field.FieldType);
-                    var assign = Expression.Assign(fieldExpr, castValue);
-                    var block = Expression.Block(assign, Expression.Empty());
-                    var lambda = Expression.Lambda<Action<object, object>>(block, targetParam, valueParam);
-                    _setter = lambda.Compile();
+
+                    // Getter: 将目标转换为声明类型，读取字段值并装箱为 object
+                    var targetExpr = Expression.Convert(targetParam, field.DeclaringType);
+                    var fieldExpr = Expression.Field(targetExpr, field);
+                    var getterBody = Expression.Convert(fieldExpr, typeof(object));
+                    _getter = Expression.Lambda<Func<object, object>>(getterBody, targetParam).Compile();
+
+                    // Setter: 根据声明类型是否为值类型，选择 Convert 或 Unbox 获取实例引用
+                    Expression instanceExpr;
+                    if (field.DeclaringType.IsValueType)
+                    {
+                        // 值类型：通过 Unbox 获取对装箱对象中字段的引用，可直接修改
+                        instanceExpr = Expression.Unbox(targetParam, field.DeclaringType);
+                    }
+                    else
+                    {
+                        // 引用类型：直接转换
+                        instanceExpr = Expression.Convert(targetParam, field.DeclaringType);
+                    }
+
+                    var fieldAccess = Expression.Field(instanceExpr, field);
+                    var valueCast = Expression.Convert(valueParam, field.FieldType);
+                    var assign = Expression.Assign(fieldAccess, valueCast);   // 赋值表达式返回被赋的值
+                    var setterLambda = Expression.Lambda<Action<object, object>>(assign, targetParam, valueParam);
+                    _setter = setterLambda.Compile();
                 }
                 public object GetValue(object target) => _getter(target);
                 public void SetValue(object target, object value) => _setter(target, value);
@@ -69,8 +78,8 @@ namespace ActionEditor
             {
                 this.type = type;
             }
-            private List<Field> fields;
-            private Dictionary<string, Field> map;
+            private List<Field> fields = new();
+            private Dictionary<string, Field> map = new();
             public List<Field> GetFields() => fields;
             public Field FindField(string name)
             {
@@ -86,8 +95,6 @@ namespace ActionEditor
             {
 
                 if (field.IsDefined(typeof(System.NonSerializedAttribute))) return;
-                fields = fields ?? new List<Field>();
-                map = map ?? new Dictionary<string, Field>();
                 var attr = field.GetCustomAttribute<BufferAttribute>();
                 if (!field.IsPublic && attr == null) return;
                 var name = attr?.bufferName ?? field.Name;
@@ -102,37 +109,34 @@ namespace ActionEditor
         public static TypeFields GetTypeFields(Type type)
         {
             if (map.TryGetValue(type, out var typefield)) return typefield;
-            var _type = type;
             typefield = new TypeFields(type);
-            while (true)
+            var baseType = type.BaseType;
+            // 处理基类（object 除外）
+            if (baseType != null && baseType != typeof(object))
             {
-                if (map.TryGetValue(_type, out var field))
-                {
-                    var fields = field.GetFields();
-                    for (int i = 0; i < fields.Count; i++)
+                var baseFields = GetTypeFields(baseType); // 递归确保缓存
+                var _fields = baseFields.GetFields();
+                if (_fields != null && _fields.Count != 0)
+                    for (int i = 0; i < _fields.Count; i++)
                     {
-                        var _field = fields[i];
-                        typefield.AddField(_field);
+                        var field = _fields[i];
+                        typefield.AddField(field);
                     }
-                }
-                else
-                {
-
-                    var fields = _type.GetFields(BindingFlags.Public
-                     | BindingFlags.NonPublic
-                     | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-                    for (int i = 0; i < fields.Length; i++)
-                    {
-                        var _field = fields[i];
-                        typefield.AddField(_field);
-                    }
-                }
-
-                if (_type.BaseType == typeof(System.Object))
-                    break;
-                _type = _type.BaseType;
             }
-            TypeHelper.map[type] = typefield;
+
+            // 添加当前类型声明的字段
+            {
+                var _fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
+                                     BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                for (int i = 0; i < _fields.Length; i++)
+                {
+                    var field = _fields[i];
+                    typefield.AddField(field);
+                }
+
+            }
+
+            map[type] = typefield;
             return typefield;
         }
 
@@ -199,19 +203,17 @@ namespace ActionEditor
                         break;
                 }
             }
-            if (type != null)
-                _typeMap[typeFullName] = type;
+            //if (type != null)
+            _typeMap[typeFullName] = type;
             return type;
         }
 
         public static T DeepCopyByBuffer<T>(this T value) => BuffConverter.ToObject<T>(BuffConverter.ToBytes(value));
-        public static bool IsNullOrDefault<T>(T t)
+        public static bool IsNullOrDefault<T>(T obj)
         {
-            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-                return ReferenceEquals(t, null);
-            return EqualityComparer<T>.Default.Equals(t, default(T));
+            if (obj == null) return true;
+            return EqualityComparer<T>.Default.Equals(obj, default(T));
         }
-
         private static Dictionary<Type, string> type_warp = new Dictionary<Type, string>()
         {
             { typeof(byte),"a"},
@@ -250,13 +252,6 @@ namespace ActionEditor
                 return result;
             return src;
         }
-
-
-
-
-
-
-
     }
 
 
@@ -289,13 +284,6 @@ namespace ActionEditor
     }
     public class BufferReader
     {
-        internal static byte[] FieldEndFlag = new byte[2] { 0, byte.MaxValue };
-        internal static byte[] FieldBeginFlag = new byte[2] { byte.MaxValue, 0 };
-
-        internal static byte[] ObjBeginFlag = new byte[4] { 1, byte.MaxValue, 1, byte.MaxValue };
-        internal static byte[] ObjEndFlag = new byte[4] { byte.MaxValue, 1, byte.MaxValue, 1, };
-
-
         private readonly byte[] _buffer;
         private int _index = 0;
 
@@ -464,94 +452,27 @@ namespace ActionEditor
         }
 
 
-        private bool EqualsBuffer(int index, byte[] comare)
-        {
-            for (int i = 0; i < comare.Length; i++)
-            {
-                var src = this._buffer[index + i];
-                if (src != comare[i])
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-        private void MoveToObjectEnd()
-        {
-            var start = 0;
-            var end = 0;
-
-            for (int i = this._index; i < this._buffer.Length; i++)
-            {
-                if (EqualsBuffer(i, ObjEndFlag))
-                    end++;
-                else if (EqualsBuffer(i, ObjBeginFlag))
-                    start++;
-                if (end == start + 1)
-                {
-                    this._index = i + ObjEndFlag.Length;
-                    break;
-                }
-            }
-        }
-        private void MoveToFieldEnd()
-        {
-            var start = 0;
-            var end = 0;
-
-            for (int i = this._index; i < this._buffer.Length; i++)
-            {
-                if (EqualsBuffer(i, FieldEndFlag))
-                    end++;
-                else if (EqualsBuffer(i, FieldBeginFlag))
-                    start++;
-                if (end == start + 1)
-                {
-                    this._index = i + FieldEndFlag.Length;
-                    break;
-                }
-            }
-        }
-
 
         private string[] metas;
         public T ReadObject<T>() where T : class
         {
             if (metas == null)
-                metas = ReadArray<string>((r) => r.ReadUTF8());
-
-
-            //var typeName = ReadUTF8();
-            //var assemblyName = ReadUTF8();
-
+                metas = ReadArray((r) => r.ReadUTF8());
             var typeName = metas[ReadInt32()];
             var assemblyName = metas[ReadInt32()];
             Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
-            this._index += ObjBeginFlag.Length;
+            var ObjEnd = ReadInt32();
             if (type == null)
             {
-                MoveToObjectEnd();
+                this._index = ObjEnd;
                 return null;
             }
             T t = (T)Activator.CreateInstance(type);
 
             var typeField = TypeHelper.GetTypeFields(type);
-            while (true)
+            while (ObjEnd - this._index > 12)
             {
-                if (!EqualsBuffer(this._index, ObjEndFlag))
-                {
-                    this._index += FieldBeginFlag.Length;
-                }
-                else
-                {
-                    this._index += ObjEndFlag.Length;
-                    break;
-                }
-                //if (id == BufferReader.ObjEndFlag)
-                //    break;
-                //var fieldName = this.ReadUTF8();
-                //var TypeName = this.ReadUTF8();
-
+                var FieldEndIndex = ReadInt32();
                 var fieldName = metas[this.ReadInt32()];
                 var TypeName = metas[this.ReadInt32()];
 
@@ -568,26 +489,13 @@ namespace ActionEditor
                     object value = null;
                     var fieldType = field.FieldType;
                     BuffConverter convert = null;
-
-                    try
-                    {
-                        convert = BuffConverter.GetConverter(fieldType);
-                        value = convert.Read(this, fieldType);
-                        field.SetValue(t, value);
-
-                    }
-                    catch (Exception)
-                    {
-
-                        throw;
-                    }
-
-
+                    convert = BuffConverter.GetConverter(fieldType);
+                    value = convert.Read(this, fieldType);
+                    field.SetValue(t, value);
                 }
-
-                MoveToFieldEnd();
+                this._index = FieldEndIndex;
             }
-            //MoveToObjectEnd();
+            this._index = ObjEnd;
             if (t is IBufferObject buff)
                 buff.AfterReadBuffer();
 
@@ -620,6 +528,9 @@ namespace ActionEditor
         public void Clear()
         {
             _index = 0;
+            metas = null;
+            _index_meta = 0;
+            _visited.Clear();
         }
         private void CheckWriterIndex(int length)
         {
@@ -797,7 +708,7 @@ namespace ActionEditor
             AddToMeta(type.FullName);
             AddToMeta(type.Assembly.FullName);
             var fields = TypeHelper.GetTypeFields(type).GetFields();
-            if (fields == null) return;
+            if (fields == null || fields.Count == 0) return;
             for (int i = 0; i < fields.Count; i++)
             {
                 var field = fields[i];
@@ -838,18 +749,22 @@ namespace ActionEditor
 
             //WriteUTF8(type.FullName);
             //WriteUTF8(type.Assembly.FullName);
-            WriteBytes(BufferReader.ObjBeginFlag);
+            //WriteBytes(BufferReader.ObjBeginFlag);
+            var ObjStart = this._index;
+            WriteInt32(0);
+
 
             var fields = TypeHelper.GetTypeFields(type).GetFields();
-            if (fields != null)
+            if (fields != null && fields.Count != 0)
 
                 for (int i = 0; i < fields.Count; i++)
                 {
                     var field = fields[i];
                     var fieldValue = field.GetValue(value);
                     if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
-                    WriteBytes(BufferReader.FieldBeginFlag);
-
+                    //WriteBytes(BufferReader.FieldBeginFlag);
+                    var FieldStart = this._index;
+                    WriteInt32(0);
 
                     var fieldType = field.FieldType;
                     //WriteUTF8(field.name);
@@ -859,20 +774,24 @@ namespace ActionEditor
 
 
                     BuffConverter convert = null;
-                    try
-                    {
-                        convert = BuffConverter.GetConverter(fieldType);
-                        convert.Write(this, fieldValue);
-                    }
-                    catch (Exception)
-                    {
-                        throw;
-                    }
-                    WriteBytes(BufferReader.FieldEndFlag);
+                    convert = BuffConverter.GetConverter(fieldType);
+                    convert.Write(this, fieldValue);
+                    //WriteBytes(BufferReader.FieldEndFlag);
+                    var FieldEnd = this._index;
+                    this._index = FieldStart;
+                    WriteInt32(FieldEnd);
+                    this._index = FieldEnd;
                 }
 
 
-            WriteBytes(BufferReader.ObjEndFlag);
+            //WriteBytes(BufferReader.ObjEndFlag);
+
+
+            var ObjEnd = this._index;
+            this._index = ObjStart;
+            WriteInt32(ObjEnd);
+            this._index = ObjEnd;
+
         }
 
     }
