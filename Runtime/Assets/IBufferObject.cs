@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using UnityEngine;
 
 
 namespace ActionEditor
@@ -27,12 +30,37 @@ namespace ActionEditor
             private Type type;
             public class Field
             {
-                public readonly FieldInfo field;
+                //private readonly FieldAccessor field;
                 public readonly string name;
+                public Type FieldType;
+                public Type DeclaringType;
+                private Func<object, object> _getter;
+                private Action<object, object> _setter;
+                private void Build(FieldInfo field)
+                {
+                    //Name = field.Name;
+                    // Getter
+                    var targetParam = Expression.Parameter(typeof(object), "target");
+                    var castTarget = Expression.Convert(targetParam, field.DeclaringType);
+                    var fieldExpr = Expression.Field(castTarget, field);
+                    var convertResult = Expression.Convert(fieldExpr, typeof(object));
+                    _getter = Expression.Lambda<Func<object, object>>(convertResult, targetParam).Compile();
 
+                    // Setter
+                    var valueParam = Expression.Parameter(typeof(object), "value");
+                    var castValue = Expression.Convert(valueParam, field.FieldType);
+                    var assign = Expression.Assign(fieldExpr, castValue);
+                    var block = Expression.Block(assign, Expression.Empty());
+                    var lambda = Expression.Lambda<Action<object, object>>(block, targetParam, valueParam);
+                    _setter = lambda.Compile();
+                }
+                public object GetValue(object target) => _getter(target);
+                public void SetValue(object target, object value) => _setter(target, value);
                 public Field(FieldInfo field, string name)
                 {
-                    this.field = field;
+                    DeclaringType = field.DeclaringType;
+                    FieldType = field.FieldType;
+                    Build(field);
                     this.name = name;
                 }
 
@@ -49,6 +77,11 @@ namespace ActionEditor
                 if (map.TryGetValue(name, out var field)) return field;
                 return null;
             }
+            public void AddField(Field field)
+            {
+                map[field.name] = field;
+                fields.Add(field);
+            }
             public void AddField(FieldInfo field)
             {
 
@@ -59,11 +92,10 @@ namespace ActionEditor
                 if (!field.IsPublic && attr == null) return;
                 var name = attr?.bufferName ?? field.Name;
                 if (map.TryGetValue(name, out var info))
-                    throw new Exception($"{type}Exist Same Name Field {name}=> {info.field.DeclaringType}:{field.DeclaringType}");
+                    throw new Exception($"{type}Exist Same Name Field {name}=> {info.DeclaringType}:{field.DeclaringType}");
                 var _f = new Field(field, name);
 
-                map[name] = _f;
-                fields.Add(_f);
+                AddField(_f);
             }
         }
         private static Dictionary<Type, TypeFields> map = new Dictionary<Type, TypeFields>();
@@ -72,21 +104,35 @@ namespace ActionEditor
             if (map.TryGetValue(type, out var typefield)) return typefield;
             var _type = type;
             typefield = new TypeFields(type);
-            TypeHelper.map[type] = typefield;
             while (true)
             {
-                var fields = _type.GetFields(BindingFlags.Public
-                 | BindingFlags.NonPublic
-                 | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-                for (int i = 0; i < fields.Length; i++)
+                if (map.TryGetValue(_type, out var field))
                 {
-                    var _field = fields[i];
-                    typefield.AddField(_field);
+                    var fields = field.GetFields();
+                    for (int i = 0; i < fields.Count; i++)
+                    {
+                        var _field = fields[i];
+                        typefield.AddField(_field);
+                    }
                 }
+                else
+                {
+
+                    var fields = _type.GetFields(BindingFlags.Public
+                     | BindingFlags.NonPublic
+                     | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                    for (int i = 0; i < fields.Length; i++)
+                    {
+                        var _field = fields[i];
+                        typefield.AddField(_field);
+                    }
+                }
+
                 if (_type.BaseType == typeof(System.Object))
                     break;
                 _type = _type.BaseType;
             }
+            TypeHelper.map[type] = typefield;
             return typefield;
         }
 
@@ -125,10 +171,15 @@ namespace ActionEditor
 
             return false;
         }
+
+        private static Dictionary<string, Type> _typeMap = new Dictionary<string, Type>();
         public static Type GetTypeByFullName(string typeFullName, string assemblyName = null)
         {
             if (string.IsNullOrEmpty(typeFullName))
                 return null;
+
+            if (_typeMap.TryGetValue(typeFullName, out var type)) return type;
+
 
             // 如果指定了程序集名称，拼接完整的类型标识
             string fullTypeName = string.IsNullOrEmpty(assemblyName)
@@ -136,7 +187,7 @@ namespace ActionEditor
                 : $"{typeFullName}, {assemblyName}";
 
             // 尝试直接获取类型
-            Type type = Type.GetType(fullTypeName);
+            type = Type.GetType(fullTypeName);
 
             // 如果获取失败，遍历当前加载的所有程序集查找
             if (type == null)
@@ -148,22 +199,16 @@ namespace ActionEditor
                         break;
                 }
             }
-
+            if (type != null)
+                _typeMap[typeFullName] = type;
             return type;
         }
 
         public static T DeepCopyByBuffer<T>(this T value) => BuffConverter.ToObject<T>(BuffConverter.ToBytes(value));
         public static bool IsNullOrDefault<T>(T t)
         {
-            Type type = typeof(T);
-            if (type.IsEnum) return false;
-            if (ReferenceEquals(t, null)) return true;
-            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
-            {
-                var hasValueProperty = type.GetProperty("HasValue");
-                bool hasValue = (bool)hasValueProperty.GetValue(t);
-                return !hasValue;
-            }
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+                return ReferenceEquals(t, null);
             return EqualityComparer<T>.Default.Equals(t, default(T));
         }
 
@@ -513,7 +558,7 @@ namespace ActionEditor
                 TypeName = TypeHelper.GetRealTypeName(TypeName);
 
                 var field = typeField.FindField(fieldName);
-                if (field != null && field.field.FieldType.FullName != TypeName)
+                if (field != null && field.FieldType.FullName != TypeName)
                 {
                     field = null;
                 }
@@ -521,14 +566,14 @@ namespace ActionEditor
 
                 {
                     object value = null;
-                    var fieldType = field.field.FieldType;
+                    var fieldType = field.FieldType;
                     BuffConverter convert = null;
 
                     try
                     {
                         convert = BuffConverter.GetConverter(fieldType);
                         value = convert.Read(this, fieldType);
-                        field.field.SetValue(t, value);
+                        field.SetValue(t, value);
 
                     }
                     catch (Exception)
@@ -599,10 +644,15 @@ namespace ActionEditor
         }
         private void WriteBytes(byte[] value)
         {
-            for (int i = 0; i < value.Length; i++)
-            {
-                WriteByte(value[i]);
-            }
+            //for (int i = 0; i < value.Length; i++)
+            //{
+            //    WriteByte(value[i]);
+            //}
+            var length = value.Length;
+            CheckWriterIndex(length);
+
+            Array.Copy(value, 0, this._buffer, _index, length);
+            _index += length;
         }
         public void WriteChar(char value)
         {
@@ -699,9 +749,28 @@ namespace ActionEditor
                 }
             }
         }
-        public void WriteByteArray(byte[] values) => WriteArray(values, (_, value) => { WriteByte(value); });
+        private void WriteByteArray(byte[] values)
+        {
+
+
+            if (values == null)
+                WriteUInt16(0);
+            else
+            {
+                int count = values.Length;
+                if (count > ushort.MaxValue)
+                    throw new FormatException($"Write array length cannot be greater than {ushort.MaxValue} !");
+                WriteUInt16(Convert.ToUInt16(count));
+                //WriteBytes
+                WriteBytes(values);
+
+            }
+            //WriteArray(values, (_, value) => { WriteByte(value); });
+        }
+
         public void WriteUTF8(string value)
         {
+
             if (string.IsNullOrEmpty(value))
                 WriteByteArray(null);
 
@@ -717,12 +786,14 @@ namespace ActionEditor
             if (metas.ContainsKey(meta)) return;
             metas.Add(meta, _index_meta++);
         }
-
+        private HashSet<Type> _visited = new HashSet<Type>();
         public void CollectMetas(object value)
         {
             if (value == null) return;
 
             var type = value.GetType();
+            if (!_visited.Add(type)) return;
+
             AddToMeta(type.FullName);
             AddToMeta(type.Assembly.FullName);
             var fields = TypeHelper.GetTypeFields(type).GetFields();
@@ -730,11 +801,11 @@ namespace ActionEditor
             for (int i = 0; i < fields.Count; i++)
             {
                 var field = fields[i];
-                var fieldValue = field.field.GetValue(value);
+                var fieldValue = field.GetValue(value);
                 if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
 
 
-                var fieldType = field.field.FieldType;
+                var fieldType = field.FieldType;
                 var fieldName = field.name;
                 var fieldTypeName = TypeHelper.GetTypeName(fieldType);
                 AddToMeta(fieldName);
@@ -775,12 +846,12 @@ namespace ActionEditor
                 for (int i = 0; i < fields.Count; i++)
                 {
                     var field = fields[i];
-                    var fieldValue = field.field.GetValue(value);
+                    var fieldValue = field.GetValue(value);
                     if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
                     WriteBytes(BufferReader.FieldBeginFlag);
 
 
-                    var fieldType = field.field.FieldType;
+                    var fieldType = field.FieldType;
                     //WriteUTF8(field.name);
                     //WriteUTF8(TypeHelper.GetTypeName(fieldType));
                     WriteInt32(metas[field.name]);
@@ -1081,8 +1152,6 @@ namespace ActionEditor
 
         }
 
-
-
         protected override void OnCollectMetas(BufferWriter writer, Dictionary<Key, Value> value)
         {
             foreach (var kv in value)
@@ -1098,12 +1167,6 @@ namespace ActionEditor
         private void WriteOnce_Key(BufferWriter writer, Key t) => c_k.OnWrite(writer, t);
         private Value ReadOnce_Value(BufferReader reader) => c_v.OnRead(reader, typeof(Value));
         private void WriteOnce_Value(BufferWriter writer, Value value) => c_v.OnWrite(writer, value);
-
-
     }
-
-
-
-
 }
 
