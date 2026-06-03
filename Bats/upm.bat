@@ -1,4 +1,6 @@
 @echo off
+cd ../
+
 set b="version"
 set version ="1"
 REM 获取版本号

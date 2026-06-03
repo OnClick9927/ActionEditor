@@ -1,3 +1,4 @@
+using ActionBuffer;
 using ActionEditor;
 using System;
 using System.Collections.Generic;
@@ -91,7 +92,7 @@ class TLMoveClipEditor : ActionEditor.ClipEditorView
 public class Vector3BuffConverter : BuffConverter<Vector3>
 {
     static BuffConverter<float> converter = GetConverter(typeof(float)) as BuffConverter<float>;
-    public override Vector3 OnRead(BufferReader reader, Type type)
+    public override Vector3 OnRead(IBufferReader reader, Type type)
     {
         Vector3 v3 = new Vector3();
         for (int i = 0; i < 3; i++)
@@ -100,7 +101,7 @@ public class Vector3BuffConverter : BuffConverter<Vector3>
 
     }
 
-    public override void OnWrite(BufferWriter writer, Vector3 value)
+    public override void OnWrite(IBufferWriter writer, Vector3 value)
     {
         for (int i = 0; i < 3; i++)
             writer.WriteFloat(value[i]);
@@ -148,7 +149,7 @@ public class TLMoveClip : Clip, ActionEditor.IResizeAble, ILengthMatchAble, ITLC
 public class TLLogSignal : ActionEditor.ClipSignal, ITLCLip
 {
     public string message;
-    [ActionEditor.Buffer, UnityEngine.SerializeField, Name("Êä³ö")]
+    [Buffer, UnityEngine.SerializeField, Name("Êä³ö")]
     private string Test2;
     [Range(0, 1)] public float test;
     public override bool IsValid => !string.IsNullOrEmpty(message);

@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace ActionEditor
+namespace ActionBuffer
 {
 
     [AttributeUsage(AttributeTargets.Field)]
@@ -281,12 +282,56 @@ namespace ActionEditor
         void BeforeWriteBuffer();
         void AfterReadBuffer();
     }
-    public class BufferReader
+
+    public interface IBufferReader
     {
-        private readonly byte[] _buffer;
+        T[] ReadArray<T>(Func<IBufferReader, T> read);
+        bool ReadBool();
+        byte ReadByte();
+        char ReadChar();
+        double ReadDouble();
+        Enum ReadEnum(Type type);
+        float ReadFloat();
+        short ReadInt16();
+        int ReadInt32();
+        long ReadInt64();
+        List<T> ReadList<T>(Func<IBufferReader, T> read);
+        T ReadObject<T>() where T : class;
+        ushort ReadUInt16();
+        uint ReadUInt32();
+        ulong ReadUInt64();
+        string ReadUTF8();
+    }
+    public interface IBufferWriter
+    {
+        void CollectMetas(object value);
+        void WriteArray<T>(T[] values, Action<IBufferWriter, T> write);
+        void WriteBool(bool value);
+        void WriteByte(byte value);
+        void WriteChar(char value);
+        void WriteDouble(double value);
+        void WriteEnum(Enum data);
+        void WriteFloat(float value);
+        void WriteInt16(short value);
+        void WriteInt32(int value);
+        void WriteInt64(long value);
+        void WriteList<T>(List<T> values, Action<IBufferWriter, T> write);
+        void WriteObject<T>(T value) where T : class;
+        void WriteUInt16(ushort value);
+        void WriteUInt32(uint value);
+        void WriteUInt64(ulong value);
+        void WriteUTF8(string value);
+    }
+
+
+
+    public class BufferReader : IBufferReader
+    {
+        private byte[] _buffer;
         private int _index = 0;
 
-        public BufferReader(byte[] data)
+
+        public void Init(byte[] data)
         {
             _buffer = data;
         }
@@ -392,7 +437,7 @@ namespace ActionEditor
         }
 
 
-        public List<T> ReadList<T>(Func<BufferReader, T> read)
+        public List<T> ReadList<T>(Func<IBufferReader, T> read)
         {
             ushort count = ReadUInt16();
 
@@ -401,7 +446,7 @@ namespace ActionEditor
                 values.Add(read(this));
             return values;
         }
-        public T[] ReadArray<T>(Func<BufferReader, T> read)
+        public T[] ReadArray<T>(Func<IBufferReader, T> read)
         {
             ushort count = ReadUInt16();
             T[] values = new T[count];
@@ -449,8 +494,7 @@ namespace ActionEditor
                 {
                     object value = null;
                     var fieldType = field.FieldType;
-                    BuffConverter convert = null;
-                    convert = BuffConverter.GetConverter(fieldType);
+                    var convert = BuffConverter.GetConverter(fieldType);
                     value = convert.Read(this, fieldType);
                     field.SetValue(t, value);
                 }
@@ -465,7 +509,9 @@ namespace ActionEditor
 
 
     }
-    public class BufferWriter
+
+
+    public class BufferWriter : IBufferWriter
     {
         public byte[] GetValidBuffer()
         {
@@ -516,10 +562,6 @@ namespace ActionEditor
         }
         private void WriteBytes(byte[] value)
         {
-            //for (int i = 0; i < value.Length; i++)
-            //{
-            //    WriteByte(value[i]);
-            //}
             var length = value.Length;
             CheckWriterIndex(length);
 
@@ -589,7 +631,7 @@ namespace ActionEditor
         }
 
 
-        public void WriteList<T>(List<T> values, Action<BufferWriter, T> write)
+        public void WriteList<T>(List<T> values, Action<IBufferWriter, T> write)
         {
             if (values == null)
                 WriteUInt16(0);
@@ -605,7 +647,7 @@ namespace ActionEditor
                 }
             }
         }
-        public void WriteArray<T>(T[] values, Action<BufferWriter, T> write)
+        public void WriteArray<T>(T[] values, Action<IBufferWriter, T> write)
         {
             if (values == null)
                 WriteUInt16(0);
@@ -686,7 +728,6 @@ namespace ActionEditor
 
                 var convert = BuffConverter.GetConverter(fieldType);
                 convert.CollectMetas(this, fieldValue);
-                //WriteBytes(BufferReader.FieldEndFlag);
             }
 
         }
@@ -700,17 +741,11 @@ namespace ActionEditor
             {
                 metas = new();
                 CollectMetas(value);
-                //var list = metas.Keys.ToList();
                 WriteArray(metas.Keys.ToArray(), (w, val) => w.WriteUTF8(val));
-                //Console.WriteLine(list);
             }
 
             WriteInt32(metas[type.FullName]);
             WriteInt32(metas[type.Assembly.FullName]);
-
-            //WriteUTF8(type.FullName);
-            //WriteUTF8(type.Assembly.FullName);
-            //WriteBytes(BufferReader.ObjBeginFlag);
             var ObjStart = this._index;
             WriteInt32(0);
 
@@ -723,21 +758,16 @@ namespace ActionEditor
                     var field = fields[i];
                     var fieldValue = field.GetValue(value);
                     if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
-                    //WriteBytes(BufferReader.FieldBeginFlag);
                     var FieldStart = this._index;
                     WriteInt32(0);
 
                     var fieldType = field.FieldType;
-                    //WriteUTF8(field.name);
-                    //WriteUTF8(TypeHelper.GetTypeName(fieldType));
                     WriteInt32(metas[field.name]);
                     WriteInt32(metas[TypeHelper.GetTypeName(fieldType)]);
 
 
-                    BuffConverter convert = null;
-                    convert = BuffConverter.GetConverter(fieldType);
+                    var convert = BuffConverter.GetConverter(fieldType);
                     convert.Write(this, fieldValue);
-                    //WriteBytes(BufferReader.FieldEndFlag);
                     var FieldEnd = this._index;
                     this._index = FieldStart;
                     WriteInt32(FieldEnd);
@@ -745,7 +775,6 @@ namespace ActionEditor
                 }
 
 
-            //WriteBytes(BufferReader.ObjEndFlag);
 
 
             var ObjEnd = this._index;
@@ -758,9 +787,8 @@ namespace ActionEditor
     }
 
 }
-namespace ActionEditor
+namespace ActionBuffer
 {
-
     public abstract class BuffConverter
     {
         private static Dictionary<Type, Type> _nmap;
@@ -831,110 +859,154 @@ namespace ActionEditor
         }
         public static BuffConverter<T> GetConverter<T>() => GetConverter(typeof(T)) as BuffConverter<T>;
 
-        public abstract object Read(BufferReader reader, Type type);
-        public abstract void Write(BufferWriter writer, object value);
-        internal abstract void CollectMetas(BufferWriter writer, object value);
+        public abstract object Read(IBufferReader reader, Type type);
+        public abstract void Write(IBufferWriter writer, object value);
+        internal abstract void CollectMetas(IBufferWriter writer, object value);
+
+
+        public enum DataType
+        {
+            Bytes, Json
+        }
+        public static IBufferReader CreateReader(DataType type)
+        {
+            if (type == DataType.Bytes) return new BufferReader();
+            if (type == DataType.Json) return new JsonReader();
+
+            return null;
+        }
+        public static IBufferWriter CreateWriter(DataType type)
+        {
+            if (type == DataType.Bytes) return new BufferWriter();
+            if (type == DataType.Json) return new JsonWriter();
+
+            return null;
+        }
+
+        public static string ToJson(object obj, bool pretty = false, bool typeInfo = true)
+        {
+            var type = obj.GetType();
+            var writer = CreateWriter(DataType.Json);
+            var js = writer as JsonWriter;
+            js.typeInfo = typeInfo;
+            js.prettyPrint = pretty;
+            var c = GetConverter(type);
+            c.Write(writer, obj);
+            return js.GetJson();
+        }
+        public static object ToObject(string data, Type type)
+        {
+            var reader = CreateReader(DataType.Json);
+            (reader as JsonReader).Init(data);
+            var c = GetConverter(type);
+            return c.Read(reader, type);
+        }
+        public static T ToObject<T>(string data) => (T)ToObject(data, typeof(T));
+
+
+
+
         public static byte[] ToBytes(object obj)
         {
             var type = obj.GetType();
-            BufferWriter writer = new BufferWriter();
+            var writer = CreateWriter(DataType.Bytes);
             var c = GetConverter(type);
             c.Write(writer, obj);
-            return writer.GetValidBuffer();
+            return (writer as BufferWriter).GetValidBuffer();
         }
         public static object ToObject(byte[] bytes, Type type)
         {
-            BufferReader reader = new BufferReader(bytes);
+            var reader = CreateReader(DataType.Bytes);
+            (reader as BufferReader).Init(bytes);
             var c = GetConverter(type);
             return c.Read(reader, type);
         }
         public static T ToObject<T>(byte[] bytes) => (T)ToObject(bytes, typeof(T));
-
     }
     public abstract class BuffConverter<T> : BuffConverter
     {
-        public abstract void OnWrite(BufferWriter writer, T value);
-        public abstract T OnRead(BufferReader reader, Type type);
-        public sealed override object Read(BufferReader reader, Type type) => OnRead(reader, type);
-        public sealed override void Write(BufferWriter writer, object value) => OnWrite(writer, (T)value);
-        protected virtual void OnCollectMetas(BufferWriter writer, T value) { }
+        public abstract void OnWrite(IBufferWriter writer, T value);
+        public abstract T OnRead(IBufferReader reader, Type type);
+        public sealed override object Read(IBufferReader reader, Type type) => OnRead(reader, type);
+        public sealed override void Write(IBufferWriter writer, object value) => OnWrite(writer, (T)value);
+        protected virtual void OnCollectMetas(IBufferWriter writer, T value) { }
 
-        internal sealed override void CollectMetas(BufferWriter writer, object value) => OnCollectMetas(writer, (T)value);
+        internal sealed override void CollectMetas(IBufferWriter writer, object value) => OnCollectMetas(writer, (T)value);
     }
 
     class ByteConverter : BuffConverter<byte>
     {
-        public override byte OnRead(BufferReader reader, Type type) => reader.ReadByte();
-        public override void OnWrite(BufferWriter writer, byte value) => writer.WriteByte(value);
+        public override byte OnRead(IBufferReader reader, Type type) => reader.ReadByte();
+        public override void OnWrite(IBufferWriter writer, byte value) => writer.WriteByte(value);
     }
     class BoolConverter : BuffConverter<bool>
     {
-        public override bool OnRead(BufferReader reader, Type type) => reader.ReadBool();
-        public override void OnWrite(BufferWriter writer, bool value) => writer.WriteBool(value);
+        public override bool OnRead(IBufferReader reader, Type type) => reader.ReadBool();
+        public override void OnWrite(IBufferWriter writer, bool value) => writer.WriteBool(value);
     }
 
     class CharConverter : BuffConverter<char>
     {
-        public override char OnRead(BufferReader reader, Type type) => reader.ReadChar();
-        public override void OnWrite(BufferWriter writer, char value) => writer.WriteChar(value);
+        public override char OnRead(IBufferReader reader, Type type) => reader.ReadChar();
+        public override void OnWrite(IBufferWriter writer, char value) => writer.WriteChar(value);
     }
 
     class ShortConverter : BuffConverter<short>
     {
-        public override short OnRead(BufferReader reader, Type type) => reader.ReadInt16();
-        public override void OnWrite(BufferWriter writer, short value) => writer.WriteInt16(value);
+        public override short OnRead(IBufferReader reader, Type type) => reader.ReadInt16();
+        public override void OnWrite(IBufferWriter writer, short value) => writer.WriteInt16(value);
     }
     class IntConverter : BuffConverter<int>
     {
-        public override int OnRead(BufferReader reader, Type type) => reader.ReadInt32();
-        public override void OnWrite(BufferWriter writer, int value) => writer.WriteInt32(value);
+        public override int OnRead(IBufferReader reader, Type type) => reader.ReadInt32();
+        public override void OnWrite(IBufferWriter writer, int value) => writer.WriteInt32(value);
     }
     class LongConverter : BuffConverter<long>
     {
-        public override long OnRead(BufferReader reader, Type type) => reader.ReadInt64();
-        public override void OnWrite(BufferWriter writer, long value) => writer.WriteInt64(value);
+        public override long OnRead(IBufferReader reader, Type type) => reader.ReadInt64();
+        public override void OnWrite(IBufferWriter writer, long value) => writer.WriteInt64(value);
     }
 
     class UShortConverter : BuffConverter<ushort>
     {
-        public override ushort OnRead(BufferReader reader, Type type) => reader.ReadUInt16();
-        public override void OnWrite(BufferWriter writer, ushort value) => writer.WriteUInt16(value);
+        public override ushort OnRead(IBufferReader reader, Type type) => reader.ReadUInt16();
+        public override void OnWrite(IBufferWriter writer, ushort value) => writer.WriteUInt16(value);
     }
     class UIntConverter : BuffConverter<uint>
     {
-        public override uint OnRead(BufferReader reader, Type type) => reader.ReadUInt32();
-        public override void OnWrite(BufferWriter writer, uint value) => writer.WriteUInt32(value);
+        public override uint OnRead(IBufferReader reader, Type type) => reader.ReadUInt32();
+        public override void OnWrite(IBufferWriter writer, uint value) => writer.WriteUInt32(value);
     }
     class ULongConverter : BuffConverter<ulong>
     {
-        public override ulong OnRead(BufferReader reader, Type type) => reader.ReadUInt64();
-        public override void OnWrite(BufferWriter writer, ulong value) => writer.WriteUInt64(value);
+        public override ulong OnRead(IBufferReader reader, Type type) => reader.ReadUInt64();
+        public override void OnWrite(IBufferWriter writer, ulong value) => writer.WriteUInt64(value);
     }
 
     class FloatConverter : BuffConverter<float>
     {
-        public override float OnRead(BufferReader reader, Type type) => reader.ReadFloat();
-        public override void OnWrite(BufferWriter writer, float value) => writer.WriteFloat(value);
+        public override float OnRead(IBufferReader reader, Type type) => reader.ReadFloat();
+        public override void OnWrite(IBufferWriter writer, float value) => writer.WriteFloat(value);
     }
     class DoubleConverter : BuffConverter<double>
     {
-        public override double OnRead(BufferReader reader, Type type) => reader.ReadDouble();
-        public override void OnWrite(BufferWriter writer, double value) => writer.WriteDouble(value);
+        public override double OnRead(IBufferReader reader, Type type) => reader.ReadDouble();
+        public override void OnWrite(IBufferWriter writer, double value) => writer.WriteDouble(value);
     }
     class StringConverter : BuffConverter<string>
     {
-        public override string OnRead(BufferReader reader, Type type) => reader.ReadUTF8();
-        public override void OnWrite(BufferWriter writer, string value) => writer.WriteUTF8(value);
+        public override string OnRead(IBufferReader reader, Type type) => reader.ReadUTF8();
+        public override void OnWrite(IBufferWriter writer, string value) => writer.WriteUTF8(value);
     }
     class DateTimeConverter : BuffConverter<DateTime>
     {
         BuffConverter<long> converter = GetConverter<long>();
-        public override DateTime OnRead(BufferReader reader, Type type)
+        public override DateTime OnRead(IBufferReader reader, Type type)
         {
             return new DateTime(converter.OnRead(reader, typeof(long)));
         }
 
-        public override void OnWrite(BufferWriter writer, DateTime value)
+        public override void OnWrite(IBufferWriter writer, DateTime value)
         {
             converter.OnWrite(writer, value.Ticks);
         }
@@ -942,36 +1014,36 @@ namespace ActionEditor
     class TimeSpanConverter : BuffConverter<TimeSpan>
     {
         BuffConverter<long> converter = GetConverter<long>();
-        public override TimeSpan OnRead(BufferReader reader, Type type)
+        public override TimeSpan OnRead(IBufferReader reader, Type type)
         {
             return TimeSpan.FromTicks(converter.OnRead(reader, typeof(long)));
         }
 
-        public override void OnWrite(BufferWriter writer, TimeSpan value)
+        public override void OnWrite(IBufferWriter writer, TimeSpan value)
         {
             converter.OnWrite(writer, value.Ticks);
         }
     }
     class EnumConverter<T> : BuffConverter<T> where T : Enum
     {
-        public override T OnRead(BufferReader reader, Type type) => (T)(Enum)reader.ReadEnum(type);
-        public override void OnWrite(BufferWriter writer, T value) => writer.WriteEnum(value);
+        public override T OnRead(IBufferReader reader, Type type) => (T)(Enum)reader.ReadEnum(type);
+        public override void OnWrite(IBufferWriter writer, T value) => writer.WriteEnum(value);
     }
     class ObjectConverter<T> : BuffConverter<T> where T : class
     {
-        public override T OnRead(BufferReader reader, Type type) => reader.ReadObject<T>();
-        public override void OnWrite(BufferWriter writer, T value) => writer.WriteObject(value);
-        protected override void OnCollectMetas(BufferWriter writer, T value) => writer.CollectMetas(value);
+        public override T OnRead(IBufferReader reader, Type type) => reader.ReadObject<T>();
+        public override void OnWrite(IBufferWriter writer, T value) => writer.WriteObject(value);
+        protected override void OnCollectMetas(IBufferWriter writer, T value) => writer.CollectMetas(value);
     }
     class ListConverter<T> : BuffConverter<List<T>>
     {
         static BuffConverter<T> converter = GetConverter<T>();
-        private T ReadOnce(BufferReader reader) => converter.OnRead(reader, typeof(T));
-        private void WriteOnce(BufferWriter writer, T t) => converter.OnWrite(writer, t);
+        private T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
+        private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
 
-        public override List<T> OnRead(BufferReader reader, Type type) => reader.ReadList(ReadOnce);
-        public override void OnWrite(BufferWriter writer, List<T> value) => writer.WriteList(value, WriteOnce);
-        protected override void OnCollectMetas(BufferWriter writer, List<T> value)
+        public override List<T> OnRead(IBufferReader reader, Type type) => reader.ReadList(ReadOnce);
+        public override void OnWrite(IBufferWriter writer, List<T> value) => writer.WriteList(value, WriteOnce);
+        protected override void OnCollectMetas(IBufferWriter writer, List<T> value)
         {
             for (var i = 0; i < value.Count; i++)
             {
@@ -984,13 +1056,13 @@ namespace ActionEditor
     class ArrayConverter<T> : BuffConverter<T[]>
     {
         static BuffConverter<T> converter = GetConverter<T>();
-        public override T[] OnRead(BufferReader reader, Type type) => reader.ReadArray(ReadOnce);
-        private void WriteOnce(BufferWriter writer, T t) => converter.OnWrite(writer, t);
+        public override T[] OnRead(IBufferReader reader, Type type) => reader.ReadArray(ReadOnce);
+        private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
 
-        private T ReadOnce(BufferReader reader) => converter.OnRead(reader, typeof(T));
+        private T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
 
-        public override void OnWrite(BufferWriter writer, T[] value) => writer.WriteArray(value, WriteOnce);
-        protected override void OnCollectMetas(BufferWriter writer, T[] value)
+        public override void OnWrite(IBufferWriter writer, T[] value) => writer.WriteArray(value, WriteOnce);
+        protected override void OnCollectMetas(IBufferWriter writer, T[] value)
         {
             for (var i = 0; i < value.Length; i++)
             {
@@ -1007,7 +1079,7 @@ namespace ActionEditor
         static BuffConverter<Key> c_k = GetConverter<Key>();
         static BuffConverter<Value> c_v = GetConverter<Value>();
 
-        public override Dictionary<Key, Value> OnRead(BufferReader reader, Type type)
+        public override Dictionary<Key, Value> OnRead(IBufferReader reader, Type type)
         {
             var list_key = reader.ReadList(ReadOnce_Key);
             var list_values = reader.ReadList(ReadOnce_Value);
@@ -1022,7 +1094,7 @@ namespace ActionEditor
 
         }
 
-        public override void OnWrite(BufferWriter writer, Dictionary<Key, Value> value)
+        public override void OnWrite(IBufferWriter writer, Dictionary<Key, Value> value)
         {
             var list_key = value.Keys.ToList();
             var list_values = value.Values.ToList();
@@ -1032,7 +1104,7 @@ namespace ActionEditor
 
         }
 
-        protected override void OnCollectMetas(BufferWriter writer, Dictionary<Key, Value> value)
+        protected override void OnCollectMetas(IBufferWriter writer, Dictionary<Key, Value> value)
         {
             foreach (var kv in value)
             {
@@ -1043,10 +1115,550 @@ namespace ActionEditor
             }
             //base.OnCollectMetas(writer, value);
         }
-        private Key ReadOnce_Key(BufferReader reader) => c_k.OnRead(reader, typeof(Key));
-        private void WriteOnce_Key(BufferWriter writer, Key t) => c_k.OnWrite(writer, t);
-        private Value ReadOnce_Value(BufferReader reader) => c_v.OnRead(reader, typeof(Value));
-        private void WriteOnce_Value(BufferWriter writer, Value value) => c_v.OnWrite(writer, value);
+        private Key ReadOnce_Key(IBufferReader reader) => c_k.OnRead(reader, typeof(Key));
+        private void WriteOnce_Key(IBufferWriter writer, Key t) => c_k.OnWrite(writer, t);
+        private Value ReadOnce_Value(IBufferReader reader) => c_v.OnRead(reader, typeof(Value));
+        private void WriteOnce_Value(IBufferWriter writer, Value value) => c_v.OnWrite(writer, value);
     }
 }
 
+
+
+
+namespace ActionBuffer
+{
+    public class JsonWriter : IBufferWriter
+    {
+        private readonly StringBuilder _sb = new StringBuilder();
+        private readonly Stack<WriteContext> _contexts = new Stack<WriteContext>();
+        private bool _prettyPrint, _typeInfo;
+        private int _indentLevel;
+
+        public bool prettyPrint
+        {
+            get { return _prettyPrint; }
+            set { _prettyPrint = value; }
+        }
+        public bool typeInfo
+        {
+            get { return _typeInfo; }
+            set { _typeInfo = value; }
+        }
+
+        private struct WriteContext
+        {
+            public bool IsArray;
+            public bool HasElements;
+        }
+
+        private void WriteIndent()
+        {
+            if (!_prettyPrint) return;
+            _sb.Append('\n');
+            _sb.Append(' ', _indentLevel * 2);
+        }
+
+        private void WriteSpaceIfPretty()
+        {
+            if (_prettyPrint) _sb.Append(' ');
+        }
+
+        private void PushContext(bool isArray)
+        {
+            _contexts.Push(new WriteContext { IsArray = isArray, HasElements = false });
+            if (_prettyPrint)
+            {
+                _indentLevel++;
+                WriteIndent();
+            }
+        }
+
+        private void PopContext()
+        {
+            if (_prettyPrint)
+            {
+                _indentLevel--;
+                WriteIndent();
+            }
+            _contexts.Pop();
+        }
+
+        private void WriteCommaIfNeeded()
+        {
+            if (_contexts.Count == 0) return;
+            WriteContext ctx = _contexts.Pop();
+            if (ctx.HasElements)
+                _sb.Append(',');
+            else
+                ctx.HasElements = true;
+            _contexts.Push(ctx);
+        }
+
+        private void WriteRaw(string value)
+        {
+            _sb.Append(value);
+        }
+
+        private void WriteString(string value)
+        {
+            if (value == null)
+            {
+                WriteRaw("null");
+                return;
+            }
+            _sb.Append('"');
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                switch (c)
+                {
+                    case '"': _sb.Append("\\\""); break;
+                    case '\\': _sb.Append("\\\\"); break;
+                    case '\b': _sb.Append("\\b"); break;
+                    case '\f': _sb.Append("\\f"); break;
+                    case '\n': _sb.Append("\\n"); break;
+                    case '\r': _sb.Append("\\r"); break;
+                    case '\t': _sb.Append("\\t"); break;
+                    default:
+                        if (c < 0x20)
+                            _sb.Append(string.Format("\\u{0:X4}", (int)c));
+                        else
+                            _sb.Append(c);
+                        break;
+                }
+            }
+            _sb.Append('"');
+        }
+
+        public string GetJson()
+        {
+            return _sb.ToString();
+        }
+
+        public void CollectMetas(object value) { }
+
+        private void WriteTypeInfo(Type type)
+        {
+            if (!typeInfo) return;
+            WriteString("$type");
+            WriteRaw(":");
+            WriteSpaceIfPretty();
+            WriteString(type.FullName);
+            WriteCommaIfNeeded();
+            WriteIndent();
+            WriteString("$assembly");
+            WriteRaw(":");
+            WriteSpaceIfPretty();
+            WriteString(type.Assembly.FullName);
+        }
+
+        public void WriteObject<T>(T value) where T : class
+        {
+            if (value == null)
+            {
+                WriteRaw("null");
+                return;
+            }
+
+            IBufferObject buff = value as IBufferObject;
+            if (buff != null)
+                buff.BeforeWriteBuffer();
+
+            PushContext(false);
+            WriteRaw("{");
+            if (_prettyPrint) WriteIndent();
+
+            Type actualType = value.GetType();
+            WriteTypeInfo(actualType);
+
+            var fields = TypeHelper.GetTypeFields(actualType).GetFields();
+            for (int i = 0; i < fields.Count; i++)
+            {
+                var field = fields[i];
+                object fieldValue = field.GetValue(value);
+                if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
+
+                WriteCommaIfNeeded();
+                WriteIndent();
+                WriteString(field.name);
+                WriteRaw(":");
+                WriteSpaceIfPretty();
+                BuffConverter.GetConverter(field.FieldType).Write(this, fieldValue);
+            }
+
+            PopContext();
+            WriteRaw("}");
+        }
+
+        public void WriteArray<T>(T[] values, Action<IBufferWriter, T> write)
+        {
+            if (values == null)
+            {
+                WriteRaw("null");
+                return;
+            }
+            PushContext(true);
+            WriteRaw("[");
+            if (_prettyPrint && values.Length > 0) WriteIndent();
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (i > 0)
+                {
+                    WriteRaw(",");
+                    if (_prettyPrint) WriteIndent();
+                }
+                write(this, values[i]);
+            }
+            PopContext();
+            WriteRaw("]");
+        }
+
+        public void WriteList<T>(List<T> values, Action<IBufferWriter, T> write)
+        {
+            if (values == null)
+            {
+                WriteRaw("null");
+                return;
+            }
+            PushContext(true);
+            WriteRaw("[");
+            if (_prettyPrint && values.Count > 0) WriteIndent();
+            for (int i = 0; i < values.Count; i++)
+            {
+                if (i > 0)
+                {
+                    WriteRaw(",");
+                    if (_prettyPrint) WriteIndent();
+                }
+                write(this, values[i]);
+            }
+            PopContext();
+            WriteRaw("]");
+        }
+
+        public void WriteBool(bool value) { WriteRaw(value ? "true" : "false"); }
+        public void WriteByte(byte value) { WriteRaw(value.ToString()); }
+        public void WriteChar(char value) { WriteString(value.ToString()); }
+        public void WriteDouble(double value) { WriteRaw(value.ToString("R", CultureInfo.InvariantCulture)); }
+        public void WriteFloat(float value) { WriteRaw(value.ToString("R", CultureInfo.InvariantCulture)); }
+        public void WriteInt16(short value) { WriteRaw(value.ToString()); }
+        public void WriteInt32(int value) { WriteRaw(value.ToString()); }
+        public void WriteInt64(long value) { WriteRaw(value.ToString()); }
+        public void WriteUInt16(ushort value) { WriteRaw(value.ToString()); }
+        public void WriteUInt32(uint value) { WriteRaw(value.ToString()); }
+        public void WriteUInt64(ulong value) { WriteRaw(value.ToString()); }
+        public void WriteUTF8(string value) { WriteString(value); }
+        public void WriteEnum(Enum data) { WriteString(data.ToString()); }
+    }
+
+    public class JsonReader : IBufferReader
+    {
+        private string _json;
+        private int _pos;
+
+        public void Init(string data)
+        {
+            _json = data;
+            _pos = 0;
+        }
+
+        private char Peek()
+        {
+            return _pos < _json.Length ? _json[_pos] : '\0';
+        }
+
+        private char Read()
+        {
+            return _pos < _json.Length ? _json[_pos++] : '\0';
+        }
+
+        private void SkipWhitespace()
+        {
+            while (char.IsWhiteSpace(Peek()))
+                Read();
+        }
+
+        private void Expect(char expected)
+        {
+            SkipWhitespace();
+            if (Peek() != expected)
+                throw new FormatException(string.Format("Expected '{0}' at position {1}", expected, _pos));
+            Read();
+        }
+
+        private string ReadNumber()
+        {
+            SkipWhitespace();
+            int start = _pos;
+            if (Peek() == '-') Read();
+            while (char.IsDigit(Peek())) Read();
+            if (Peek() == '.') { Read(); while (char.IsDigit(Peek())) Read(); }
+            if (Peek() == 'e' || Peek() == 'E')
+            {
+                Read();
+                if (Peek() == '+' || Peek() == '-') Read();
+                while (char.IsDigit(Peek())) Read();
+            }
+            return _json.Substring(start, _pos - start);
+        }
+
+        private string ReadString()
+        {
+            SkipWhitespace();
+            Expect('"');
+            StringBuilder sb = new StringBuilder();
+            while (true)
+            {
+                char c = Read();
+                if (c == '"') break;
+                if (c == '\\')
+                {
+                    c = Read();
+                    switch (c)
+                    {
+                        case '"': sb.Append('"'); break;
+                        case '\\': sb.Append('\\'); break;
+                        case '/': sb.Append('/'); break;
+                        case 'b': sb.Append('\b'); break;
+                        case 'f': sb.Append('\f'); break;
+                        case 'n': sb.Append('\n'); break;
+                        case 'r': sb.Append('\r'); break;
+                        case 't': sb.Append('\t'); break;
+                        case 'u':
+                            char[] hexChars = new char[4];
+                            hexChars[0] = Read();
+                            hexChars[1] = Read();
+                            hexChars[2] = Read();
+                            hexChars[3] = Read();
+                            string hex = new string(hexChars);
+                            sb.Append((char)Convert.ToInt32(hex, 16));
+                            break;
+                        default: throw new FormatException(string.Format("Invalid escape sequence \\{0}", c));
+                    }
+                }
+                else
+                {
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString();
+        }
+
+        private void SkipValue()
+        {
+            SkipWhitespace();
+            char c = Peek();
+            if (c == '{')
+            {
+                Read();
+                int depth = 1;
+                while (depth > 0)
+                {
+                    c = Read();
+                    if (c == '{') depth++;
+                    else if (c == '}') depth--;
+                    else if (c == '"') { while (Read() != '"') { } }
+                }
+            }
+            else if (c == '[')
+            {
+                Read();
+                int depth = 1;
+                while (depth > 0)
+                {
+                    c = Read();
+                    if (c == '[') depth++;
+                    else if (c == ']') depth--;
+                    else if (c == '"') { while (Read() != '"') { } }
+                }
+            }
+            else if (c == '"')
+            {
+                ReadString();
+            }
+            else
+            {
+                // 数字、true、false、null
+                while (!char.IsWhiteSpace(Peek()) && Peek() != ',' && Peek() != ']' && Peek() != '}')
+                    Read();
+            }
+        }
+
+        public T ReadObject<T>() where T : class
+        {
+            Expect('{');
+            SkipWhitespace();
+
+            // 空对象
+            if (Peek() == '}')
+            {
+                Read();
+                T empty = Activator.CreateInstance<T>();
+                IBufferObject bufferObj = empty as IBufferObject;
+                if (bufferObj != null) bufferObj.AfterReadBuffer();
+                return empty;
+            }
+
+            // 保存快照，用于回退（无类型信息时）
+            int snapshot = _pos;
+            string firstKey = ReadString();
+            Expect(':');
+
+            Type actualType = typeof(T);
+            object instance = null;
+
+            // 情况1：第一个字段是 $type，则读取类型信息
+            if (firstKey == "$type")
+            {
+                string typeFullName = ReadString();
+                string assemblyName = null;
+
+                // 读取 $assembly
+                SkipWhitespace();
+                if (Peek() == ',')
+                {
+                    Read();
+                    SkipWhitespace();
+                    string nextKey = ReadString();
+                    if (nextKey == "$assembly")
+                    {
+                        Expect(':');
+                        assemblyName = ReadString();
+                        // 跳过 $assembly 后面的逗号（如果存在）
+                        SkipWhitespace();
+                        if (Peek() == ',')
+                            Read();
+                    }
+                    else
+                    {
+                        throw new FormatException("Expected $assembly after $type");
+                    }
+                }
+
+                actualType = TypeHelper.GetTypeByFullName(typeFullName, assemblyName);
+                if (actualType == null)
+                    throw new Exception(string.Format("Cannot resolve type: {0}, {1}", typeFullName, assemblyName));
+
+                instance = Activator.CreateInstance(actualType);
+            }
+            else
+            {
+                // 情况2：没有 $type，回退到快照并使用泛型类型 T
+                _pos = snapshot;
+                instance = Activator.CreateInstance(actualType);
+            }
+
+            var typeFields = TypeHelper.GetTypeFields(actualType);
+            bool firstField = true;
+
+            // 循环读取剩余字段（普通字段）
+            while (true)
+            {
+                SkipWhitespace();
+                if (Peek() == '}')
+                {
+                    Read();
+                    break;
+                }
+                if (!firstField) Expect(',');
+                firstField = false;
+
+                string fieldName = ReadString();
+                Expect(':');
+                var field = typeFields.FindField(fieldName);
+                if (field == null)
+                {
+                    SkipValue();
+                }
+                else
+                {
+                    var converter = BuffConverter.GetConverter(field.FieldType);
+                    object value = converter.Read(this, field.FieldType);
+                    field.SetValue(instance, value);
+                }
+            }
+
+            IBufferObject bufferObjFinal = instance as IBufferObject;
+            if (bufferObjFinal != null)
+                bufferObjFinal.AfterReadBuffer();
+            return (T)instance;
+        }
+
+        // 其余方法保持不变（ReadArray, ReadList, 基础类型等）
+        public T[] ReadArray<T>(Func<IBufferReader, T> read)
+        {
+            SkipWhitespace();
+            Expect('[');
+            List<T> list = new List<T>();
+            bool first = true;
+            while (true)
+            {
+                SkipWhitespace();
+                if (Peek() == ']')
+                {
+                    Read();
+                    break;
+                }
+                if (!first) Expect(',');
+                first = false;
+                list.Add(read(this));
+            }
+            return list.ToArray();
+        }
+
+        public List<T> ReadList<T>(Func<IBufferReader, T> read)
+        {
+            SkipWhitespace();
+            Expect('[');
+            List<T> list = new List<T>();
+            bool first = true;
+            while (true)
+            {
+                SkipWhitespace();
+                if (Peek() == ']')
+                {
+                    Read();
+                    break;
+                }
+                if (!first) Expect(',');
+                first = false;
+                list.Add(read(this));
+            }
+            return list;
+        }
+
+        public bool ReadBool()
+        {
+            SkipWhitespace();
+            if (Peek() == 't')
+            {
+                Expect('t'); Expect('r'); Expect('u'); Expect('e');
+                return true;
+            }
+            if (Peek() == 'f')
+            {
+                Expect('f'); Expect('a'); Expect('l'); Expect('s'); Expect('e');
+                return false;
+            }
+            throw new FormatException("Expected boolean");
+        }
+
+        public byte ReadByte() { return (byte)ReadInt64(); }
+        public char ReadChar() { return ReadUTF8()[0]; }
+        public double ReadDouble() { return double.Parse(ReadNumber(), CultureInfo.InvariantCulture); }
+        public float ReadFloat() { return float.Parse(ReadNumber(), CultureInfo.InvariantCulture); }
+        public short ReadInt16() { return (short)ReadInt64(); }
+        public int ReadInt32() { return (int)ReadInt64(); }
+        public long ReadInt64() { return long.Parse(ReadNumber(), CultureInfo.InvariantCulture); }
+        public ushort ReadUInt16() { return (ushort)ReadInt64(); }
+        public uint ReadUInt32() { return (uint)ReadInt64(); }
+        public ulong ReadUInt64() { return (ulong)ReadInt64(); }
+        public string ReadUTF8() { return ReadString(); }
+
+        public Enum ReadEnum(Type type)
+        {
+            string value = ReadString();
+            return (Enum)Enum.Parse(type, value);
+        }
+    }
+}

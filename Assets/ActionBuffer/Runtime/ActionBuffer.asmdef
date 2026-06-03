@@ -1,10 +1,7 @@
 {
-    "name": "ActionEditor.Nodes",
+    "name": "ActionBuffer",
     "rootNamespace": "",
-    "references": [
-        "GUID:2f5d7ff7639293b4bbbea67c608851e6",
-        "GUID:27ca05e1d80c71c44873bc25f807c70b"
-    ],
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
@@ -13,5 +10,5 @@
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
-    "noEngineReferences": false
+    "noEngineReferences": true
 }
