@@ -2,10 +2,10 @@
 cd ../
 set b="version"
 set version ="1"
-set branchName="upm_node"
+set branchName="upm_buffer"
 
 REM 获取版本号
-for /f "tokens=1,2* delims=:," %%a in (Assets/ActionEditor.Nodes/package.json) do (
+for /f "tokens=1,2* delims=:," %%a in (Assets/ActionBuffer/package.json) do (
     echo %%a| findstr %b% >nul && (
        set version=  %%b
     ) || (
@@ -16,7 +16,7 @@ for /f "tokens=1,2* delims=:," %%a in (Assets/ActionEditor.Nodes/package.json) d
 
 set version=%version: =%
 echo on
-git subtree split --prefix=Assets/ActionEditor.Nodes --branch %branchName%
+git subtree split --prefix=Assets/ActionBuffer --branch %branchName%
 git push origin %branchName%:%branchName%
 git tag %branchName%_%version% %branchName%
 git push origin %branchName% --tags
