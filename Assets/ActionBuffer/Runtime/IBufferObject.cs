@@ -209,10 +209,24 @@ namespace ActionBuffer
         }
 
         public static T DeepCopyByBuffer<T>(this T value) => BuffConverter.ToObject<T>(BuffConverter.ToBytes(value));
-        public static bool IsNullOrDefault<T>(T obj)
+        private static readonly Dictionary<Type, object> _defaultValues = new Dictionary<Type, object>();
+        private static readonly object _lock = new object();
+        public static bool IsNullOrDefault(object obj)
         {
             if (obj == null) return true;
-            return EqualityComparer<T>.Default.Equals(obj, default(T));
+            Type type = obj.GetType();
+            if (!type.IsValueType) return false;
+
+            object defaultValue;
+            lock (_lock)
+            {
+                if (!_defaultValues.TryGetValue(type, out defaultValue))
+                {
+                    defaultValue = Activator.CreateInstance(type);
+                    _defaultValues.Add(type, defaultValue);
+                }
+            }
+            return obj.Equals(defaultValue);
         }
         private static Dictionary<Type, string> type_warp = new Dictionary<Type, string>()
         {
@@ -324,6 +338,158 @@ namespace ActionBuffer
     }
 
 
+    public abstract class BuffConverter
+    {
+        private static Dictionary<Type, Type> _nmap;
+
+        private static Dictionary<Type, Type> _fgenmap;
+        private static Dictionary<Type, BuffConverter> map = new Dictionary<Type, BuffConverter>();
+        private static BuffConverter Create(Type type)
+        {
+            if (_nmap == null)
+            {
+                _nmap = new Dictionary<Type, Type>();
+                _fgenmap = new Dictionary<Type, Type>();
+                var types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes()).Where(x =>
+                {
+                    return !x.IsAbstract && x.BaseType != null && x.BaseType.IsGenericType && typeof(BuffConverter).IsAssignableFrom(x);
+                });
+                foreach (var item in types)
+                {
+                    var args = item.BaseType.GetGenericArguments();
+                    if (args.Length == 1)
+                    {
+                        var arg = args[0];
+                        if (arg.IsGenericType)
+                        {
+                            _fgenmap.Add(arg.GetGenericTypeDefinition(), item);
+                            Console.WriteLine();
+                        }
+                        else
+                            _nmap.Add(args[0], item);
+                    }
+                }
+
+            }
+
+
+            if (_nmap.TryGetValue(type, out var target))
+                return Activator.CreateInstance(target) as BuffConverter;
+            if (type.IsEnum)
+                return Activator.CreateInstance(typeof(EnumConverter<>).MakeGenericType(type)) as BuffConverter;
+            if (type.IsArray)
+                return Activator.CreateInstance(typeof(ArrayConverter<>).MakeGenericType(type.GetElementType())) as BuffConverter;
+            if (type.IsGenericType)
+            {
+                foreach (var item in _fgenmap.Keys)
+                {
+                    if (TypeHelper.IsSubclassOfGeneric(type, item))
+                    {
+                        return Activator.CreateInstance(_fgenmap[item].MakeGenericType(type.GetGenericArguments())) as BuffConverter;
+                    }
+                }
+            }
+            if (!type.IsValueType && !type.IsGenericType)
+                return Activator.CreateInstance(typeof(ObjectConverter<>).MakeGenericType(type)) as BuffConverter;
+            return null;
+        }
+        public static BuffConverter GetConverter(Type type)
+        {
+            if (!map.TryGetValue(type, out var convert))
+            {
+                convert = Create(type);
+                if (convert == null)
+                {
+                    throw new Exception($"UnHandled Type {type}");
+                }
+                map.Add(type, convert);
+            }
+            return convert;
+        }
+        public static BuffConverter<T> GetConverter<T>() => GetConverter(typeof(T)) as BuffConverter<T>;
+
+        public abstract object Read(IBufferReader reader, Type type);
+        public abstract void Write(IBufferWriter writer, object value);
+        internal abstract void CollectMetas(IBufferWriter writer, object value);
+
+
+        public enum DataType
+        {
+            Bytes, Json
+        }
+        public static IBufferReader CreateReader(DataType type)
+        {
+            if (type == DataType.Bytes) return new BufferReader();
+            if (type == DataType.Json) return new JsonReader();
+
+            return null;
+        }
+        public static IBufferWriter CreateWriter(DataType type)
+        {
+            if (type == DataType.Bytes) return new BufferWriter();
+            if (type == DataType.Json) return new JsonWriter();
+
+            return null;
+        }
+
+        public static string ToJson(object obj, bool pretty = false, bool typeInfo = true, bool fullField = false)
+        {
+            var type = obj.GetType();
+            var writer = CreateWriter(DataType.Json);
+            var js = writer as JsonWriter;
+            js.typeInfo = typeInfo;
+            js.prettyPrint = pretty;
+            js.fullField = fullField;
+            var c = GetConverter(type);
+            c.Write(writer, obj);
+            return js.GetJson();
+        }
+        public static object ToObject(string data, Type type)
+        {
+            var reader = CreateReader(DataType.Json);
+            (reader as JsonReader).Init(data);
+            var c = GetConverter(type);
+            return c.Read(reader, type);
+        }
+        public static T ToObject<T>(string data) => (T)ToObject(data, typeof(T));
+
+
+
+
+        public static byte[] ToBytes(object obj)
+        {
+            var type = obj.GetType();
+            var writer = CreateWriter(DataType.Bytes);
+            var c = GetConverter(type);
+            c.Write(writer, obj);
+            return (writer as BufferWriter).GetValidBuffer();
+        }
+        public static object ToObject(byte[] bytes, Type type)
+        {
+            var reader = CreateReader(DataType.Bytes);
+            (reader as BufferReader).Init(bytes);
+            var c = GetConverter(type);
+            return c.Read(reader, type);
+        }
+        public static T ToObject<T>(byte[] bytes) => (T)ToObject(bytes, typeof(T));
+    }
+    public abstract class BuffConverter<T> : BuffConverter
+    {
+        public abstract void OnWrite(IBufferWriter writer, T value);
+        public abstract T OnRead(IBufferReader reader, Type type);
+        public sealed override object Read(IBufferReader reader, Type type) => OnRead(reader, type);
+        public sealed override void Write(IBufferWriter writer, object value) => OnWrite(writer, (T)value);
+        protected virtual void OnCollectMetas(IBufferWriter writer, T value) { }
+
+        internal sealed override void CollectMetas(IBufferWriter writer, object value) => OnCollectMetas(writer, (T)value);
+    }
+
+}
+
+
+
+namespace ActionBuffer
+{
 
     public class BufferReader : IBufferReader
     {
@@ -785,353 +951,14 @@ namespace ActionBuffer
         }
 
     }
-
 }
-namespace ActionBuffer
-{
-    public abstract class BuffConverter
-    {
-        private static Dictionary<Type, Type> _nmap;
-
-        private static Dictionary<Type, Type> _fgenmap;
-        private static Dictionary<Type, BuffConverter> map = new Dictionary<Type, BuffConverter>();
-        private static BuffConverter Create(Type type)
-        {
-            if (_nmap == null)
-            {
-                _nmap = new Dictionary<Type, Type>();
-                _fgenmap = new Dictionary<Type, Type>();
-                var types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes()).Where(x =>
-                {
-                    return !x.IsAbstract && x.BaseType != null && x.BaseType.IsGenericType && typeof(BuffConverter).IsAssignableFrom(x);
-                });
-                foreach (var item in types)
-                {
-                    var args = item.BaseType.GetGenericArguments();
-                    if (args.Length == 1)
-                    {
-                        var arg = args[0];
-                        if (arg.IsGenericType)
-                        {
-                            _fgenmap.Add(arg.GetGenericTypeDefinition(), item);
-                            Console.WriteLine();
-                        }
-                        else
-                            _nmap.Add(args[0], item);
-                    }
-                }
-
-            }
-
-
-            if (_nmap.TryGetValue(type, out var target))
-                return Activator.CreateInstance(target) as BuffConverter;
-            if (type.IsEnum)
-                return Activator.CreateInstance(typeof(EnumConverter<>).MakeGenericType(type)) as BuffConverter;
-            if (type.IsArray)
-                return Activator.CreateInstance(typeof(ArrayConverter<>).MakeGenericType(type.GetElementType())) as BuffConverter;
-            if (type.IsGenericType)
-            {
-                foreach (var item in _fgenmap.Keys)
-                {
-                    if (TypeHelper.IsSubclassOfGeneric(type, item))
-                    {
-                        return Activator.CreateInstance(_fgenmap[item].MakeGenericType(type.GetGenericArguments())) as BuffConverter;
-                    }
-                }
-            }
-            if (!type.IsValueType && !type.IsGenericType)
-                return Activator.CreateInstance(typeof(ObjectConverter<>).MakeGenericType(type)) as BuffConverter;
-            return null;
-        }
-        public static BuffConverter GetConverter(Type type)
-        {
-            if (!map.TryGetValue(type, out var convert))
-            {
-                convert = Create(type);
-                if (convert == null)
-                {
-                    throw new Exception($"UnHandled Type {type}");
-                }
-                map.Add(type, convert);
-            }
-            return convert;
-        }
-        public static BuffConverter<T> GetConverter<T>() => GetConverter(typeof(T)) as BuffConverter<T>;
-
-        public abstract object Read(IBufferReader reader, Type type);
-        public abstract void Write(IBufferWriter writer, object value);
-        internal abstract void CollectMetas(IBufferWriter writer, object value);
-
-
-        public enum DataType
-        {
-            Bytes, Json
-        }
-        public static IBufferReader CreateReader(DataType type)
-        {
-            if (type == DataType.Bytes) return new BufferReader();
-            if (type == DataType.Json) return new JsonReader();
-
-            return null;
-        }
-        public static IBufferWriter CreateWriter(DataType type)
-        {
-            if (type == DataType.Bytes) return new BufferWriter();
-            if (type == DataType.Json) return new JsonWriter();
-
-            return null;
-        }
-
-        public static string ToJson(object obj, bool pretty = false, bool typeInfo = true)
-        {
-            var type = obj.GetType();
-            var writer = CreateWriter(DataType.Json);
-            var js = writer as JsonWriter;
-            js.typeInfo = typeInfo;
-            js.prettyPrint = pretty;
-            var c = GetConverter(type);
-            c.Write(writer, obj);
-            return js.GetJson();
-        }
-        public static object ToObject(string data, Type type)
-        {
-            var reader = CreateReader(DataType.Json);
-            (reader as JsonReader).Init(data);
-            var c = GetConverter(type);
-            return c.Read(reader, type);
-        }
-        public static T ToObject<T>(string data) => (T)ToObject(data, typeof(T));
-
-
-
-
-        public static byte[] ToBytes(object obj)
-        {
-            var type = obj.GetType();
-            var writer = CreateWriter(DataType.Bytes);
-            var c = GetConverter(type);
-            c.Write(writer, obj);
-            return (writer as BufferWriter).GetValidBuffer();
-        }
-        public static object ToObject(byte[] bytes, Type type)
-        {
-            var reader = CreateReader(DataType.Bytes);
-            (reader as BufferReader).Init(bytes);
-            var c = GetConverter(type);
-            return c.Read(reader, type);
-        }
-        public static T ToObject<T>(byte[] bytes) => (T)ToObject(bytes, typeof(T));
-    }
-    public abstract class BuffConverter<T> : BuffConverter
-    {
-        public abstract void OnWrite(IBufferWriter writer, T value);
-        public abstract T OnRead(IBufferReader reader, Type type);
-        public sealed override object Read(IBufferReader reader, Type type) => OnRead(reader, type);
-        public sealed override void Write(IBufferWriter writer, object value) => OnWrite(writer, (T)value);
-        protected virtual void OnCollectMetas(IBufferWriter writer, T value) { }
-
-        internal sealed override void CollectMetas(IBufferWriter writer, object value) => OnCollectMetas(writer, (T)value);
-    }
-
-    class ByteConverter : BuffConverter<byte>
-    {
-        public override byte OnRead(IBufferReader reader, Type type) => reader.ReadByte();
-        public override void OnWrite(IBufferWriter writer, byte value) => writer.WriteByte(value);
-    }
-    class BoolConverter : BuffConverter<bool>
-    {
-        public override bool OnRead(IBufferReader reader, Type type) => reader.ReadBool();
-        public override void OnWrite(IBufferWriter writer, bool value) => writer.WriteBool(value);
-    }
-
-    class CharConverter : BuffConverter<char>
-    {
-        public override char OnRead(IBufferReader reader, Type type) => reader.ReadChar();
-        public override void OnWrite(IBufferWriter writer, char value) => writer.WriteChar(value);
-    }
-
-    class ShortConverter : BuffConverter<short>
-    {
-        public override short OnRead(IBufferReader reader, Type type) => reader.ReadInt16();
-        public override void OnWrite(IBufferWriter writer, short value) => writer.WriteInt16(value);
-    }
-    class IntConverter : BuffConverter<int>
-    {
-        public override int OnRead(IBufferReader reader, Type type) => reader.ReadInt32();
-        public override void OnWrite(IBufferWriter writer, int value) => writer.WriteInt32(value);
-    }
-    class LongConverter : BuffConverter<long>
-    {
-        public override long OnRead(IBufferReader reader, Type type) => reader.ReadInt64();
-        public override void OnWrite(IBufferWriter writer, long value) => writer.WriteInt64(value);
-    }
-
-    class UShortConverter : BuffConverter<ushort>
-    {
-        public override ushort OnRead(IBufferReader reader, Type type) => reader.ReadUInt16();
-        public override void OnWrite(IBufferWriter writer, ushort value) => writer.WriteUInt16(value);
-    }
-    class UIntConverter : BuffConverter<uint>
-    {
-        public override uint OnRead(IBufferReader reader, Type type) => reader.ReadUInt32();
-        public override void OnWrite(IBufferWriter writer, uint value) => writer.WriteUInt32(value);
-    }
-    class ULongConverter : BuffConverter<ulong>
-    {
-        public override ulong OnRead(IBufferReader reader, Type type) => reader.ReadUInt64();
-        public override void OnWrite(IBufferWriter writer, ulong value) => writer.WriteUInt64(value);
-    }
-
-    class FloatConverter : BuffConverter<float>
-    {
-        public override float OnRead(IBufferReader reader, Type type) => reader.ReadFloat();
-        public override void OnWrite(IBufferWriter writer, float value) => writer.WriteFloat(value);
-    }
-    class DoubleConverter : BuffConverter<double>
-    {
-        public override double OnRead(IBufferReader reader, Type type) => reader.ReadDouble();
-        public override void OnWrite(IBufferWriter writer, double value) => writer.WriteDouble(value);
-    }
-    class StringConverter : BuffConverter<string>
-    {
-        public override string OnRead(IBufferReader reader, Type type) => reader.ReadUTF8();
-        public override void OnWrite(IBufferWriter writer, string value) => writer.WriteUTF8(value);
-    }
-    class DateTimeConverter : BuffConverter<DateTime>
-    {
-        BuffConverter<long> converter = GetConverter<long>();
-        public override DateTime OnRead(IBufferReader reader, Type type)
-        {
-            return new DateTime(converter.OnRead(reader, typeof(long)));
-        }
-
-        public override void OnWrite(IBufferWriter writer, DateTime value)
-        {
-            converter.OnWrite(writer, value.Ticks);
-        }
-    }
-    class TimeSpanConverter : BuffConverter<TimeSpan>
-    {
-        BuffConverter<long> converter = GetConverter<long>();
-        public override TimeSpan OnRead(IBufferReader reader, Type type)
-        {
-            return TimeSpan.FromTicks(converter.OnRead(reader, typeof(long)));
-        }
-
-        public override void OnWrite(IBufferWriter writer, TimeSpan value)
-        {
-            converter.OnWrite(writer, value.Ticks);
-        }
-    }
-    class EnumConverter<T> : BuffConverter<T> where T : Enum
-    {
-        public override T OnRead(IBufferReader reader, Type type) => (T)(Enum)reader.ReadEnum(type);
-        public override void OnWrite(IBufferWriter writer, T value) => writer.WriteEnum(value);
-    }
-    class ObjectConverter<T> : BuffConverter<T> where T : class
-    {
-        public override T OnRead(IBufferReader reader, Type type) => reader.ReadObject<T>();
-        public override void OnWrite(IBufferWriter writer, T value) => writer.WriteObject(value);
-        protected override void OnCollectMetas(IBufferWriter writer, T value) => writer.CollectMetas(value);
-    }
-    class ListConverter<T> : BuffConverter<List<T>>
-    {
-        static BuffConverter<T> converter = GetConverter<T>();
-        private T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
-        private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
-
-        public override List<T> OnRead(IBufferReader reader, Type type) => reader.ReadList(ReadOnce);
-        public override void OnWrite(IBufferWriter writer, List<T> value) => writer.WriteList(value, WriteOnce);
-        protected override void OnCollectMetas(IBufferWriter writer, List<T> value)
-        {
-            for (var i = 0; i < value.Count; i++)
-            {
-                var t = value[i];
-                converter.CollectMetas(writer, t);
-            }
-        }
-
-    }
-    class ArrayConverter<T> : BuffConverter<T[]>
-    {
-        static BuffConverter<T> converter = GetConverter<T>();
-        public override T[] OnRead(IBufferReader reader, Type type) => reader.ReadArray(ReadOnce);
-        private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
-
-        private T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
-
-        public override void OnWrite(IBufferWriter writer, T[] value) => writer.WriteArray(value, WriteOnce);
-        protected override void OnCollectMetas(IBufferWriter writer, T[] value)
-        {
-            for (var i = 0; i < value.Length; i++)
-            {
-                var t = value[i];
-                converter.CollectMetas(writer, t);
-            }
-        }
-    }
-
-
-
-    class DictionaryConverter<Key, Value> : BuffConverter<Dictionary<Key, Value>>
-    {
-        static BuffConverter<Key> c_k = GetConverter<Key>();
-        static BuffConverter<Value> c_v = GetConverter<Value>();
-
-        public override Dictionary<Key, Value> OnRead(IBufferReader reader, Type type)
-        {
-            var list_key = reader.ReadList(ReadOnce_Key);
-            var list_values = reader.ReadList(ReadOnce_Value);
-
-            var dic = new Dictionary<Key, Value>();
-            for (int i = 0; i < list_key.Count; i++)
-            {
-                dic.Add(list_key[i], list_values[i]);
-            }
-
-            return dic;
-
-        }
-
-        public override void OnWrite(IBufferWriter writer, Dictionary<Key, Value> value)
-        {
-            var list_key = value.Keys.ToList();
-            var list_values = value.Values.ToList();
-
-            writer.WriteList(list_key, WriteOnce_Key);
-            writer.WriteList(list_values, WriteOnce_Value);
-
-        }
-
-        protected override void OnCollectMetas(IBufferWriter writer, Dictionary<Key, Value> value)
-        {
-            foreach (var kv in value)
-            {
-                var k = kv.Key;
-                var v = kv.Value;
-                c_k.CollectMetas(writer, k);
-                c_v.CollectMetas(writer, v);
-            }
-            //base.OnCollectMetas(writer, value);
-        }
-        private Key ReadOnce_Key(IBufferReader reader) => c_k.OnRead(reader, typeof(Key));
-        private void WriteOnce_Key(IBufferWriter writer, Key t) => c_k.OnWrite(writer, t);
-        private Value ReadOnce_Value(IBufferReader reader) => c_v.OnRead(reader, typeof(Value));
-        private void WriteOnce_Value(IBufferWriter writer, Value value) => c_v.OnWrite(writer, value);
-    }
-}
-
-
-
-
 namespace ActionBuffer
 {
     public class JsonWriter : IBufferWriter
     {
         private readonly StringBuilder _sb = new StringBuilder();
         private readonly Stack<WriteContext> _contexts = new Stack<WriteContext>();
-        private bool _prettyPrint, _typeInfo;
+        private bool _prettyPrint, _typeInfo, _fullField;
         private int _indentLevel;
 
         public bool prettyPrint
@@ -1144,6 +971,12 @@ namespace ActionBuffer
             get { return _typeInfo; }
             set { _typeInfo = value; }
         }
+        public bool fullField
+        {
+            get { return _fullField; }
+            set { _fullField = value; }
+        }
+
 
         private struct WriteContext
         {
@@ -1276,7 +1109,7 @@ namespace ActionBuffer
             {
                 var field = fields[i];
                 object fieldValue = field.GetValue(value);
-                if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
+                if (!fullField && TypeHelper.IsNullOrDefault(fieldValue)) continue;
 
                 WriteCommaIfNeeded();
                 WriteIndent();
@@ -1660,5 +1493,194 @@ namespace ActionBuffer
             string value = ReadString();
             return (Enum)Enum.Parse(type, value);
         }
+    }
+}
+namespace ActionBuffer
+{
+    class ByteConverter : BuffConverter<byte>
+    {
+        public override byte OnRead(IBufferReader reader, Type type) => reader.ReadByte();
+        public override void OnWrite(IBufferWriter writer, byte value) => writer.WriteByte(value);
+    }
+    class BoolConverter : BuffConverter<bool>
+    {
+        public override bool OnRead(IBufferReader reader, Type type) => reader.ReadBool();
+        public override void OnWrite(IBufferWriter writer, bool value) => writer.WriteBool(value);
+    }
+
+    class CharConverter : BuffConverter<char>
+    {
+        public override char OnRead(IBufferReader reader, Type type) => reader.ReadChar();
+        public override void OnWrite(IBufferWriter writer, char value) => writer.WriteChar(value);
+    }
+
+    class ShortConverter : BuffConverter<short>
+    {
+        public override short OnRead(IBufferReader reader, Type type) => reader.ReadInt16();
+        public override void OnWrite(IBufferWriter writer, short value) => writer.WriteInt16(value);
+    }
+    class IntConverter : BuffConverter<int>
+    {
+        public override int OnRead(IBufferReader reader, Type type) => reader.ReadInt32();
+        public override void OnWrite(IBufferWriter writer, int value) => writer.WriteInt32(value);
+    }
+    class LongConverter : BuffConverter<long>
+    {
+        public override long OnRead(IBufferReader reader, Type type) => reader.ReadInt64();
+        public override void OnWrite(IBufferWriter writer, long value) => writer.WriteInt64(value);
+    }
+
+    class UShortConverter : BuffConverter<ushort>
+    {
+        public override ushort OnRead(IBufferReader reader, Type type) => reader.ReadUInt16();
+        public override void OnWrite(IBufferWriter writer, ushort value) => writer.WriteUInt16(value);
+    }
+    class UIntConverter : BuffConverter<uint>
+    {
+        public override uint OnRead(IBufferReader reader, Type type) => reader.ReadUInt32();
+        public override void OnWrite(IBufferWriter writer, uint value) => writer.WriteUInt32(value);
+    }
+    class ULongConverter : BuffConverter<ulong>
+    {
+        public override ulong OnRead(IBufferReader reader, Type type) => reader.ReadUInt64();
+        public override void OnWrite(IBufferWriter writer, ulong value) => writer.WriteUInt64(value);
+    }
+
+    class FloatConverter : BuffConverter<float>
+    {
+        public override float OnRead(IBufferReader reader, Type type) => reader.ReadFloat();
+        public override void OnWrite(IBufferWriter writer, float value) => writer.WriteFloat(value);
+    }
+    class DoubleConverter : BuffConverter<double>
+    {
+        public override double OnRead(IBufferReader reader, Type type) => reader.ReadDouble();
+        public override void OnWrite(IBufferWriter writer, double value) => writer.WriteDouble(value);
+    }
+    class StringConverter : BuffConverter<string>
+    {
+        public override string OnRead(IBufferReader reader, Type type) => reader.ReadUTF8();
+        public override void OnWrite(IBufferWriter writer, string value) => writer.WriteUTF8(value);
+    }
+    class DateTimeConverter : BuffConverter<DateTime>
+    {
+        BuffConverter<long> converter = GetConverter<long>();
+        public override DateTime OnRead(IBufferReader reader, Type type)
+        {
+            return new DateTime(converter.OnRead(reader, typeof(long)));
+        }
+
+        public override void OnWrite(IBufferWriter writer, DateTime value)
+        {
+            converter.OnWrite(writer, value.Ticks);
+        }
+    }
+    class TimeSpanConverter : BuffConverter<TimeSpan>
+    {
+        BuffConverter<long> converter = GetConverter<long>();
+        public override TimeSpan OnRead(IBufferReader reader, Type type)
+        {
+            return TimeSpan.FromTicks(converter.OnRead(reader, typeof(long)));
+        }
+
+        public override void OnWrite(IBufferWriter writer, TimeSpan value)
+        {
+            converter.OnWrite(writer, value.Ticks);
+        }
+    }
+    class EnumConverter<T> : BuffConverter<T> where T : Enum
+    {
+        public override T OnRead(IBufferReader reader, Type type) => (T)(Enum)reader.ReadEnum(type);
+        public override void OnWrite(IBufferWriter writer, T value) => writer.WriteEnum(value);
+    }
+    class ObjectConverter<T> : BuffConverter<T> where T : class
+    {
+        public override T OnRead(IBufferReader reader, Type type) => reader.ReadObject<T>();
+        public override void OnWrite(IBufferWriter writer, T value) => writer.WriteObject(value);
+        protected override void OnCollectMetas(IBufferWriter writer, T value) => writer.CollectMetas(value);
+    }
+    class ListConverter<T> : BuffConverter<List<T>>
+    {
+        static BuffConverter<T> converter = GetConverter<T>();
+        private T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
+        private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
+
+        public override List<T> OnRead(IBufferReader reader, Type type) => reader.ReadList(ReadOnce);
+        public override void OnWrite(IBufferWriter writer, List<T> value) => writer.WriteList(value, WriteOnce);
+        protected override void OnCollectMetas(IBufferWriter writer, List<T> value)
+        {
+            for (var i = 0; i < value.Count; i++)
+            {
+                var t = value[i];
+                converter.CollectMetas(writer, t);
+            }
+        }
+
+    }
+    class ArrayConverter<T> : BuffConverter<T[]>
+    {
+        static BuffConverter<T> converter = GetConverter<T>();
+        public override T[] OnRead(IBufferReader reader, Type type) => reader.ReadArray(ReadOnce);
+        private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
+
+        private T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
+
+        public override void OnWrite(IBufferWriter writer, T[] value) => writer.WriteArray(value, WriteOnce);
+        protected override void OnCollectMetas(IBufferWriter writer, T[] value)
+        {
+            for (var i = 0; i < value.Length; i++)
+            {
+                var t = value[i];
+                converter.CollectMetas(writer, t);
+            }
+        }
+    }
+
+
+
+    class DictionaryConverter<Key, Value> : BuffConverter<Dictionary<Key, Value>>
+    {
+        static BuffConverter<Key> c_k = GetConverter<Key>();
+        static BuffConverter<Value> c_v = GetConverter<Value>();
+
+        public override Dictionary<Key, Value> OnRead(IBufferReader reader, Type type)
+        {
+            var list_key = reader.ReadList(ReadOnce_Key);
+            var list_values = reader.ReadList(ReadOnce_Value);
+
+            var dic = new Dictionary<Key, Value>();
+            for (int i = 0; i < list_key.Count; i++)
+            {
+                dic.Add(list_key[i], list_values[i]);
+            }
+
+            return dic;
+
+        }
+
+        public override void OnWrite(IBufferWriter writer, Dictionary<Key, Value> value)
+        {
+            var list_key = value.Keys.ToList();
+            var list_values = value.Values.ToList();
+
+            writer.WriteList(list_key, WriteOnce_Key);
+            writer.WriteList(list_values, WriteOnce_Value);
+
+        }
+
+        protected override void OnCollectMetas(IBufferWriter writer, Dictionary<Key, Value> value)
+        {
+            foreach (var kv in value)
+            {
+                var k = kv.Key;
+                var v = kv.Value;
+                c_k.CollectMetas(writer, k);
+                c_v.CollectMetas(writer, v);
+            }
+            //base.OnCollectMetas(writer, value);
+        }
+        private Key ReadOnce_Key(IBufferReader reader) => c_k.OnRead(reader, typeof(Key));
+        private void WriteOnce_Key(IBufferWriter writer, Key t) => c_k.OnWrite(writer, t);
+        private Value ReadOnce_Value(IBufferReader reader) => c_v.OnRead(reader, typeof(Value));
+        private void WriteOnce_Value(IBufferWriter writer, Value value) => c_v.OnWrite(writer, value);
     }
 }
