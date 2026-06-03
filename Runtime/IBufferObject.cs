@@ -1077,12 +1077,17 @@ namespace ActionBuffer
             WriteRaw(":");
             WriteSpaceIfPretty();
             WriteString(type.FullName);
-            WriteCommaIfNeeded();
+            WriteRaw(",");
+
+            //WriteCommaIfNeeded();
             WriteIndent();
             WriteString("$assembly");
             WriteRaw(":");
             WriteSpaceIfPretty();
             WriteString(type.Assembly.FullName);
+            //WriteRaw(",");
+            WriteCommaIfNeeded();
+
         }
 
         public void WriteObject<T>(T value) where T : class
