@@ -1,4 +1,5 @@
 @echo off
+cd ../
 set b="version"
 set version ="1"
 set branchName="upm_node"

@@ -3,7 +3,7 @@
   "displayName": "ActionBehaviorTree",
   "version": "1.0.9",
   "unity": "2019.4",
-  "description": "ActionEditor.BehavorTree",
+  "description": "ActionEditor.BehaviorTree",
   "type": "library",
   "author": {
     "name": "woo",
