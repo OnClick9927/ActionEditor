@@ -500,6 +500,7 @@ namespace ActionBuffer
         public void Init(byte[] data)
         {
             _buffer = data;
+            _index = 0;
         }
         private void CheckReaderIndex(int length)
         {
