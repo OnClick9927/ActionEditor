@@ -89,25 +89,6 @@ class TLMoveClipEditor : ActionEditor.ClipEditorView
 
 
 
-public class Vector3BuffConverter : BuffConverter<Vector3>
-{
-    static BuffConverter<float> converter = GetConverter(typeof(float)) as BuffConverter<float>;
-    public override Vector3 OnRead(IBufferReader reader, Type type)
-    {
-        Vector3 v3 = new Vector3();
-        for (int i = 0; i < 3; i++)
-            v3[i] = converter.OnRead(reader, typeof(float));
-        return v3;
-
-    }
-
-    public override void OnWrite(IBufferWriter writer, Vector3 value)
-    {
-        for (int i = 0; i < 3; i++)
-            writer.WriteFloat(value[i]);
-    }
-}
-
 
 [Attachable(typeof(TLActionTrack)), Name("ÒÆ¶¯")]
 
@@ -153,7 +134,6 @@ public class TLLogSignal : ActionEditor.ClipSignal, ITLCLip
     private string Test2;
     [Range(0, 1)] public float test;
     public override bool IsValid => !string.IsNullOrEmpty(message);
-
     private float time;
     private bool called;
     void ITLCLip.Update()
