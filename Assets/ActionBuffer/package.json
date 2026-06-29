@@ -1,7 +1,7 @@
 {
     "name": "com.woo.actionbuffer",
     "displayName": "ActionBuffer",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "unity": "2019.4",
     "description": "ActionBuffer",
     "type": "library",
