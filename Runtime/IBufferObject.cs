@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 
+
 namespace ActionBuffer
 {
 
@@ -210,7 +211,6 @@ namespace ActionBuffer
 
         public static T DeepCopyByBuffer<T>(this T value) => BuffConverter.ToObject<T>(BuffConverter.ToBytes(value));
         private static readonly Dictionary<Type, object> _defaultValues = new Dictionary<Type, object>();
-        private static readonly object _lock = new object();
         public static bool IsNullOrDefault(object obj)
         {
             if (obj == null) return true;
@@ -218,13 +218,10 @@ namespace ActionBuffer
             if (!type.IsValueType) return false;
 
             object defaultValue;
-            lock (_lock)
+            if (!_defaultValues.TryGetValue(type, out defaultValue))
             {
-                if (!_defaultValues.TryGetValue(type, out defaultValue))
-                {
-                    defaultValue = Activator.CreateInstance(type);
-                    _defaultValues.Add(type, defaultValue);
-                }
+                defaultValue = TypeHelper.CreateInstance(type);
+                _defaultValues.Add(type, defaultValue);
             }
             return obj.Equals(defaultValue);
         }
@@ -246,7 +243,7 @@ namespace ActionBuffer
             { typeof(TimeSpan),"n"},
         };
         private static Dictionary<string, string> type_warp_2;
-
+        public static object CreateInstance(Type type) => Activator.CreateInstance(type);
         public static string GetTypeName(Type type)
         {
             if (type_warp.TryGetValue(type, out var result))
@@ -267,11 +264,6 @@ namespace ActionBuffer
             return src;
         }
     }
-
-
-
-
-
     [StructLayout(LayoutKind.Explicit, Size = 4)]
     struct FloatUnion
     {
@@ -299,7 +291,27 @@ namespace ActionBuffer
 
     public interface IBufferReader
     {
-        T[] ReadArray<T>(Func<IBufferReader, T> read);
+        List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read);
+        List<T> ReadList<T>(Func<IBufferReader, T> read)
+        {
+            return ReadIEnumerable(ListPool<T>.GetList(), read);
+        }
+        T[] ReadArray<T>(Func<IBufferReader, T> read)
+        {
+            var list = ListPool<T>.GetList();
+            list = ReadIEnumerable(list, read);
+            var result = list.ToArray();
+            ListPool<T>.BackList(list);
+            return result;
+        }
+        HashSet<T> ReadHashSet<T>(Func<IBufferReader, T> read)
+        {
+            var list = ListPool<T>.GetList();
+            list = ReadIEnumerable(list, read);
+            var result = list.ToHashSet();
+            ListPool<T>.BackList(list);
+            return result;
+        }
         bool ReadBool();
         byte ReadByte();
         char ReadChar();
@@ -309,8 +321,7 @@ namespace ActionBuffer
         short ReadInt16();
         int ReadInt32();
         long ReadInt64();
-        List<T> ReadList<T>(Func<IBufferReader, T> read);
-        T ReadObject<T>() where T : class;
+        T ReadObject<T>();
         ushort ReadUInt16();
         uint ReadUInt32();
         ulong ReadUInt64();
@@ -319,7 +330,8 @@ namespace ActionBuffer
     public interface IBufferWriter
     {
         void CollectMetas(object value);
-        void WriteArray<T>(T[] values, Action<IBufferWriter, T> write);
+        void WriteIEnumerable<T>(IEnumerable<T> values, Action<IBufferWriter, T> write);
+
         void WriteBool(bool value);
         void WriteByte(byte value);
         void WriteChar(char value);
@@ -329,14 +341,26 @@ namespace ActionBuffer
         void WriteInt16(short value);
         void WriteInt32(int value);
         void WriteInt64(long value);
-        void WriteList<T>(List<T> values, Action<IBufferWriter, T> write);
-        void WriteObject<T>(T value) where T : class;
+        void WriteObject<T>(T value);
         void WriteUInt16(ushort value);
         void WriteUInt32(uint value);
         void WriteUInt64(ulong value);
         void WriteUTF8(string value);
     }
-
+    public class ListPool<T>
+    {
+        private static Queue<List<T>> pool = new();
+        public static List<T> GetList()
+        {
+            List<T> values = pool.Count > 0 ? pool.Dequeue() : new List<T>();
+            values.Clear();
+            return values;
+        }
+        public static void BackList(List<T> values)
+        {
+            pool.Enqueue(values);
+        }
+    }
 
     public abstract class BuffConverter
     {
@@ -363,7 +387,6 @@ namespace ActionBuffer
                         if (arg.IsGenericType)
                         {
                             _fgenmap.Add(arg.GetGenericTypeDefinition(), item);
-                            Console.WriteLine();
                         }
                         else
                             _nmap.Add(args[0], item);
@@ -374,23 +397,23 @@ namespace ActionBuffer
 
 
             if (_nmap.TryGetValue(type, out var target))
-                return Activator.CreateInstance(target) as BuffConverter;
+                return TypeHelper.CreateInstance(target) as BuffConverter;
             if (type.IsEnum)
-                return Activator.CreateInstance(typeof(EnumConverter<>).MakeGenericType(type)) as BuffConverter;
+                return TypeHelper.CreateInstance(typeof(EnumConverter<>).MakeGenericType(type)) as BuffConverter;
             if (type.IsArray)
-                return Activator.CreateInstance(typeof(ArrayConverter<>).MakeGenericType(type.GetElementType())) as BuffConverter;
+                return TypeHelper.CreateInstance(typeof(ArrayConverter<>).MakeGenericType(type.GetElementType())) as BuffConverter;
             if (type.IsGenericType)
             {
                 foreach (var item in _fgenmap.Keys)
                 {
                     if (TypeHelper.IsSubclassOfGeneric(type, item))
                     {
-                        return Activator.CreateInstance(_fgenmap[item].MakeGenericType(type.GetGenericArguments())) as BuffConverter;
+                        return TypeHelper.CreateInstance(_fgenmap[item].MakeGenericType(type.GetGenericArguments())) as BuffConverter;
                     }
                 }
             }
-            if (!type.IsValueType && !type.IsGenericType)
-                return Activator.CreateInstance(typeof(ObjectConverter<>).MakeGenericType(type)) as BuffConverter;
+            if (!type.IsGenericType)
+                return TypeHelper.CreateInstance(typeof(ObjectConverter<>).MakeGenericType(type)) as BuffConverter;
             return null;
         }
         public static BuffConverter GetConverter(Type type)
@@ -475,6 +498,7 @@ namespace ActionBuffer
     }
     public abstract class BuffConverter<T> : BuffConverter
     {
+
         public abstract void OnWrite(IBufferWriter writer, T value);
         public abstract T OnRead(IBufferReader reader, Type type);
         public sealed override object Read(IBufferReader reader, Type type) => OnRead(reader, type);
@@ -603,33 +627,33 @@ namespace ActionBuffer
         }
 
 
-        public List<T> ReadList<T>(Func<IBufferReader, T> read)
+        public List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read)
         {
             ushort count = ReadUInt16();
 
-            List<T> values = new List<T>();
+            List<T> values = result;
             for (int i = 0; i < count; i++)
                 values.Add(read(this));
             return values;
         }
-        public T[] ReadArray<T>(Func<IBufferReader, T> read)
-        {
-            ushort count = ReadUInt16();
-            T[] values = new T[count];
-            for (int i = 0; i < count; i++)
-            {
-                values[i] = read(this);
-            }
-            return values;
-        }
+        //public T[] ReadArray<T>(Func<IBufferReader, T> read)
+        //{
+        //    ushort count = ReadUInt16();
+        //    T[] values = new T[count];
+        //    for (int i = 0; i < count; i++)
+        //    {
+        //        values[i] = read(this);
+        //    }
+        //    return values;
+        //}
 
 
 
-        private string[] metas;
-        public T ReadObject<T>() where T : class
+        private List<string> metas;
+        public T ReadObject<T>()
         {
             if (metas == null)
-                metas = ReadArray((r) => r.ReadUTF8());
+                metas = ReadIEnumerable(new List<string>(), (r) => r.ReadUTF8());
             var typeName = metas[ReadInt32()];
             var assemblyName = metas[ReadInt32()];
             Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
@@ -637,9 +661,9 @@ namespace ActionBuffer
             if (type == null)
             {
                 this._index = ObjEnd;
-                return null;
+                return default;
             }
-            T t = (T)Activator.CreateInstance(type);
+            object t = TypeHelper.CreateInstance(type);
 
             var typeField = TypeHelper.GetTypeFields(type);
             while (ObjEnd - this._index > 12)
@@ -670,7 +694,7 @@ namespace ActionBuffer
             if (t is IBufferObject buff)
                 buff.AfterReadBuffer();
 
-            return t;
+            return (T)t;
         }
 
 
@@ -796,39 +820,52 @@ namespace ActionBuffer
             _buffer[_index++] = (byte)(value >> 56);
         }
 
-
-        public void WriteList<T>(List<T> values, Action<IBufferWriter, T> write)
+        public void WriteIEnumerable<T>(IEnumerable<T> values, Action<IBufferWriter, T> write)
         {
             if (values == null)
                 WriteUInt16(0);
             else
             {
-                int count = values.Count;
+                int count = values.Count();
                 if (count > ushort.MaxValue)
                     throw new FormatException($"Write array length cannot be greater than {ushort.MaxValue} !");
                 WriteUInt16(Convert.ToUInt16(count));
-                for (int i = 0; i < count; i++)
-                {
-                    write.Invoke(this, values[i]);
-                }
+                foreach (T value in values)
+                    write.Invoke(this, value);
             }
         }
-        public void WriteArray<T>(T[] values, Action<IBufferWriter, T> write)
-        {
-            if (values == null)
-                WriteUInt16(0);
-            else
-            {
-                int count = values.Length;
-                if (count > ushort.MaxValue)
-                    throw new FormatException($"Write array length cannot be greater than {ushort.MaxValue} !");
-                WriteUInt16(Convert.ToUInt16(count));
-                for (int i = 0; i < count; i++)
-                {
-                    write.Invoke(this, values[i]);
-                }
-            }
-        }
+        //public void WriteList<T>(List<T> values, Action<IBufferWriter, T> write)
+        //{
+        //    if (values == null)
+        //        WriteUInt16(0);
+        //    else
+        //    {
+        //        int count = values.Count;
+        //        if (count > ushort.MaxValue)
+        //            throw new FormatException($"Write array length cannot be greater than {ushort.MaxValue} !");
+        //        WriteUInt16(Convert.ToUInt16(count));
+        //        for (int i = 0; i < count; i++)
+        //        {
+        //            write.Invoke(this, values[i]);
+        //        }
+        //    }
+        //}
+        //public void WriteArray<T>(T[] values, Action<IBufferWriter, T> write)
+        //{
+        //    if (values == null)
+        //        WriteUInt16(0);
+        //    else
+        //    {
+        //        int count = values.Length;
+        //        if (count > ushort.MaxValue)
+        //            throw new FormatException($"Write array length cannot be greater than {ushort.MaxValue} !");
+        //        WriteUInt16(Convert.ToUInt16(count));
+        //        for (int i = 0; i < count; i++)
+        //        {
+        //            write.Invoke(this, values[i]);
+        //        }
+        //    }
+        //}
         private void WriteByteArray(byte[] values)
         {
 
@@ -882,7 +919,7 @@ namespace ActionBuffer
             {
                 var field = fields[i];
                 var fieldValue = field.GetValue(value);
-                if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
+                //if (TypeHelper.IsNullOrDefault(fieldValue)) continue;
 
 
                 var fieldType = field.FieldType;
@@ -898,7 +935,7 @@ namespace ActionBuffer
 
         }
 
-        public void WriteObject<T>(T value) where T : class
+        public void WriteObject<T>(T value)
         {
             var type = value.GetType();
             if (value is IBufferObject buff)
@@ -907,7 +944,7 @@ namespace ActionBuffer
             {
                 metas = new();
                 CollectMetas(value);
-                WriteArray(metas.Keys.ToArray(), (w, val) => w.WriteUTF8(val));
+                WriteIEnumerable(metas.Keys, (w, val) => w.WriteUTF8(val));
             }
 
             WriteInt32(metas[type.FullName]);
@@ -949,6 +986,7 @@ namespace ActionBuffer
             this._index = ObjEnd;
 
         }
+
 
     }
 }
@@ -1090,7 +1128,7 @@ namespace ActionBuffer
 
         }
 
-        public void WriteObject<T>(T value) where T : class
+        public void WriteObject<T>(T value)
         {
             if (value == null)
             {
@@ -1128,7 +1166,52 @@ namespace ActionBuffer
             WriteRaw("}");
         }
 
-        public void WriteArray<T>(T[] values, Action<IBufferWriter, T> write)
+        //public void WriteArray<T>(T[] values, Action<IBufferWriter, T> write)
+        //{
+        //    if (values == null)
+        //    {
+        //        WriteRaw("null");
+        //        return;
+        //    }
+        //    PushContext(true);
+        //    WriteRaw("[");
+        //    if (_prettyPrint && values.Length > 0) WriteIndent();
+        //    for (int i = 0; i < values.Length; i++)
+        //    {
+        //        if (i > 0)
+        //        {
+        //            WriteRaw(",");
+        //            if (_prettyPrint) WriteIndent();
+        //        }
+        //        write(this, values[i]);
+        //    }
+        //    PopContext();
+        //    WriteRaw("]");
+        //}
+
+        //public void WriteList<T>(List<T> values, Action<IBufferWriter, T> write)
+        //{
+        //    if (values == null)
+        //    {
+        //        WriteRaw("null");
+        //        return;
+        //    }
+        //    PushContext(true);
+        //    WriteRaw("[");
+        //    if (_prettyPrint && values.Count > 0) WriteIndent();
+        //    for (int i = 0; i < values.Count; i++)
+        //    {
+        //        if (i > 0)
+        //        {
+        //            WriteRaw(",");
+        //            if (_prettyPrint) WriteIndent();
+        //        }
+        //        write(this, values[i]);
+        //    }
+        //    PopContext();
+        //    WriteRaw("]");
+        //}
+        public void WriteIEnumerable<T>(IEnumerable<T> values, Action<IBufferWriter, T> write)
         {
             if (values == null)
             {
@@ -1137,43 +1220,24 @@ namespace ActionBuffer
             }
             PushContext(true);
             WriteRaw("[");
-            if (_prettyPrint && values.Length > 0) WriteIndent();
-            for (int i = 0; i < values.Length; i++)
+            var count = values.Count();
+            if (_prettyPrint && count > 0) WriteIndent();
+            int i = 0;
+            foreach (var item in values)
             {
+
                 if (i > 0)
                 {
                     WriteRaw(",");
                     if (_prettyPrint) WriteIndent();
                 }
-                write(this, values[i]);
+                write(this, item);
+                i++;
             }
+
             PopContext();
             WriteRaw("]");
         }
-
-        public void WriteList<T>(List<T> values, Action<IBufferWriter, T> write)
-        {
-            if (values == null)
-            {
-                WriteRaw("null");
-                return;
-            }
-            PushContext(true);
-            WriteRaw("[");
-            if (_prettyPrint && values.Count > 0) WriteIndent();
-            for (int i = 0; i < values.Count; i++)
-            {
-                if (i > 0)
-                {
-                    WriteRaw(",");
-                    if (_prettyPrint) WriteIndent();
-                }
-                write(this, values[i]);
-            }
-            PopContext();
-            WriteRaw("]");
-        }
-
         public void WriteBool(bool value) { WriteRaw(value ? "true" : "false"); }
         public void WriteByte(byte value) { WriteRaw(value.ToString()); }
         public void WriteChar(char value) { WriteString(value.ToString()); }
@@ -1187,6 +1251,8 @@ namespace ActionBuffer
         public void WriteUInt64(ulong value) { WriteRaw(value.ToString()); }
         public void WriteUTF8(string value) { WriteString(value); }
         public void WriteEnum(Enum data) { WriteString(data.ToString()); }
+
+
     }
 
     public class JsonReader : IBufferReader
@@ -1322,7 +1388,7 @@ namespace ActionBuffer
             }
         }
 
-        public T ReadObject<T>() where T : class
+        public T ReadObject<T>()
         {
             Expect('{');
             SkipWhitespace();
@@ -1331,7 +1397,7 @@ namespace ActionBuffer
             if (Peek() == '}')
             {
                 Read();
-                T empty = Activator.CreateInstance<T>();
+                T empty = (T)TypeHelper.CreateInstance(typeof(T));
                 IBufferObject bufferObj = empty as IBufferObject;
                 if (bufferObj != null) bufferObj.AfterReadBuffer();
                 return empty;
@@ -1377,13 +1443,13 @@ namespace ActionBuffer
                 if (actualType == null)
                     throw new Exception(string.Format("Cannot resolve type: {0}, {1}", typeFullName, assemblyName));
 
-                instance = Activator.CreateInstance(actualType);
+                instance = TypeHelper.CreateInstance(actualType);
             }
             else
             {
                 // 情况2：没有 $type，回退到快照并使用泛型类型 T
                 _pos = snapshot;
-                instance = Activator.CreateInstance(actualType);
+                instance = TypeHelper.CreateInstance(actualType);
             }
 
             var typeFields = TypeHelper.GetTypeFields(actualType);
@@ -1423,32 +1489,52 @@ namespace ActionBuffer
         }
 
         // 其余方法保持不变（ReadArray, ReadList, 基础类型等）
-        public T[] ReadArray<T>(Func<IBufferReader, T> read)
-        {
-            SkipWhitespace();
-            Expect('[');
-            List<T> list = new List<T>();
-            bool first = true;
-            while (true)
-            {
-                SkipWhitespace();
-                if (Peek() == ']')
-                {
-                    Read();
-                    break;
-                }
-                if (!first) Expect(',');
-                first = false;
-                list.Add(read(this));
-            }
-            return list.ToArray();
-        }
+        //public T[] ReadArray<T>(Func<IBufferReader, T> read)
+        //{
+        //    SkipWhitespace();
+        //    Expect('[');
+        //    List<T> list = new List<T>();
+        //    bool first = true;
+        //    while (true)
+        //    {
+        //        SkipWhitespace();
+        //        if (Peek() == ']')
+        //        {
+        //            Read();
+        //            break;
+        //        }
+        //        if (!first) Expect(',');
+        //        first = false;
+        //        list.Add(read(this));
+        //    }
+        //    return list.ToArray();
+        //}
 
-        public List<T> ReadList<T>(Func<IBufferReader, T> read)
+        //public List<T> ReadList<T>(Func<IBufferReader, T> read)
+        //{
+        //    SkipWhitespace();
+        //    Expect('[');
+        //    List<T> list = new List<T>();
+        //    bool first = true;
+        //    while (true)
+        //    {
+        //        SkipWhitespace();
+        //        if (Peek() == ']')
+        //        {
+        //            Read();
+        //            break;
+        //        }
+        //        if (!first) Expect(',');
+        //        first = false;
+        //        list.Add(read(this));
+        //    }
+        //    return list;
+        //}
+        public List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read)
         {
             SkipWhitespace();
             Expect('[');
-            List<T> list = new List<T>();
+            List<T> list = result;
             bool first = true;
             while (true)
             {
@@ -1464,7 +1550,6 @@ namespace ActionBuffer
             }
             return list;
         }
-
         public bool ReadBool()
         {
             SkipWhitespace();
@@ -1498,10 +1583,13 @@ namespace ActionBuffer
             string value = ReadString();
             return (Enum)Enum.Parse(type, value);
         }
+
+
     }
 }
 namespace ActionBuffer
 {
+  
     class ByteConverter : BuffConverter<byte>
     {
         public override byte OnRead(IBufferReader reader, Type type) => reader.ReadByte();
@@ -1509,6 +1597,7 @@ namespace ActionBuffer
     }
     class BoolConverter : BuffConverter<bool>
     {
+        
         public override bool OnRead(IBufferReader reader, Type type) => reader.ReadBool();
         public override void OnWrite(IBufferWriter writer, bool value) => writer.WriteBool(value);
     }
@@ -1597,7 +1686,7 @@ namespace ActionBuffer
         public override T OnRead(IBufferReader reader, Type type) => (T)(Enum)reader.ReadEnum(type);
         public override void OnWrite(IBufferWriter writer, T value) => writer.WriteEnum(value);
     }
-    class ObjectConverter<T> : BuffConverter<T> where T : class
+    class ObjectConverter<T> : BuffConverter<T>
     {
         public override T OnRead(IBufferReader reader, Type type) => reader.ReadObject<T>();
         public override void OnWrite(IBufferWriter writer, T value) => writer.WriteObject(value);
@@ -1610,7 +1699,8 @@ namespace ActionBuffer
         private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
 
         public override List<T> OnRead(IBufferReader reader, Type type) => reader.ReadList(ReadOnce);
-        public override void OnWrite(IBufferWriter writer, List<T> value) => writer.WriteList(value, WriteOnce);
+
+        public override void OnWrite(IBufferWriter writer, List<T> value) => writer.WriteIEnumerable(value, WriteOnce);
         protected override void OnCollectMetas(IBufferWriter writer, List<T> value)
         {
             for (var i = 0; i < value.Count; i++)
@@ -1625,11 +1715,12 @@ namespace ActionBuffer
     {
         static BuffConverter<T> converter = GetConverter<T>();
         public override T[] OnRead(IBufferReader reader, Type type) => reader.ReadArray(ReadOnce);
+
         private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
 
         private T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
 
-        public override void OnWrite(IBufferWriter writer, T[] value) => writer.WriteArray(value, WriteOnce);
+        public override void OnWrite(IBufferWriter writer, T[] value) => writer.WriteIEnumerable(value, WriteOnce);
         protected override void OnCollectMetas(IBufferWriter writer, T[] value)
         {
             for (var i = 0; i < value.Length; i++)
@@ -1640,7 +1731,24 @@ namespace ActionBuffer
         }
     }
 
+    class HashSetConverter<T> : BuffConverter<HashSet<T>>
+    {
+        static BuffConverter<T> converter = GetConverter<T>();
+        public override HashSet<T> OnRead(IBufferReader reader, Type type) => reader.ReadHashSet(ReadOnce);
 
+        private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
+
+        private T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
+
+        public override void OnWrite(IBufferWriter writer, HashSet<T> value) => writer.WriteIEnumerable(value, WriteOnce);
+        protected override void OnCollectMetas(IBufferWriter writer, HashSet<T> value)
+        {
+            foreach (var item in value)
+                converter.CollectMetas(writer, item);
+
+        }
+    }
+    
 
     class DictionaryConverter<Key, Value> : BuffConverter<Dictionary<Key, Value>>
     {
@@ -1649,26 +1757,31 @@ namespace ActionBuffer
 
         public override Dictionary<Key, Value> OnRead(IBufferReader reader, Type type)
         {
-            var list_key = reader.ReadList(ReadOnce_Key);
-            var list_values = reader.ReadList(ReadOnce_Value);
+
+            var Keys = ListPool<Key>.GetList();
+            Keys = reader.ReadIEnumerable(Keys, ReadOnce_Key);
+            var Values = ListPool<Value>.GetList();
+            Values = reader.ReadIEnumerable(Values, ReadOnce_Value);
+
 
             var dic = new Dictionary<Key, Value>();
-            for (int i = 0; i < list_key.Count; i++)
+            for (int i = 0; i < Keys.Count; i++)
             {
-                dic.Add(list_key[i], list_values[i]);
+                dic.Add(Keys[i], Values[i]);
             }
-
+            ListPool<Value>.BackList(Values);
+            ListPool<Key>.BackList(Keys);
             return dic;
 
         }
 
         public override void OnWrite(IBufferWriter writer, Dictionary<Key, Value> value)
         {
+           
             var list_key = value.Keys.ToList();
             var list_values = value.Values.ToList();
-
-            writer.WriteList(list_key, WriteOnce_Key);
-            writer.WriteList(list_values, WriteOnce_Value);
+            writer.WriteIEnumerable(list_key, WriteOnce_Key);
+            writer.WriteIEnumerable(list_values, WriteOnce_Value);
 
         }
 
