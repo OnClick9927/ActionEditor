@@ -520,10 +520,22 @@ namespace ActionBuffer
         private byte[] _buffer;
         private int _index = 0;
 
+        public int index
+        {
+            get { return _index; }
+            set
+            {
 
+                if (value < 0) value = 0;
+                if (value >= _buffer.Length) value = _buffer.Length + 1;
+                _index = value;
+            }
+        }
         public void Init(byte[] data)
         {
             _buffer = data;
+            _index = 0;
+            metas = null;
         }
         private void CheckReaderIndex(int length)
         {
@@ -711,6 +723,18 @@ namespace ActionBuffer
         }
         private byte[] _buffer;
         private int _index = 0;
+
+        public int index
+        {
+            get { return _index; }
+            set
+            {
+
+                if (value < 0) value = 0;
+                if (value >= _buffer.Length) value = _buffer.Length + 1;
+                _index = value;
+            }
+        }
         public int length => _index;
         public byte[] buffer => _buffer;
         public BufferWriter(int capacity = 1024)
