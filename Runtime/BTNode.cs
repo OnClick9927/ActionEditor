@@ -11,7 +11,7 @@ namespace ActionEditor.Nodes.BT
             Failure,
             Running
         }
-        protected Blackboard blackBoard { get; private set; }
+        protected Blackboard blackboard { get; private set; }
         internal BTNode parent { get; private set; }
       
         public State state { get; private set; }
@@ -46,7 +46,7 @@ namespace ActionEditor.Nodes.BT
 
         internal virtual List<BTCondition> Init(Blackboard blackBord, BTNode parent, List<BTCondition> result)
         {
-            this.blackBoard = blackBord;
+            this.blackboard = blackBord;
             this.parent = parent;
             return result;
         }
