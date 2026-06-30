@@ -127,14 +127,14 @@ namespace ActionEditor
                    Position.height - Styles.HeaderHeight);
 
             GUILayout.BeginArea(_headerRect, EditorStyles.toolbar);
-            OnHearderGUI();
+            OnHeaderGUI();
             GUILayout.EndArea();
 
 
 
         }
 
-        private void OnHearderGUI()
+        private void OnHeaderGUI()
         {
 
             GUILayout.BeginHorizontal(EditorStyles.toolbar);

@@ -94,6 +94,7 @@ class TLMoveClipEditor : ActionEditor.ClipEditorView
 
 public class TLMoveClip : Clip, ActionEditor.IResizeAble, ILengthMatchAble, ITLCLip
 {
+    public string[] test;
     public string targetName;
     public Vector3 from;
     public Vector3 to;

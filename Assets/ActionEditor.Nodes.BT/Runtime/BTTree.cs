@@ -5,6 +5,8 @@ namespace ActionEditor.Nodes.BT
     [System.Serializable, Name("ÐÐÎªÊ÷")]
     public abstract class BTTree : GraphAsset
     {
+
+
         public static event Action<BTTree> onInstanceChanged;
         private static BTTree _instance;
         public static BTTree instance
@@ -20,15 +22,27 @@ namespace ActionEditor.Nodes.BT
         }
         public void SetAsInstance() => instance = this;
         public static void ClearInstance() => instance = null;
-
-        public abstract Blackboard blackBoard { get; }
-
-        public BTRoot root { get; internal set; }
+        protected abstract Blackboard blackboard { get; }
+        public Blackboard Blackboard => parent == null ? blackboard : parent.blackboard;
+        public BTTree parent { get; private set; }
+        public BTRoot root { get; private set; }
         [System.NonSerialized] private List<BTComposite> aborted = new List<BTComposite>();
         [System.NonSerialized] private List<BTCondition> abort_coditions;
+        [System.NonSerialized] public List<BTTree> subs = new List<BTTree>();
 
-
-
+        public T FindRuntimeTreeNode<T>(string guid) where T : NodeData
+        {
+            var result = this.FindNode<T>(guid);
+            if (result != null) return result;
+            for (int i = 0; i < subs.Count; i++)
+            {
+                var sub = subs[i];
+                result = sub.FindNode<T>(guid);
+                if (result != null)
+                    return result;
+            }
+            return null;
+        }
 
 
         public BTNode.State Update()
@@ -52,14 +66,28 @@ namespace ActionEditor.Nodes.BT
             return root.Update();
         }
         public void Abort() => root.Abort();
-        public override void PrepareForRuntime()
+        public new void PrepareForRuntime()
         {
+            throw new Exception($"use loader method");
+        }
+        public void PrepareForRuntime(Func<string, BTTree> loader)
+        {
+            subs.Clear();
             base.PrepareForRuntime();
-
             for (int i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
 
+                if (node is BTSubTree sub)
+                {
+                    if (loader == null)
+                        throw new Exception($"{nameof(loader)}  can not be null");
+                    var tree = loader.Invoke(sub.path);
+                    tree.parent = this;
+                    tree.PrepareForRuntime(loader);
+                    sub.tree = tree;
+                    subs.Add(tree);
+                }
                 if (node.outPorts.Count == 1)
                 {
                     var connections = node.outPorts[0].connections;
@@ -69,7 +97,6 @@ namespace ActionEditor.Nodes.BT
                         this.root = root;
                         if (connections.Count == 1)
                             root.child = connections[0].input.node as BTNode;
-
                     }
                     else if (node is BTDecorate decorate)
                     {
@@ -84,13 +111,10 @@ namespace ActionEditor.Nodes.BT
                             composite.children.Add(connections[j].input.node as BTNode);
                         }
                     }
-
                 }
             }
-
-
-            abort_coditions = root.Init(blackBoard, null, new List<BTCondition>());
+            if (parent == null)
+                abort_coditions = root.Init(blackboard, null, new List<BTCondition>());
         }
-
     }
 }

@@ -1,6 +1,7 @@
 using ActionBuffer;
 using System;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 namespace ActionEditor.Nodes.BT
 {
@@ -17,7 +18,7 @@ namespace ActionEditor.Nodes.BT
     }
     public class TestBT : BT.BTTree
     {
-        public override Blackboard blackBoard => _blackboard;
+        protected override Blackboard blackboard => _blackboard;
         [Buffer] private TestBlackBorad _blackboard = new TestBlackBorad();
     }
     [Attachable(typeof(TestBT)), Node(BTNodeTypes.Condition), Name("≤‚ ‘Ãıº˛")]
@@ -25,7 +26,7 @@ namespace ActionEditor.Nodes.BT
     {
         protected override bool Condition()
         {
-            return (blackBoard as TestBlackBorad).Money < 50;
+            return (blackboard as TestBlackBorad).Money < 50;
         }
 
 
@@ -37,7 +38,7 @@ namespace ActionEditor.Nodes.BT
 
         protected override State OnUpdate()
         {
-            (blackBoard as TestBlackBorad).Money -= Time.deltaTime * 5;
+            (blackboard as TestBlackBorad).Money -= Time.deltaTime * 5;
             return base.OnUpdate();
         }
     }
@@ -48,11 +49,11 @@ namespace ActionEditor.Nodes.BT
 
         protected override State OnUpdate()
         {
-            (blackBoard as TestBlackBorad).Money += Time.deltaTime * 10;
+            (blackboard as TestBlackBorad).Money += Time.deltaTime * 10;
             return base.OnUpdate();
         }
     }
-   
+
     class BTWaitTime : BTAction
     {
         protected override void OnAbort()
@@ -83,7 +84,11 @@ namespace ActionEditor.Nodes.BT
         void Start()
         {
             tree = TestBT.FromBytes(typeof(TestBT), txt.bytes) as TestBT;
-            tree.PrepareForRuntime();
+            tree.PrepareForRuntime((path) =>
+            {
+                var txt = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+                return TestBT.FromBytes(typeof(BTTree), txt.bytes) as BTTree;
+            });
             tree.SetAsInstance();
         }
         // Update is called once per frame
@@ -91,10 +96,11 @@ namespace ActionEditor.Nodes.BT
         {
             if (tree == null) return;
             var result = tree.Update();
-            if (result == BTNode.State.Success)
-            {
-                tree = null;
-            }
+
+            //if (result == BTNode.State.Success)
+            //{
+            //    tree = null;
+            //}
         }
     }
 }

@@ -4,7 +4,6 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 namespace ActionEditor.Nodes.BT
 {
@@ -57,7 +56,7 @@ namespace ActionEditor.Nodes.BT
         internal static void DrawBlackBord(BTTreeView<T> view, float maxheight)
         {
             var run = Runing_BlackBoard && view.runningTree != null;
-            var blackboard = run ? view.runningTree.blackBoard : view.graph.blackBoard;
+            var blackboard = run ? view.runningTree.Blackboard : view.graph.Blackboard;
 
             GUI.color = Color.black;
             GUILayout.Box("", GUILayout.Height(30), GUILayout.ExpandWidth(true));
@@ -88,8 +87,13 @@ namespace ActionEditor.Nodes.BT
             {
                 if (GUI.Button(_rect, EditorGUIUtility.IconContent("PlayButton"), EditorStyles.toolbarButton))
                 {
-                    if (BTTree.instance != null && App.asset.guid == BTTree.instance.guid)
-                        Runing_BlackBoard = true;
+                    if (BTTree.instance != null)
+                    {
+                        if (App.asset.guid == BTTree.instance.guid || BTTree.instance.subs.Any(x => x.guid == App.asset.guid))
+                        {
+                            Runing_BlackBoard = true;
+                        }
+                    }
                 }
                 EditorGUI.LabelField(rect, "BlackBord", new GUIStyle(EditorStyles.largeLabel)
                 {
@@ -113,7 +117,7 @@ namespace ActionEditor.Nodes.BT
                 {
                     scroll = GUILayout.BeginScrollView(scroll);
 
-                EditorEX.CreateEditor(blackboard).OnInspectorGUI();
+                    EditorEX.CreateEditor(blackboard).OnInspectorGUI();
                     GUILayout.EndScrollView();
                 }
                 GUILayout.EndVertical();

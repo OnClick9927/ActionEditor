@@ -78,8 +78,7 @@ namespace ActionEditor.Nodes.BT
             }
             else
             {
-                runningNode = tree.FindNode<BTNode>(this.GUID);
-
+                runningNode = tree.FindRuntimeTreeNode<BTNode>(this.GUID);
             }
         }
     }

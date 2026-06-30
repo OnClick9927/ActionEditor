@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace ActionEditor.Nodes
 {
-    static class Prefs
+  internal  static class Prefs
     {
         public static readonly string CONFIG_PATH =
             $"{Application.dataPath}/Editor/NodeGraph.txt";
