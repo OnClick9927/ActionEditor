@@ -15,27 +15,22 @@ namespace ActionEditor.Nodes.BT
     public class TestBlackBorad : Blackboard
     {
         public float Money;
+        public A a;
+        public enum A
+        {
+            a,b,c
+        }
     }
     public class TestBT : BT.BTTree
     {
         protected override Blackboard blackboard => _blackboard;
         [Buffer] private TestBlackBorad _blackboard = new TestBlackBorad();
     }
-    [Attachable(typeof(TestBT)), Node(BTNodeTypes.Condition), Name("≤‚ ‘Ãıº˛")]
-    class BTTestCondition : BTCondition
-    {
-        protected override bool Condition()
-        {
-            return (blackboard as TestBlackBorad).Money < 50;
-        }
-
-
-    }
     [Attachable(typeof(TestBT)), Node(BTNodeTypes.Action)]
 
     class BTRset : BTWaitTime
     {
-
+        public override float time => 100;
         protected override State OnUpdate()
         {
             (blackboard as TestBlackBorad).Money -= Time.deltaTime * 5;
@@ -46,7 +41,7 @@ namespace ActionEditor.Nodes.BT
 
     class BTWork : BTWaitTime
     {
-
+        public override float time => 2;
         protected override State OnUpdate()
         {
             (blackboard as TestBlackBorad).Money += Time.deltaTime * 10;
@@ -60,7 +55,7 @@ namespace ActionEditor.Nodes.BT
         {
             Debug.Log($"{GetType()} OnAbort");
         }
-        public float time = 10;
+        public virtual float time { get; }
         private float end;
 
 

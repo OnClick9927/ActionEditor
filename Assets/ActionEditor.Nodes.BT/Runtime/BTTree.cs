@@ -6,7 +6,6 @@ namespace ActionEditor.Nodes.BT
     public abstract class BTTree : GraphAsset
     {
 
-
         public static event Action<BTTree> onInstanceChanged;
         private static BTTree _instance;
         public static BTTree instance
@@ -24,6 +23,7 @@ namespace ActionEditor.Nodes.BT
         public static void ClearInstance() => instance = null;
         protected abstract Blackboard blackboard { get; }
         public Blackboard Blackboard => parent == null ? blackboard : parent.blackboard;
+        [Name("×ÓÊ÷?")]public bool IsSubTree;
         public BTTree parent { get; private set; }
         public BTRoot root { get; private set; }
         [System.NonSerialized] private List<BTComposite> aborted = new List<BTComposite>();
