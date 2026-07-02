@@ -22,7 +22,8 @@ namespace ActionEditor.Nodes.BT
                     {
                         try
                         {
-                            if (BTTree.FromBytes(typeof(BTTree), txt.bytes) is BTTree tree && tree.GetType() == App.asset.GetType())
+                            if (BTTree.FromBytes(typeof(BTTree), txt.bytes) is BTTree tree && tree.IsSubTree &&
+                            tree.GetType() == App.asset.GetType())
                             {
                                 this.data.path = AssetDatabase.GetAssetPath(o);
                                 GUIUtility.ExitGUI();

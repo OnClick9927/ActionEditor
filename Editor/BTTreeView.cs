@@ -113,7 +113,7 @@ namespace ActionEditor.Nodes.BT
             {
                 GUILayout.BeginVertical(EditorStyles.helpBox);
                 EditorEX.DrawPingScript(blackboard.GetType());
-                using (new UnityEditor.EditorGUI.DisabledScope(run))
+                using (new UnityEditor.EditorGUI.DisabledScope(run || view.graph.IsSubTree))
                 {
                     scroll = GUILayout.BeginScrollView(scroll);
 
