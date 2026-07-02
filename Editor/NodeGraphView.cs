@@ -350,6 +350,14 @@ namespace ActionEditor.Nodes
             {
                 switch (evt.keyCode)
                 {
+                    case KeyCode.A:
+                        {
+                        App.SelectAll();
+                   
+                            evt.StopImmediatePropagation();
+
+                            break;
+                        }
                     case KeyCode.S:
                         if (evt.shiftKey)
                             App.SaveAs();
