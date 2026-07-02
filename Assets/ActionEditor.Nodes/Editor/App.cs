@@ -53,7 +53,7 @@ namespace ActionEditor.Nodes
 
         public static void OnObjectPickerConfig(string path)
         {
-            if (string.IsNullOrEmpty(path) ||!File.Exists(path)
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)
                 || !path.EndsWith(GraphAsset.FileEx)) return;
             try
             {
@@ -169,15 +169,16 @@ namespace ActionEditor.Nodes
             {
                 while (true)
                 {
-                    var index = path.IndexOf(Asset.FileEx);
+                    var index = path.IndexOf(GraphAsset.FileEx);
                     if (index == -1) break;
                     path = path.Remove(index - 1);
                 }
                 path = $"{path}.{GraphAsset.FileEx}";
                 if (path != App.assetPath)
                 {
-                    var txt = App.asset.ToBytes();
-                    File.WriteAllBytes(path, txt);
+                    var tree = App.asset.DeepCopyByBuffer();
+                    tree.guid = Guid.NewGuid().ToString();
+                    File.WriteAllBytes(path, tree.ToBytes());
                     AssetDatabase.Refresh();
                 }
             }
@@ -245,8 +246,27 @@ namespace ActionEditor.Nodes
 
 
 
+        public static void SelectAll()
+        {
+            view.selection.Clear();
+            foreach (var item in view.groups)
+                view.AddToSelection(item);
+            foreach (var item in view.connections)
+                view.AddToSelection(item);
+            foreach (var item in view.nodes)
+                view.AddToSelection(item);
+        }
+        public static List<GraphElement> Duplicate()
+        {
+            var result = Duplicate(view.selection.ConvertAll(x => x as GraphElement));
+            view.selection.Clear();
+            foreach (GraphElement e in result)
+            {
+                view.AddToSelection(e);
+            }
+            return result;
+        }
 
-        public static void Duplicate() => Duplicate(view.selection.ConvertAll(x => x as GraphElement));
         public static List<GraphElement> Duplicate(List<GraphElement> src)
         {
             List<GraphElement> result = new List<GraphElement>();
@@ -292,9 +312,9 @@ namespace ActionEditor.Nodes
             }
 
             CreateElements(result, datas, groupDatas, conDatas);
-            view.ClearSelection();
-            foreach (var item in result)
-                view.AddToSelection(item);
+            //view.ClearSelection();
+            //foreach (var item in result)
+            //    view.AddToSelection(item);
             return result;
         }
         public static void CreateElements(List<GraphElement> result, IEnumerable<NodeData> nodes, IEnumerable<GroupData> groups, IEnumerable<ConnectionData> cons)
