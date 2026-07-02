@@ -53,7 +53,8 @@ namespace ActionEditor.Nodes
 
         public static void OnObjectPickerConfig(string path)
         {
-            if (string.IsNullOrEmpty(path) || !path.EndsWith(GraphAsset.FileEx)) return;
+            if (string.IsNullOrEmpty(path) ||!File.Exists(path)
+                || !path.EndsWith(GraphAsset.FileEx)) return;
             try
             {
                 var txt = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
