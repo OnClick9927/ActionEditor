@@ -204,7 +204,7 @@ namespace ActionEditor.Nodes
                     .CompareTo(b.input.node.GetPosition().center.y);
                 }
 
-                return 0;
+                return a.output.node.GUID.CompareTo(b.output.node.GUID);
             });
 
 
