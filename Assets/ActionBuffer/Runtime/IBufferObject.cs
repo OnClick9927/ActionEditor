@@ -1788,6 +1788,8 @@ namespace ActionBuffer
         public override void OnWrite(IBufferWriter writer, V value) => writer.WriteIEnumerable(value, WriteOnce);
         protected override void OnCollectMetas(IBufferWriter writer, V value)
         {
+            if (value == null || !value.Any())
+                return;
             foreach (var item in value)
             {
                 converter.CollectMetas(writer, item);
