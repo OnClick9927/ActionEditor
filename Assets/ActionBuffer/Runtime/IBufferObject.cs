@@ -317,6 +317,7 @@ namespace ActionBuffer
     }
     public interface IBufferWriter
     {
+        void AddToMeta(string value);
         void CollectMetas(object value);
         void WriteIEnumerable<T>(IEnumerable<T> values, Action<IBufferWriter, T> write);
 
@@ -475,13 +476,17 @@ namespace ActionBuffer
         }
         public static T ToObject<T>(string data) => (T)ToObject(data, typeof(T));
 
-        public static byte[] ToBytes(object obj)
+        public static BufferWriter WriteToBytes(object obj)
         {
             var type = obj.GetType();
             var writer = CreateWriter(DataType.Bytes);
             var c = GetConverter(type);
             c.Write(writer, obj);
-            return (writer as BufferWriter).GetValidBuffer();
+            return writer as BufferWriter;
+        }
+        public static byte[] ToBytes(object obj)
+        {
+            return WriteToBytes(obj).GetValidBuffer();
         }
         public static object ToObject(byte[] bytes, Type type)
         {
@@ -907,7 +912,7 @@ namespace ActionBuffer
 
         private Dictionary<string, int> metas;
         private int _index_meta = 0;
-        private void AddToMeta(string meta)
+        public void AddToMeta(string meta)
         {
             if (metas.ContainsKey(meta)) return;
             metas.Add(meta, _index_meta++);
@@ -922,6 +927,12 @@ namespace ActionBuffer
 
             AddToMeta(type.FullName);
             AddToMeta(type.Assembly.FullName);
+            {
+                var convert = BuffConverter.GetConverter(type);
+                convert.CollectMetas(this, value);
+            }
+
+
             var fields = TypeHelper.GetTypeFields(type).GetFields();
             if (fields == null || fields.Count == 0) return;
             for (int i = 0; i < fields.Count; i++)
@@ -1267,6 +1278,11 @@ namespace ActionBuffer
         public void WriteUInt64(ulong value) { WriteRaw(value.ToString()); }
         public void WriteUTF8(string value) { WriteString(value); }
         public void WriteEnum(Enum data) { WriteString(data.ToString()); }
+
+        public void AddToMeta(string value)
+        {
+
+        }
     }
     public class JsonReader : IBufferReader
     {
@@ -1848,6 +1864,12 @@ namespace ActionBuffer
 
         protected override void OnCollectMetas(IBufferWriter writer, KeyValuePair<Key, Value> value)
         {
+            var type = typeof(KeyValuePair<Key, Value>);
+            writer.AddToMeta(type.FullName);
+            writer.AddToMeta(type.Assembly.FullName);
+
+            writer.AddToMeta("key");
+            writer.AddToMeta("value");
             _key.CollectMetas(writer, value.Key);
             _value.CollectMetas(writer, value.Value);
         }
@@ -1856,6 +1878,32 @@ namespace ActionBuffer
     [BuffConverter(typeof(Dictionary<,>))]
     class DictionaryConverter<Key, Value> : IEnumerableConverter<KeyValuePair<Key, Value>, Dictionary<Key, Value>>
     {
+        protected override void OnCollectMetas(IBufferWriter writer, Dictionary<Key, Value> value)
+        {
+
+            base.OnCollectMetas(writer, value);
+        }
         public override Dictionary<Key, Value> OnRead(IBufferReader reader, Type type) => reader.ReadDictionary(ReadOnce);
     }
 }
+//namespace ActionBuffer
+//{
+//    [UnityEditor.InitializeOnLoad]
+//    public class GG
+//    {
+//        private static Dictionary<int, A> dic = new Dictionary<int, A>() {
+//            { 1,new A(){ Id=1} }
+//        };
+//        class A
+//        {
+//            public int Id;
+//        }
+//        [UnityEditor.MenuItem("Tools/AA")]
+//        static void GG1()
+//        {
+//            var bytes = ActionBuffer.BuffConverter.ToBytes(dic);
+//            var result = ActionBuffer.BuffConverter.ToObject(bytes, typeof(Dictionary<int, A>));
+//            Console.WriteLine();
+//        }
+//    }
+//}
