@@ -26,11 +26,14 @@ namespace ActionEditor.Nodes.BT
                 if (_node is BTComposite composite)
                 {
                     if (this.composite == null)
+                    {
                         this.composite = composite;
-                    if (composite.abortType == BTComposite.AbortType.Both || composite.abortType == BTComposite.AbortType.LowerPriority)
-                        lowerAbortComposite = composite;
+                    }
                     else
+                    {
+                        lowerAbortComposite = composite;
                         break;
+                    }
                 }
                 _node = _node.parent;
             }

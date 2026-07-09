@@ -51,14 +51,18 @@ namespace ActionEditor.Nodes.BT
             for (int i = 0; i < abort_coditions.Count; i++)
             {
                 var condition = abort_coditions[i];
-                if (condition.composite.abortType == BTComposite.AbortType.Both || condition.composite.abortType == BTComposite.AbortType.LowerPriority)
+                if (condition.composite.abortType == BTComposite.AbortType.Both 
+                    || condition.composite.abortType == BTComposite.AbortType.LowerPriority)
                 {
-                    if (condition.composite.state != BTNode.State.Running && condition.Update() == BTNode.State.Success)
+                    if (condition.composite.state != BTNode.State.Running 
+                        && condition.Update() == BTNode.State.Success)
                         condition.lowerAbortComposite.Abort();
                 }
-                if (condition.composite.abortType == BTComposite.AbortType.Both || condition.composite.abortType == BTComposite.AbortType.Self)
+                if (condition.composite.abortType == BTComposite.AbortType.Both 
+                    || condition.composite.abortType == BTComposite.AbortType.Self)
                 {
-                    if (condition.composite.state == BTNode.State.Running && condition.Update() == BTNode.State.Success)
+                    if (condition.composite.state == BTNode.State.Running 
+                        && condition.Update() == BTNode.State.Success)
                         condition.composite.Abort();
                 }
             }
