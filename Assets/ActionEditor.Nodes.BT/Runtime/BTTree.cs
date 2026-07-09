@@ -26,8 +26,8 @@ namespace ActionEditor.Nodes.BT
         [Name("×ÓÊ÷?")]public bool IsSubTree;
         public BTTree parent { get; private set; }
         public BTRoot root { get; private set; }
-        [System.NonSerialized] private List<BTComposite> aborted = new List<BTComposite>();
-        [System.NonSerialized] private List<BTCondition> abort_coditions;
+        //[System.NonSerialized] private List<BTComposite> aborted = new List<BTComposite>();
+        [System.NonSerialized] private List<BTComposite> abort_coditions;
         [System.NonSerialized] public List<BTTree> subs = new List<BTTree>();
 
         public T FindRuntimeTreeNode<T>(string guid) where T : NodeData
@@ -47,24 +47,12 @@ namespace ActionEditor.Nodes.BT
 
         public BTNode.State Update()
         {
-            aborted.Clear();
+            //aborted.Clear();
             for (int i = 0; i < abort_coditions.Count; i++)
             {
                 var condition = abort_coditions[i];
-                if (condition.composite.abortType == BTComposite.AbortType.Both 
-                    || condition.composite.abortType == BTComposite.AbortType.LowerPriority)
-                {
-                    if (condition.composite.state != BTNode.State.Running 
-                        && condition.Update() == BTNode.State.Success)
-                        condition.lowerAbortComposite.Abort();
-                }
-                if (condition.composite.abortType == BTComposite.AbortType.Both 
-                    || condition.composite.abortType == BTComposite.AbortType.Self)
-                {
-                    if (condition.composite.state == BTNode.State.Running 
-                        && condition.Update() == BTNode.State.Success)
-                        condition.composite.Abort();
-                }
+                condition.TryAutoAbort();
+               
             }
 
             return root.Update();
@@ -118,7 +106,7 @@ namespace ActionEditor.Nodes.BT
                 }
             }
             if (parent == null)
-                abort_coditions = root.Init(blackboard, null, new List<BTCondition>());
+                abort_coditions = root.Init(blackboard, null, new List<BTComposite>());
         }
     }
 }

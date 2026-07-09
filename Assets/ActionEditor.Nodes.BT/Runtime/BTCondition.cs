@@ -5,38 +5,10 @@ namespace ActionEditor.Nodes.BT
     [Icon("Conditional")]
     public abstract class BTCondition : BTNode
     {
-        internal BTComposite composite { get; private set; }
-        internal BTComposite lowerAbortComposite { get; private set; }
-
         protected sealed override void OnAbort() { }
-        internal sealed override List<BTCondition> Init(Blackboard blackBord, BTNode parent, List<BTCondition> result)
+        internal sealed override List<BTComposite> Init(Blackboard blackBord, BTNode parent, List<BTComposite> result)
         {
-
-            base.Init(blackBord, parent, result);
-            FindParentComposite();
-            if (composite != null && composite.abortType != BTComposite.AbortType.None)
-                result.Add(this);
-            return result;
-        }
-        private void FindParentComposite()
-        {
-            var _node = parent;
-            while (_node != null)
-            {
-                if (_node is BTComposite composite)
-                {
-                    if (this.composite == null)
-                    {
-                        this.composite = composite;
-                    }
-                    else
-                    {
-                        lowerAbortComposite = composite;
-                        break;
-                    }
-                }
-                _node = _node.parent;
-            }
+            return base.Init(blackBord, parent, result);
         }
 
         protected abstract bool Condition();
