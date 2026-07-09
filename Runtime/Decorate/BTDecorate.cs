@@ -5,7 +5,7 @@ namespace ActionEditor.Nodes.BT
     {
         public BTNode child { get; internal set; }
         protected sealed override void OnAbort() => child.Abort();
-        internal sealed override List<BTCondition> Init(Blackboard blackBord, BTNode parent, List<BTCondition> result)
+        internal sealed override List<BTComposite> Init(Blackboard blackBord, BTNode parent, List<BTComposite> result)
         {
             base.Init(blackBord, parent, result);
             if (child == null)

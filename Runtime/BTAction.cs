@@ -8,7 +8,7 @@ namespace ActionEditor.Nodes.BT
         {
             
         }
-        internal sealed override List<BTCondition> Init(Blackboard blackBord, BTNode parent, List<BTCondition> result)
+        internal sealed override List<BTComposite> Init(Blackboard blackBord, BTNode parent, List<BTComposite> result)
         {
             return base.Init(blackBord,parent, result);
         }

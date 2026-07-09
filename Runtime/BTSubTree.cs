@@ -6,7 +6,7 @@ namespace ActionEditor.Nodes.BT
     {
         public string path;
         public BTTree tree { get; internal set; }
-        internal override List<BTCondition> Init(Blackboard blackboard, BTNode parent, List<BTCondition> result)
+        internal override List<BTComposite> Init(Blackboard blackboard, BTNode parent, List<BTComposite> result)
         {
             base.Init(blackboard, parent, result);
             if (tree == null)

@@ -5,7 +5,7 @@ namespace ActionEditor.Nodes.BT
     public class BTRoot : BTNode
     {
         public BTNode child { get; internal set; }
-        internal override List<BTCondition> Init(Blackboard blackBord, BTNode parent, List<BTCondition> result)
+        internal override List<BTComposite> Init(Blackboard blackBord, BTNode parent, List<BTComposite> result)
         {
             base.Init(blackBord, parent, result);
             if (child == null)

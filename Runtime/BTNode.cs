@@ -44,7 +44,7 @@ namespace ActionEditor.Nodes.BT
         protected abstract void OnAbort();
 
 
-        internal virtual List<BTCondition> Init(Blackboard blackBord, BTNode parent, List<BTCondition> result)
+        internal virtual List<BTComposite> Init(Blackboard blackBord, BTNode parent, List<BTComposite> result)
         {
             this.blackboard = blackBord;
             this.parent = parent;
