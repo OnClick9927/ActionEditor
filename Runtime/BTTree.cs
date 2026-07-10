@@ -5,7 +5,6 @@ namespace ActionEditor.Nodes.BT
     [System.Serializable, Name("行为树")]
     public abstract class BTTree : GraphAsset
     {
-
         public static event Action<BTTree> onInstanceChanged;
         private static BTTree _instance;
         public static BTTree instance
@@ -23,11 +22,25 @@ namespace ActionEditor.Nodes.BT
         public static void ClearInstance() => instance = null;
         protected abstract Blackboard blackboard { get; }
         public Blackboard Blackboard => parent == null ? blackboard : parent.blackboard;
-        [Name("子树?")]public bool IsSubTree;
+        [Name("子树?")] public bool IsSubTree;
         public BTTree parent { get; private set; }
         public BTRoot root { get; private set; }
-        //[System.NonSerialized] private List<BTComposite> aborted = new List<BTComposite>();
         [System.NonSerialized] private List<BTComposite> abort_composites;
+        [System.NonSerialized] private Dictionary<string, BTInterrupt> interrupts;
+
+        internal void AddAbortNode(BTNode node)
+        {
+            if (node is BTComposite composite)
+            {
+                abort_composites.Add(composite);
+            }
+            else if (node is BTInterrupt interrupt)
+            {
+                var flag= interrupt.flag;
+                if (!interrupts.TryAdd(flag , interrupt))
+                    throw new Exception($"Same Flag {flag}");
+            }
+        }
         [System.NonSerialized] public List<BTTree> subs = new List<BTTree>();
 
         public T FindRuntimeTreeNode<T>(string guid) where T : NodeData
@@ -47,7 +60,7 @@ namespace ActionEditor.Nodes.BT
 
         public BTNode.State Update()
         {
-            if (abort_composites!=null)
+            if (abort_composites != null)
             {
                 for (int i = 0; i < abort_composites.Count; i++)
                 {
@@ -56,9 +69,18 @@ namespace ActionEditor.Nodes.BT
 
                 }
             }
-      
+
 
             return root.Update();
+        }
+        public bool Abort(string flag)
+        {
+            if (interrupts.TryGetValue(flag, out var interrupt))
+            {
+                interrupt.Interrupt();
+                return true;
+            }
+            return false;
         }
         public void Abort() => root.Abort();
         public new void PrepareForRuntime()
@@ -118,7 +140,11 @@ namespace ActionEditor.Nodes.BT
                 }
             }
             if (parent == null)
-                abort_composites = root.Init(blackboard, null, new List<BTComposite>());
+            {
+                interrupts = new ();
+                abort_composites = new List<BTComposite>();
+                root.Init(blackboard, null, this);
+            }
         }
     }
 }

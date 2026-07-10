@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
     [System.Serializable, Name("×ÓÊ÷"), Attachable(typeof(BTTree)), Icon("sub")]
@@ -6,14 +5,14 @@ namespace ActionEditor.Nodes.BT
     {
         public string path;
         public BTTree tree { get; internal set; }
-        internal override List<BTComposite> Init(Blackboard blackboard, BTNode parent, List<BTComposite> result)
+        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
-            base.Init(blackboard, parent, result);
+            base.Init(blackboard, parent, tree);
             if (tree == null)
                 throw new System.Exception($"{GetType()} {nameof(tree)} is Null");
-            if (tree.root==null || tree.root.child==null)
+            if (tree.root == null || tree.root.child == null)
                 throw new System.Exception("Invalid  SubTree");
-            return tree.root.child.Init(blackboard, this, result);
+            tree.root.child.Init(blackboard, this, tree);
         }
         protected sealed override void OnAbort()
         {
