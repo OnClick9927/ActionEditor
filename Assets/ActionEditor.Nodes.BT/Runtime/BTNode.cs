@@ -13,7 +13,7 @@ namespace ActionEditor.Nodes.BT
         }
         protected Blackboard blackboard { get; private set; }
         internal BTNode parent { get; private set; }
-      
+        internal BTTree runtimeTree { get; private set; }
         public State state { get; private set; }
         internal State Update()
         {
@@ -42,13 +42,25 @@ namespace ActionEditor.Nodes.BT
         }
 
         protected abstract void OnAbort();
+        protected BTComposite FindParentComposite()
+        {
+            var _node = parent;
+            while (_node != null)
+            {
+                if (_node is BTComposite composite)
+                {
+                    return composite;
+                }
+                _node = _node.parent;
+            }
+            return null;
+        }
 
-
-        internal virtual List<BTComposite> Init(Blackboard blackboard, BTNode parent, List<BTComposite> result)
+        internal virtual void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
             this.blackboard = blackboard;
             this.parent = parent;
-            return result;
+            this.runtimeTree = tree;
         }
 
     }

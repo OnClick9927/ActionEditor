@@ -119,8 +119,8 @@ namespace ActionEditor.Nodes
         private IMGUIContainer inspector;
         private void _inspector()
         {
-            style.minWidth = 100 + label.MeasureTextSize(this.NodeName, 0, 
-                MeasureMode.Undefined, 0, 
+            style.minWidth = 100 + label.MeasureTextSize(this.NodeName, 0,
+                MeasureMode.Undefined, 0,
                 MeasureMode.Undefined).x;
             if (!App.window.showInspector)
             {
@@ -238,15 +238,14 @@ namespace ActionEditor.Nodes
         }
         public virtual void OnInspectorGUI()
         {
+            scroll = GUILayout.BeginScrollView(scroll);
             DrawDefaultInspector();
+            GUILayout.EndScrollView();
         }
         private Vector2 scroll;
         protected void DrawDefaultInspector()
         {
-            scroll = GUILayout.BeginScrollView(scroll);
-
             ActionEditor.EditorEX.CreateEditor(Data).OnInspectorGUI();
-            GUILayout.EndScrollView();
         }
 
         public virtual void OnUpdate()

@@ -19,20 +19,7 @@ namespace ActionEditor.Nodes.BT
                 children[i].Abort();
         }
 
-        private BTComposite FindParentComposite()
-        {
-            var _node = parent;
-            while (_node != null)
-            {
-                if (_node is BTComposite composite)
-                {
-                    CompositeParent = composite;
-                    break;
-                }
-                _node = _node.parent;
-            }
-            return CompositeParent;
-        }
+
         private BTComposite CompositeParent;
         private BTNode AutoAbortCondition;
         bool abortLower;
@@ -71,9 +58,9 @@ namespace ActionEditor.Nodes.BT
                 && AutoAbortCondition.Update() == State.Success)
                 Abort();
         }
-        internal sealed override List<BTComposite> Init(Blackboard blackboard, BTNode parent, List<BTComposite> result)
+        internal sealed override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
-            base.Init(blackboard, parent, result);
+            base.Init(blackboard, parent, tree);
             if (children == null)
                 throw new System.Exception($"{GetType()} {nameof(children)} is Null");
             abortLower = abortType == AbortType.Both || abortType == AbortType.LowerPriority;
@@ -86,18 +73,18 @@ namespace ActionEditor.Nodes.BT
                     throw new System.Exception($" {this.abortType} need {nameof(AutoAbortCondition)}");
                 if (abortLower)
                 {
-                    var _result = FindParentComposite();
-                    if (_result == null)
+                    CompositeParent = FindParentComposite();
+                    if (CompositeParent == null)
                         throw new System.Exception($" {this.abortType} need {nameof(CompositeParent)}");
                 }
-                result.Add(this);
+                
+                tree.AddAbortNode(this);
             }
 
             for (int i = 0; i < children.Count; i++)
             {
-                children[i].Init(blackboard, this, result);
+                children[i].Init(blackboard, this, tree);
             }
-            return result;
         }
         protected override void OnAbort()
         {

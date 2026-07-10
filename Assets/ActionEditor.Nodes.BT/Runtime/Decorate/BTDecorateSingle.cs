@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
     public abstract class BTDecorateSingle : BTDecorate
@@ -9,12 +8,12 @@ namespace ActionEditor.Nodes.BT
         }
         public BTNode child { get; internal set; }
         protected sealed override void OnAbort() => child.Abort();
-        internal sealed override List<BTComposite> Init(Blackboard blackboard, BTNode parent, List<BTComposite> result)
+        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
-            base.Init(blackboard, parent, result);
+            base.Init(blackboard, parent, tree);
             if (child == null)
                 throw new System.Exception($"{GetType()} {nameof(child)} is Null");
-            return child.Init(blackboard, this, result);
+            child.Init(blackboard, this, tree);
         }
 
         protected abstract State Decorate(State state);

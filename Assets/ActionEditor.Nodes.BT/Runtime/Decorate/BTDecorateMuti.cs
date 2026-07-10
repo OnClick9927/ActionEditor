@@ -24,17 +24,16 @@ namespace ActionEditor.Nodes.BT
                 child.Abort();
             }
         }
-        internal sealed override List<BTComposite> Init(Blackboard blackboard, BTNode parent, List<BTComposite> result)
+        internal sealed override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
-            base.Init(blackboard, parent, result);
+            base.Init(blackboard, parent, tree);
             if (children == null)
                 throw new System.Exception($"{GetType()} {nameof(children)} is Null");
             for (int i = 0; i < children.Count; i++)
             {
                 var child = children[i];
-                child.Init(blackboard, this, result);
+                child.Init(blackboard, this, tree);
             }
-            return result;
         }
 
         protected override State OnUpdate()
