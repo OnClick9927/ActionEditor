@@ -35,6 +35,8 @@ namespace ActionEditor.Nodes.BT
         }
         private BTComposite CompositeParent;
         private BTNode AutoAbortCondition;
+        bool abortLower;
+        bool abortSelf;
         private BTNode FindAutoAbortCondition()
         {
             for (int i = 0; i < children.Count; i++)
@@ -58,37 +60,31 @@ namespace ActionEditor.Nodes.BT
         }
         internal void TryAutoAbort()
         {
-            if (abortType == AbortType.Both
-                   || abortType == AbortType.LowerPriority)
-            {
-                if (state != State.Running)
-                {
-                    if (AutoAbortCondition.Update() == State.Success)
-                        CompositeParent.Abort();
-                }
 
-            }
-            if (abortType == AbortType.Both
-                || abortType == AbortType.Self)
-            {
-                if (state == State.Running)
-                {
-                    if (AutoAbortCondition.Update() == State.Success)
-                        Abort();
-                }
-            }
+            if (abortLower
+                && state != State.Running
+                && CompositeParent.state == State.Running
+                && AutoAbortCondition.Update() == State.Success)
+                CompositeParent.Abort();
+            if (abortSelf
+                && state == State.Running
+                && AutoAbortCondition.Update() == State.Success)
+                Abort();
         }
         internal sealed override List<BTComposite> Init(Blackboard blackboard, BTNode parent, List<BTComposite> result)
         {
             base.Init(blackboard, parent, result);
             if (children == null)
                 throw new System.Exception($"{GetType()} {nameof(children)} is Null");
-            if (this.abortType != AbortType.None)
+            abortLower = abortType == AbortType.Both || abortType == AbortType.LowerPriority;
+            abortSelf = abortType == AbortType.Both || abortType == AbortType.Self;
+
+            if (abortLower || abortSelf)
             {
                 var condition = FindAutoAbortCondition();
                 if (condition == null)
                     throw new System.Exception($" {this.abortType} need {nameof(AutoAbortCondition)}");
-                if (this.abortType == AbortType.LowerPriority || this.abortType == AbortType.Both)
+                if (abortLower)
                 {
                     var _result = FindParentComposite();
                     if (_result == null)
