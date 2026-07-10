@@ -27,7 +27,7 @@ namespace ActionEditor.Nodes.BT
         public BTTree parent { get; private set; }
         public BTRoot root { get; private set; }
         //[System.NonSerialized] private List<BTComposite> aborted = new List<BTComposite>();
-        [System.NonSerialized] private List<BTComposite> abort_coditions;
+        [System.NonSerialized] private List<BTComposite> abort_composites;
         [System.NonSerialized] public List<BTTree> subs = new List<BTTree>();
 
         public T FindRuntimeTreeNode<T>(string guid) where T : NodeData
@@ -47,13 +47,16 @@ namespace ActionEditor.Nodes.BT
 
         public BTNode.State Update()
         {
-            //aborted.Clear();
-            for (int i = 0; i < abort_coditions.Count; i++)
+            if (abort_composites!=null)
             {
-                var condition = abort_coditions[i];
-                condition.TryAutoAbort();
-               
+                for (int i = 0; i < abort_composites.Count; i++)
+                {
+                    var condition = abort_composites[i];
+                    condition.TryAutoAbort();
+
+                }
             }
+      
 
             return root.Update();
         }
@@ -90,10 +93,18 @@ namespace ActionEditor.Nodes.BT
                         if (connections.Count == 1)
                             root.child = connections[0].input.node as BTNode;
                     }
-                    else if (node is BTDecorate decorate)
+                    else if (node is BTDecorateSingle decorate)
                     {
                         if (connections.Count == 1)
                             decorate.child = connections[0].input.node as BTNode;
+                    }
+                    else if (node is BTDecorateMuti decorate_muti)
+                    {
+                        decorate_muti.children = new List<BTNode>();
+                        for (int j = 0; j < connections.Count; j++)
+                        {
+                            decorate_muti.children.Add(connections[j].input.node as BTNode);
+                        }
                     }
                     else if (node is BTComposite composite)
                     {
@@ -103,10 +114,11 @@ namespace ActionEditor.Nodes.BT
                             composite.children.Add(connections[j].input.node as BTNode);
                         }
                     }
+
                 }
             }
             if (parent == null)
-                abort_coditions = root.Init(blackboard, null, new List<BTComposite>());
+                abort_composites = root.Init(blackboard, null, new List<BTComposite>());
         }
     }
 }

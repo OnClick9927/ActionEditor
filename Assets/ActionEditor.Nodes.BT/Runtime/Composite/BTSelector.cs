@@ -4,6 +4,17 @@ namespace ActionEditor.Nodes.BT
 
     public class BTSelector : BTComposite
     {
+        public int current { get; protected set; }
+        protected override void OnStart()
+        {
+            base.OnStart();
+            current = 0;
+        }
+        protected override void OnAbort()
+        {
+            base.OnAbort();
+            current = 0;
+        }
         protected override State OnUpdate()
         {
             for (int i = current; i < children.Count; i++)

@@ -2,7 +2,7 @@ namespace ActionEditor.Nodes.BT
 {
     [ Name("÷ÿ∏¥"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Repeater")]
 
-    public class BTRepeat : BTDecorate
+    public class BTRepeat : BTDecorateSingle
     {
         public bool restartOnSuccess = true;
         public bool restartOnFailure = true;
