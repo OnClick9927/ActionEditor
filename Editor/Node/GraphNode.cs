@@ -81,12 +81,12 @@ namespace ActionEditor.Nodes
 
         //private Image dot;
         //bool noIcon;
-
+        Label label;
         public virtual void OnCreated(NodeGraphView view)
         {
             //this.title = NodeName;
             this.titleContainer.Clear();
-            Label label = new Label() { text = NodeName };
+            label = new Label() { text = NodeName };
 
             label.style.fontSize = 25;
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
@@ -112,7 +112,6 @@ namespace ActionEditor.Nodes
                 this.titleContainer.Add(dot);
                 //icon = dot;
             }
-            style.minWidth = Mathf.Max(150, NodeName.Sum(c => c >= '\u4e00' && c <= '\u9fff' ? 1.6f : 1) * 30);
             inspector = new IMGUIContainer(this._inspector);
             inspector.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 1);
             this.Add(inspector);
@@ -120,6 +119,9 @@ namespace ActionEditor.Nodes
         private IMGUIContainer inspector;
         private void _inspector()
         {
+            style.minWidth = 100 + label.MeasureTextSize(this.NodeName, 0, 
+                MeasureMode.Undefined, 0, 
+                MeasureMode.Undefined).x;
             if (!App.window.showInspector)
             {
                 inspector.style.minWidth = 0;
