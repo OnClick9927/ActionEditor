@@ -1,10 +1,10 @@
 namespace ActionEditor.Nodes.BT
 {
-    [Name("并行"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("Parallel")]
+    [Name("并行选择"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("ParallelSelector")]
 
-    public class BTParallel : BTComposite
+    public class BTParallelSelector : BTComposite
     {
-
+        
         [System.NonSerialized] private State[] running;
         protected override void OnAbort()
         {
@@ -19,18 +19,21 @@ namespace ActionEditor.Nodes.BT
             for (int i = 0; i < running.Length; i++)
                 running[i] = State.Running;
         }
+
+
         protected override State OnUpdate()
         {
             bool stillRunning = false;
+            
             for (int i = 0; i < running.Length; ++i)
             {
                 if (running[i] == State.Running)
                 {
                     var status = children[i].Update();
-                    if (status == State.Failure)
+                    if (status == State.Success)
                     {
                         AbortRunningChildren();
-                        return State.Failure;
+                        return State.Success;
                     }
 
                     if (status == State.Running)
@@ -41,7 +44,7 @@ namespace ActionEditor.Nodes.BT
                 }
             }
 
-            return stillRunning ? State.Running : State.Success;
+            return stillRunning ? State.Running : State.Failure;
         }
 
 

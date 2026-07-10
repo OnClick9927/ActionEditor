@@ -3,20 +3,6 @@ namespace ActionEditor.Nodes.BT
 {
     public abstract class BTDecorate : BTNode
     {
-        public BTNode child { get; internal set; }
-        protected sealed override void OnAbort() => child.Abort();
-        internal sealed override List<BTComposite> Init(Blackboard blackBord, BTNode parent, List<BTComposite> result)
-        {
-            base.Init(blackBord, parent, result);
-            if (child == null)
-                throw new System.Exception($"{GetType()} {nameof(child)} is Null");
-            return child.Init(blackBord, this, result);
-        }
-
-        protected abstract State Decorate(State state);
-        protected sealed override State OnUpdate()
-        {
-            return Decorate(child.Update());
-        }
+        internal abstract bool IsConditionDecorate();
     }
 }

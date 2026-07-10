@@ -6,9 +6,9 @@ namespace ActionEditor.Nodes.BT
     public abstract class BTCondition : BTNode
     {
         protected sealed override void OnAbort() { }
-        internal sealed override List<BTComposite> Init(Blackboard blackBord, BTNode parent, List<BTComposite> result)
+        internal sealed override List<BTComposite> Init(Blackboard blackboard, BTNode parent, List<BTComposite> result)
         {
-            return base.Init(blackBord, parent, result);
+            return base.Init(blackboard, parent, result);
         }
 
         protected abstract bool Condition();

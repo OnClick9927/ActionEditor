@@ -2,7 +2,7 @@ namespace ActionEditor.Nodes.BT
 {
     [ Name("È¡·´"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Inverter")]
 
-    public class BTInverter : BTDecorate
+    public class BTInverter : BTDecorateSingle
     {
         protected override State Decorate(State state)
         {

@@ -13,13 +13,11 @@ namespace ActionEditor.Nodes.BT
 
         public AbortType abortType;
         public List<BTNode> children { get; internal set; }
-        public int current { get; protected set; }
-        protected override void OnStart()
+        protected void AbortRunningChildren()
         {
-            base.OnStart();
-            current = 0;
+            for (int i = 0; i < children.Count; ++i)
+                children[i].Abort();
         }
-
 
         private BTComposite FindParentComposite()
         {
@@ -49,17 +47,16 @@ namespace ActionEditor.Nodes.BT
                 }
                 else if (child is BTDecorate decorate)
                 {
-                    if (decorate.child is BTCondition)
+                    if (decorate.IsConditionDecorate())
                     {
                         AutoAbortCondition = child;
                         break;
                     }
                 }
-
             }
             return AutoAbortCondition;
         }
-        public void TryAutoAbort()
+        internal void TryAutoAbort()
         {
             if (abortType == AbortType.Both
                    || abortType == AbortType.LowerPriority)
@@ -81,9 +78,9 @@ namespace ActionEditor.Nodes.BT
                 }
             }
         }
-        internal sealed override List<BTComposite> Init(Blackboard blackBord, BTNode parent, List<BTComposite> result)
+        internal sealed override List<BTComposite> Init(Blackboard blackboard, BTNode parent, List<BTComposite> result)
         {
-            base.Init(blackBord, parent, result);
+            base.Init(blackboard, parent, result);
             if (children == null)
                 throw new System.Exception($"{GetType()} {nameof(children)} is Null");
             if (this.abortType != AbortType.None)
@@ -102,15 +99,13 @@ namespace ActionEditor.Nodes.BT
 
             for (int i = 0; i < children.Count; i++)
             {
-                children[i].Init(blackBord, this, result);
+                children[i].Init(blackboard, this, result);
             }
             return result;
         }
         protected override void OnAbort()
         {
-            this.current = 0;
-            for (int i = 0; i < children.Count; i++)
-                children[i].Abort();
+            AbortRunningChildren();
         }
     }
 }
