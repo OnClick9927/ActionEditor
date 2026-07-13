@@ -10,7 +10,7 @@ namespace ActionEditor.Nodes.BT
         bool abortLower;
         bool abortSelf;
         private BTComposite CompositeParent;
-        [ReadOnly]public string flag;
+        [ReadOnly] public string flag;
 
         internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
@@ -25,7 +25,7 @@ namespace ActionEditor.Nodes.BT
                     throw new System.Exception($" {this.abortType} need {nameof(CompositeParent)}");
             }
             if (abortSelf || abortLower)
-                tree.AddAbortNode(this);
+                tree.AddSpecialNode(this);
         }
         public void Interrupt()
         {

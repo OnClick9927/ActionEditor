@@ -15,7 +15,7 @@ namespace ActionEditor.Nodes.BT
     {
         private GraphConnection flow;
         ProgressBar progress;
-        protected BTNode runningNode { get; private set; }
+        public BTNode runningNode { get; protected set; }
         protected new Port GeneratePort(Direction portDir, Type type, Port.Capacity capacity = Port.Capacity.Single, string name = "")
         {
             var port = base.GeneratePort(portDir, type, capacity, name);
@@ -47,13 +47,17 @@ namespace ActionEditor.Nodes.BT
             this.titleContainer.Add(progress);
         }
 
+        protected virtual bool IsRunning()
+        {
+            return runningNode != null && runningNode.state == BTNode.State.Running;
+        }
         public override void OnUpdate()
         {
             base.OnUpdate();
             if (flow != null)
                 flow.enableFlow = false;
             progress.visible = false;
-            if (runningNode != null && runningNode.state == BTNode.State.Running)
+            if (IsRunning())
             {
                 var time = EditorApplication.timeSinceStartup;
                 time %= 1f;

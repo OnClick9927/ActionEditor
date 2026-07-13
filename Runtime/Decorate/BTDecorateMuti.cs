@@ -15,6 +15,12 @@ namespace ActionEditor.Nodes.BT
             return true;
         }
         public List<BTNode> children { get; internal set; }
+        protected void AbortRunningChildren()
+        {
+            for (int i = 0; i < children.Count; ++i)
+                children[i].Abort();
+        }
+
         protected sealed override void OnAbort()
         {
             if (children == null) return;
@@ -24,7 +30,7 @@ namespace ActionEditor.Nodes.BT
                 child.Abort();
             }
         }
-        internal sealed override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
             base.Init(blackboard, parent, tree);
             if (children == null)
@@ -35,20 +41,20 @@ namespace ActionEditor.Nodes.BT
                 child.Init(blackboard, this, tree);
             }
         }
-
+        protected virtual int GetStartIndex() { return 0; }
         protected override State OnUpdate()
         {
             State state = State.Inactive;
-            for (int i = 0; i < children.Count; i++)
+            for (int i = GetStartIndex(); i < children.Count; i++)
             {
                 var child = children[i];
                 var result = child.Update();
-                var next = Decorate(ref state, result);
+                var next = Decorate(i, ref state, result);
                 if (!next) break;
             }
             return state;
         }
-        protected abstract bool Decorate(ref State src, State state);
+        protected abstract bool Decorate(int index, ref State src, State state);
 
     }
 }

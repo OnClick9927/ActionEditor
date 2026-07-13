@@ -7,8 +7,6 @@ using UnityEngine;
 
 namespace ActionEditor.Nodes.BT
 {
-
-
     public class BTTreeView<T> : Nodes.NodeGraphView<T> where T : BTTree
     {
         protected BTTree runningTree { get; private set; }
@@ -128,8 +126,22 @@ namespace ActionEditor.Nodes.BT
         protected override void OnInspectorGUI()
         {
             GUILayout.BeginVertical(GUILayout.Height(height));
-            base.OnInspectorGUI();
-            GUILayout.EndVertical();
+
+            scroll = GUILayout.BeginScrollView(scroll);
+
+            var editor = ActionEditor.EditorEX.CreateEditor(this.graph);
+            editor.OnInspectorGUI();
+            using (new EditorGUI.DisabledScope(this.graph.IsSubTree))
+            {
+                var p = editor.serializedObject.FindProperty("obj");
+                editor.serializedObject.UpdateIfRequiredOrScript();
+                EditorGUILayout.PropertyField(p.FindPropertyRelative(nameof(this.graph.events)), true);
+                EditorGUILayout.PropertyField(p.FindPropertyRelative(nameof(this.graph.interruptFlags)), true);
+                EditorGUILayout.PropertyField(p.FindPropertyRelative(nameof(this.graph.semaphores)),true);
+                editor.serializedObject.ApplyModifiedProperties();
+             
+            }
+            GUILayout.EndScrollView();
             DrawBlackBord(this, position.height);
             GUILayout.Space(2);
         }

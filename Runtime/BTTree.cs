@@ -5,6 +5,12 @@ namespace ActionEditor.Nodes.BT
     [System.Serializable, Name("ÐÐÎªÊ÷")]
     public abstract class BTTree : GraphAsset
     {
+        [System.Serializable]
+        public class Semaphore
+        {
+            public string name;
+            public int max = 1;
+        }
         public static event Action<BTTree> onInstanceChanged;
         private static BTTree _instance;
         public static BTTree instance
@@ -25,10 +31,43 @@ namespace ActionEditor.Nodes.BT
         [Name("×ÓÊ÷?")] public bool IsSubTree;
         public BTTree parent { get; private set; }
         public BTRoot root { get; private set; }
+
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.HideInInspector]
+#endif
+        public List<string> interruptFlags = new();
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.HideInInspector]
+#endif
+        public List<string> events = new();
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.HideInInspector]
+#endif
+        public List<Semaphore> semaphores = new List<Semaphore>();
+
         [System.NonSerialized] private List<BTComposite> abort_composites;
         [System.NonSerialized] private Dictionary<string, BTInterrupt> interrupts;
+        [System.NonSerialized] private Dictionary<int, int> semaphore_value;
+        [System.NonSerialized] private Dictionary<string, List<BTRecEventCondition>> eve_map;
 
-        internal void AddAbortNode(BTNode node)
+        internal void ReleaseSemaphore(int index)
+        {
+            var value = semaphore_value.TryGetValue(index, out var result) ? result : 0;
+            value--;
+            if (value < 0)
+                value = 0;
+            semaphore_value[index] = value;
+        }
+
+        internal bool WaitSemaphore(int index)
+        {
+            var value = semaphore_value.TryGetValue(index, out var result) ? result : 0;
+            var cfg = semaphores[index];
+            if (value >= cfg.max) return false;
+            semaphore_value[index] = result + 1;
+            return true;
+        }
+        internal void AddSpecialNode(BTNode node)
         {
             if (node is BTComposite composite)
             {
@@ -36,9 +75,19 @@ namespace ActionEditor.Nodes.BT
             }
             else if (node is BTInterrupt interrupt)
             {
-                var flag= interrupt.flag;
-                if (!interrupts.TryAdd(flag , interrupt))
+                var flag = interrupt.flag;
+                if (!interrupts.TryAdd(flag, interrupt))
                     throw new Exception($"Same Flag {flag}");
+            }
+            else if (node is BTRecEventCondition rec)
+            {
+                var flag = rec.eventName;
+                if (!eve_map.TryGetValue(flag, out var list))
+                {
+                    list = new List<BTRecEventCondition>();
+                    eve_map[flag] = list;
+                }
+                list.Add(rec);
             }
         }
         [System.NonSerialized] public List<BTTree> subs = new List<BTTree>();
@@ -83,6 +132,16 @@ namespace ActionEditor.Nodes.BT
             return false;
         }
         public void Abort() => root.Abort();
+        public bool PushEvent(string eve)
+        {
+            if (!eve_map.TryGetValue(eve, out var list)) return false;
+            for (int i = 0; i < list.Count; i++)
+            {
+                var rec = list[i];
+                rec.recEve = true;
+            }
+            return true;
+        }
         public new void PrepareForRuntime()
         {
             throw new Exception($"use loader method");
@@ -139,10 +198,60 @@ namespace ActionEditor.Nodes.BT
 
                 }
             }
-            if (parent == null)
+            for (int i = 0; i < nodes.Count; i++)
             {
-                interrupts = new ();
-                abort_composites = new List<BTComposite>();
+                var node = nodes[i];
+                if (node is BTRoot root)
+                {
+                    if (root.child is BTSubTree tree)
+                    {
+                        root.child = tree.tree.root.child;
+                        tree.runtimeNode = root.child;
+                    }
+                }
+                else if (node is BTDecorateSingle decorate)
+                {
+                    if (decorate.child is BTSubTree tree)
+                    {
+                        decorate.child = tree.tree.root.child;
+                        tree.runtimeNode = decorate.child;
+                    }
+                }
+                else if (node is BTDecorateMuti decorate_muti)
+                {
+                    for (int j = 0; j < decorate_muti.children.Count; j++)
+                    {
+                        var child = decorate_muti.children[i];
+                        if (child is BTSubTree tree)
+                        {
+                            decorate_muti.children[j] = tree.tree.root.child;
+                            tree.runtimeNode = decorate_muti.children[j];
+                        }
+                    }
+                }
+                else if (node is BTComposite composite)
+                {
+                    for (int j = 0; j < composite.children.Count; j++)
+                    {
+                        var child = composite.children[j];
+                        if (child is BTSubTree tree)
+                        {
+                            composite.children[j] = tree.tree.root.child;
+                            tree.runtimeNode = composite.children[j];
+
+                        }
+                    }
+                }
+
+            }
+
+            if (!IsSubTree)
+            {
+                eve_map = new();
+                interrupts = new();
+                semaphore_value = new();
+
+                abort_composites = new();
                 root.Init(blackboard, null, this);
             }
         }

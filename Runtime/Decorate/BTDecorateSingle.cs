@@ -7,7 +7,7 @@ namespace ActionEditor.Nodes.BT
             return child is BTCondition;
         }
         public BTNode child { get; internal set; }
-        protected sealed override void OnAbort() => child.Abort();
+        protected override void OnAbort() => child.Abort();
         internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
             base.Init(blackboard, parent, tree);
@@ -17,7 +17,7 @@ namespace ActionEditor.Nodes.BT
         }
 
         protected abstract State Decorate(State state);
-        protected sealed override State OnUpdate()
+        protected override State OnUpdate()
         {
             return Decorate(child.Update());
         }
