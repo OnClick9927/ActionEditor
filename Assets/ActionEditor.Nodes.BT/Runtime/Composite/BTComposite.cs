@@ -78,7 +78,7 @@ namespace ActionEditor.Nodes.BT
                         throw new System.Exception($" {this.abortType} need {nameof(CompositeParent)}");
                 }
                 
-                tree.AddAbortNode(this);
+                tree.AddSpecialNode(this);
             }
 
             for (int i = 0; i < children.Count; i++)

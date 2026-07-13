@@ -1,6 +1,5 @@
-using System.Drawing;
+using System.Linq;
 using UnityEditor;
-using UnityEditor.EditorTools;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -11,7 +10,7 @@ namespace ActionEditor.Nodes.BT
     {
         public override void OnInspectorGUI()
         {
-            ActionEditor.EditorEX.CreateEditor(Data).OnInspectorGUI();
+            DrawDefaultInspector();
 
             if (GUILayout.Button("Select"))
             {
@@ -44,7 +43,22 @@ namespace ActionEditor.Nodes.BT
                     return true;
                 });
             }
+            if (GUILayout.Button("Sync interrupt && Semaphore && Events"))
+            {
+                var path = this.data.path;
+                var text = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+                if (text != null)
+                {
+                    var tree = BTTree.FromBytes(typeof(BTTree), text.bytes) as BTTree;
+                    var src = App.asset as BTTree;
+                    tree.semaphores = src.semaphores;
+                    tree.interruptFlags = src.interruptFlags;
+                    tree.events = src.events;
 
+                    System.IO.File.WriteAllBytes(data.path, tree.ToBytes());
+                    AssetDatabase.Refresh();
+                }
+            }
         }
         public override void OnCreated(NodeGraphView view)
         {
@@ -61,5 +75,16 @@ namespace ActionEditor.Nodes.BT
                 }
             });
         }
+
+        public override void OnBTTreeChanged(BTTree tree)
+        {
+            base.OnBTTreeChanged(tree);
+            if (tree != null)
+            {
+                var node_sub = tree.FindRuntimeTreeNode<BTSubTree>(this.data.guid);
+                runningNode = node_sub.runtimeNode;
+            }
+        }
+   
     }
 }
