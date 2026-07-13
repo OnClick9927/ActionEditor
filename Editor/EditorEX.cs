@@ -66,10 +66,10 @@ namespace ActionEditor
         public static Texture2D GetIcon(this object track)
         {
             Type type = null;
-            if(track is Type)
-                type=track as Type;
+            if (track is Type)
+                type = track as Type;
             else
-                  type = track.GetType();
+                type = track.GetType();
             if (_iconDictionary.TryGetValue(type, out var icon))
             {
                 return icon;
@@ -279,7 +279,6 @@ namespace ActionEditor
         [CustomEditor(typeof(DrawerObject))]
         class DrawerObjectEditor : Editor
         {
-
             public static List<SerializedProperty> GetDirectChildProperties(SerializedProperty parentProp)
             {
                 List<SerializedProperty> childProps = new List<SerializedProperty>();
@@ -297,9 +296,9 @@ namespace ActionEditor
                     {
                         break;
                     }
-
                     childProps.Add(childProp.Copy()); // 必须Copy！否则后续Next会改变当前引用
-                    hasNext = childProp.Next(false);
+
+                    hasNext = childProp.NextVisible(false);
                 }
                 return childProps;
             }
