@@ -318,7 +318,7 @@ namespace ActionBuffer
     public interface IBufferWriter
     {
         void AddToMeta(string value);
-        void CollectMetas(Type value);
+        void CollectMetas<T>(T obj);
         void WriteIEnumerable<T>(IEnumerable<T> values, Action<IBufferWriter, T> write);
 
         void WriteBool(bool value);
@@ -493,12 +493,25 @@ namespace ActionBuffer
             return c.Read(reader, type);
         }
         public static T ToObject<T>(byte[] bytes) => (T)ToObject(bytes, typeof(T));
-        public virtual void CollectMetas(IBufferWriter writer) { }
-
+        public virtual void CollectMetas(IBufferWriter writer, object value)
+        {
+        }
     }
     public abstract class BuffConverter<T> : BuffConverter
     {
+        public override sealed void CollectMetas(IBufferWriter writer, object value)
+        {
 
+            //OnCollectMetas(writer);
+            if (value is T t)
+                OnCollectMetas(writer, t);
+            else
+                writer.CollectMetas<T>(default);
+        }
+        protected virtual void OnCollectMetas(IBufferWriter writer, T value) { }
+
+
+        //protected virtual void OnCollectMetas(IBufferWriter writer) { }
         public abstract void OnWrite(IBufferWriter writer, T value);
         public abstract T OnRead(IBufferReader reader, Type type);
         public sealed override object Read(IBufferReader reader, Type type) => OnRead(reader, type);
@@ -915,8 +928,14 @@ namespace ActionBuffer
             metas.Add(meta, _index_meta++);
         }
         private HashSet<Type> _visited = new HashSet<Type>();
-        public void CollectMetas(Type type)
+
+
+        public void CollectMetas<T>(T obj)
         {
+            Type type = typeof(T);
+            if (obj != null)
+                type = obj.GetType();
+
             if (type == null) return;
 
             if (!_visited.Add(type)) return;
@@ -924,7 +943,7 @@ namespace ActionBuffer
             AddToMeta(type.FullName);
             AddToMeta(type.Assembly.FullName);
             var convert = BuffConverter.GetConverter(type);
-            convert.CollectMetas(this);
+            convert.CollectMetas(this, obj);
             var fields = TypeHelper.GetTypeFields(type).GetFields();
             if (fields == null || fields.Count == 0) return;
             for (int i = 0; i < fields.Count; i++)
@@ -935,7 +954,9 @@ namespace ActionBuffer
                 var fieldTypeName = TypeHelper.GetTypeName(fieldType);
                 AddToMeta(fieldName);
                 AddToMeta(fieldTypeName);
-                BuffConverter.GetConverter(fieldType).CollectMetas(this);
+                object filedValue = null;
+                if (obj != null) filedValue = field.GetValue(obj);
+                BuffConverter.GetConverter(fieldType).CollectMetas(this, filedValue);
             }
         }
 
@@ -949,7 +970,7 @@ namespace ActionBuffer
             if (metas == null)
             {
                 metas = new();
-                CollectMetas(value.GetType());
+                CollectMetas(value);
                 WriteIEnumerable(metas.Keys, (w, val) => w.WriteUTF8(val));
             }
 
@@ -1105,7 +1126,7 @@ namespace ActionBuffer
             return _sb.ToString();
         }
 
-        public void CollectMetas(Type field) { }
+        public void CollectMetas<T>(T value) { }
 
         private void WriteTypeInfo(Type type)
         {
@@ -1724,7 +1745,11 @@ namespace ActionBuffer
     {
         public override T OnRead(IBufferReader reader, Type type) => reader.ReadObject<T>();
         public override void OnWrite(IBufferWriter writer, T value) => writer.WriteObject(value);
-        public override void CollectMetas(IBufferWriter writer) => writer.CollectMetas(typeof(T));
+        //protected override void OnCollectMetas(IBufferWriter writer) => writer.CollectMetas(typeof(T));
+        protected override void OnCollectMetas(IBufferWriter writer, T value)
+        {
+            writer.CollectMetas(value);
+        }
     }
 }
 namespace ActionBuffer
@@ -1735,7 +1760,14 @@ namespace ActionBuffer
         protected T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
         private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
         public override void OnWrite(IBufferWriter writer, V value) => writer.WriteIEnumerable(value, WriteOnce);
-        public override void CollectMetas(IBufferWriter writer) => converter.CollectMetas(writer);
+        //protected override void OnCollectMetas(IBufferWriter writer) => converter.CollectMetas(writer);
+        protected override void OnCollectMetas(IBufferWriter writer, V value)
+        {
+            foreach (var item in value)
+            {
+                writer.CollectMetas(item);
+            }
+        }
     }
     [BuffConverter(typeof(Queue<>))]
     class QueueConverter<T> : IEnumerableConverter<T, Queue<T>>
@@ -1787,12 +1819,16 @@ namespace ActionBuffer
             writer.WriteObject(value, fields);
         }
 
-        public override void CollectMetas(IBufferWriter writer)
+        protected override void OnCollectMetas(IBufferWriter writer, KeyValuePair<Key, Value> value)
         {
+            var type = value.GetType();
+            writer.AddToMeta(type.FullName);
+            writer.AddToMeta(type.Assembly.FullName);
+
             writer.AddToMeta("key");
             writer.AddToMeta("value");
-            _key.CollectMetas(writer);
-            _value.CollectMetas(writer);
+            _key.CollectMetas(writer, value.Key);
+            _value.CollectMetas(writer, value.Value);
         }
     }
 
