@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ActionBuffer;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -134,28 +135,13 @@ namespace ActionEditor
             return color;
         }
 
-        public static IEnumerable<Type> GetAllTypes()
-        {
-            return AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes());
-
-        }
-        public static Type[] GetImplementationsOf(Type type)
-        {
-            if (type.IsInterface)
-                return GetAllTypes().Where(x => x.GetInterfaces().Count(y => y == type) != 0).Where(x => !x.IsAbstract).ToArray();
-            return GetAllTypes().Where(x => type.IsAssignableFrom(x)).Where(x => !x.IsAbstract).ToArray();
-
-        }
-
 
 
         public struct TypeMetaInfo
         {
             public Type type;
             public string name;
-            //public string category;
             public Type[] attachableTypes;
-            //public bool isUnique;
         }
 
 
@@ -195,7 +181,7 @@ namespace ActionEditor
         public static List<TypeMetaInfo> GetTypeMetaDerivedFrom(Type baseType)
         {
             var infos = new List<TypeMetaInfo>();
-            foreach (var type in EditorEX.GetImplementationsOf(baseType))
+            foreach (var type in TypeHelper.GetSubTypes(baseType))
             {
                 if (type.GetCustomAttributes(typeof(System.ObsoleteAttribute), true).FirstOrDefault() != null)
                 {

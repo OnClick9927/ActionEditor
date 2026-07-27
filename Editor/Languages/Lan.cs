@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using ActionBuffer;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace ActionEditor
@@ -13,7 +14,7 @@ namespace ActionEditor
         internal static void Load()
         {
             var lan = Prefs.Lan_key;
-            var types = EditorEX.GetImplementationsOf(typeof(ILanguages));
+            var types = TypeHelper.GetSubTypes(typeof(ILanguages));
             foreach (var t in types)
             {
                 var name = EditorEX.GetTypeName(t);

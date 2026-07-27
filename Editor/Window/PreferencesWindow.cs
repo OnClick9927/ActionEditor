@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ActionBuffer;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -45,7 +46,7 @@ namespace ActionEditor
                     .ToDictionary(x => x)
                     .Where(x =>
                     {
-                        var attachs = x.Value.attach.Select(x => EditorEX.GetAllTypes().First(y => y.Name == x));
+                        var attachs = x.Value.attach.Select(x => TypeHelper.GetTypeByFullName(x));
                         foreach (var item in attachs)
                         {
                             var names = EditorEX.GetTypeMetaDerivedFrom(item).SelectMany(x => x.attachableTypes.Select(x => x.Name));
