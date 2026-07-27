@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using static ActionBuffer.TypeHelper;
 
 
 namespace ActionBuffer
@@ -75,32 +76,16 @@ namespace ActionBuffer
         {
             if (map.TryGetValue(type, out var typefield)) return typefield;
             typefield = new TypeFields(type);
-            var baseType = type.BaseType;
-            // 处理基类（object 除外）
-            if (baseType != null && baseType != typeof(object))
-            {
-                var baseFields = GetTypeFields(baseType); // 递归确保缓存
-                var _fields = baseFields.GetFields();
-                if (_fields != null && _fields.Count != 0)
-                    for (int i = 0; i < _fields.Count; i++)
-                    {
-                        var field = _fields[i];
-                        typefield.AddField(field);
-                    }
-            }
-
             // 添加当前类型声明的字段
             {
                 var _fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
-                                     BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                                     BindingFlags.Instance);
                 for (int i = 0; i < _fields.Length; i++)
                 {
                     var field = _fields[i];
                     typefield.AddField(field);
                 }
-
             }
-
             map[type] = typefield;
             return typefield;
         }
@@ -139,6 +124,28 @@ namespace ActionBuffer
             }
 
             return false;
+        }
+
+        private static IEnumerable<Type> types;
+        public static IEnumerable<Type> Types => types;
+        private static Dictionary<Type, IEnumerable<Type>> subMap = new Dictionary<Type, IEnumerable<Type>>();
+        public static IEnumerable<Type> GetSubTypes(Type type)
+        {
+            if (!subMap.TryGetValue(type, out var result))
+            {
+                types = types ?? AppDomain.CurrentDomain.GetAssemblies()
+                    .SelectMany(x => x.GetTypes())
+                    .Where(x => !x.IsAbstract);
+                if (type.IsInterface)
+                    result = types.Where(x => x.GetInterface(type.Name) != null);
+                else if (type.IsGenericType)
+                    result = types.Where(x => IsSubclassOfGeneric(x, type));
+                else
+                    result = types.Where(x => x.IsSubclassOf(type));
+                subMap.Add(type, result);
+            }
+            return result;
+
         }
 
         private static Dictionary<string, Type> _typeMap = new Dictionary<string, Type>();
@@ -318,7 +325,7 @@ namespace ActionBuffer
     public interface IBufferWriter
     {
         void AddToMeta(string value);
-        void CollectMetas<T>(T obj);
+        void CollectMetas(Type obj);
         void WriteIEnumerable<T>(IEnumerable<T> values, Action<IBufferWriter, T> write);
 
         void WriteBool(bool value);
@@ -368,6 +375,7 @@ namespace ActionBuffer
 
         private static Dictionary<Type, Type> _fgenmap;
         private static Dictionary<Type, BuffConverter> map = new Dictionary<Type, BuffConverter>();
+        public virtual TypeHelper.TypeFields GetTypeTypeFields() => null;
         private static BuffConverter Create(Type type)
         {
             if (_nmap == null)
@@ -493,25 +501,12 @@ namespace ActionBuffer
             return c.Read(reader, type);
         }
         public static T ToObject<T>(byte[] bytes) => (T)ToObject(bytes, typeof(T));
-        public virtual void CollectMetas(IBufferWriter writer, object value)
-        {
-        }
+        public abstract void CollectMetas(IBufferWriter writer);
     }
     public abstract class BuffConverter<T> : BuffConverter
     {
-        public override sealed void CollectMetas(IBufferWriter writer, object value)
-        {
-
-            //OnCollectMetas(writer);
-            if (value is T t)
-                OnCollectMetas(writer, t);
-            else
-                writer.CollectMetas<T>(default);
-        }
-        protected virtual void OnCollectMetas(IBufferWriter writer, T value) { }
-
-
-        //protected virtual void OnCollectMetas(IBufferWriter writer) { }
+        protected virtual void OnCollectMetas(IBufferWriter writer) { }
+        public override sealed void CollectMetas(IBufferWriter writer) => OnCollectMetas(writer);
         public abstract void OnWrite(IBufferWriter writer, T value);
         public abstract T OnRead(IBufferReader reader, Type type);
         public sealed override object Read(IBufferReader reader, Type type) => OnRead(reader, type);
@@ -929,23 +924,14 @@ namespace ActionBuffer
         }
         private HashSet<Type> _visited = new HashSet<Type>();
 
-
-        public void CollectMetas<T>(T obj)
+        public void CollectMetas(Type type)
         {
-            Type type = typeof(T);
-            if (obj != null)
-                type = obj.GetType();
-
-            if (type == null) return;
-
-            if (!_visited.Add(type)) return;
-
+            if (type == null || !_visited.Add(type)) return;
+            var convert = BuffConverter.GetConverter(type);
+            var src = convert.GetTypeTypeFields() ?? TypeHelper.GetTypeFields(type);
+            var fields = src.GetFields();
             AddToMeta(type.FullName);
             AddToMeta(type.Assembly.FullName);
-            var convert = BuffConverter.GetConverter(type);
-            convert.CollectMetas(this, obj);
-            var fields = TypeHelper.GetTypeFields(type).GetFields();
-            if (fields == null || fields.Count == 0) return;
             for (int i = 0; i < fields.Count; i++)
             {
                 var field = fields[i];
@@ -954,10 +940,11 @@ namespace ActionBuffer
                 var fieldTypeName = TypeHelper.GetTypeName(fieldType);
                 AddToMeta(fieldName);
                 AddToMeta(fieldTypeName);
-                object filedValue = null;
-                if (obj != null) filedValue = field.GetValue(obj);
-                BuffConverter.GetConverter(fieldType).CollectMetas(this, filedValue);
+                BuffConverter.GetConverter(fieldType).CollectMetas(this);
             }
+            var subs = TypeHelper.GetSubTypes(type);
+            foreach (var item in subs)
+                BuffConverter.GetConverter(item).CollectMetas(this);
         }
 
 
@@ -970,7 +957,7 @@ namespace ActionBuffer
             if (metas == null)
             {
                 metas = new();
-                CollectMetas(value);
+                CollectMetas(type);
                 WriteIEnumerable(metas.Keys, (w, val) => w.WriteUTF8(val));
             }
 
@@ -978,11 +965,8 @@ namespace ActionBuffer
             WriteInt32(metas[type.Assembly.FullName]);
             var ObjStart = this._index;
             WriteInt32(0);
-
-
             var fields = _fields.GetFields();
             if (fields != null && fields.Count != 0)
-
                 for (int i = 0; i < fields.Count; i++)
                 {
                     var field = fields[i];
@@ -1126,7 +1110,7 @@ namespace ActionBuffer
             return _sb.ToString();
         }
 
-        public void CollectMetas<T>(T value) { }
+        public void CollectMetas(Type value) { }
 
         private void WriteTypeInfo(Type type)
         {
@@ -1743,31 +1727,28 @@ namespace ActionBuffer
     }
     class ObjectConverter<T> : BuffConverter<T>
     {
+        protected override void OnCollectMetas(IBufferWriter writer)
+        {
+            writer.CollectMetas(typeof(T));
+        }
         public override T OnRead(IBufferReader reader, Type type) => reader.ReadObject<T>();
         public override void OnWrite(IBufferWriter writer, T value) => writer.WriteObject(value);
-        //protected override void OnCollectMetas(IBufferWriter writer) => writer.CollectMetas(typeof(T));
-        protected override void OnCollectMetas(IBufferWriter writer, T value)
-        {
-            writer.CollectMetas(value);
-        }
+
     }
 }
 namespace ActionBuffer
 {
     public abstract class IEnumerableConverter<T, V> : BuffConverter<V> where V : IEnumerable<T>
     {
+        protected override sealed void OnCollectMetas(IBufferWriter writer)
+        {
+            writer.CollectMetas(typeof(T));
+        }
         static BuffConverter<T> converter = GetConverter<T>();
         protected T ReadOnce(IBufferReader reader) => converter.OnRead(reader, typeof(T));
         private void WriteOnce(IBufferWriter writer, T t) => converter.OnWrite(writer, t);
         public override void OnWrite(IBufferWriter writer, V value) => writer.WriteIEnumerable(value, WriteOnce);
-        //protected override void OnCollectMetas(IBufferWriter writer) => converter.CollectMetas(writer);
-        protected override void OnCollectMetas(IBufferWriter writer, V value)
-        {
-            foreach (var item in value)
-            {
-                writer.CollectMetas(item);
-            }
-        }
+
     }
     [BuffConverter(typeof(Queue<>))]
     class QueueConverter<T> : IEnumerableConverter<T, Queue<T>>
@@ -1797,9 +1778,20 @@ namespace ActionBuffer
     [BuffConverter(typeof(KeyValuePair<,>))]
     class KeyValuePairConverter<Key, Value> : BuffConverter<KeyValuePair<Key, Value>>
     {
-        BuffConverter<Key> _key = GetConverter<Key>();
-        BuffConverter<Value> _value = GetConverter<Value>();
         static TypeHelper.TypeFields fields;
+        protected override void OnCollectMetas(IBufferWriter writer)
+        {
+            base.OnCollectMetas(writer);
+            writer.AddToMeta(typeof(KeyValuePair<Key, Value>).FullName);
+            writer.CollectMetas(typeof(Key));
+            writer.CollectMetas(typeof(Value));
+
+        }
+
+        public override TypeFields GetTypeTypeFields()
+        {
+            return fields;
+        }
         static KeyValuePairConverter()
         {
             var _type = typeof(KeyValuePair<Key, Value>);
@@ -1818,49 +1810,11 @@ namespace ActionBuffer
         {
             writer.WriteObject(value, fields);
         }
-
-        protected override void OnCollectMetas(IBufferWriter writer, KeyValuePair<Key, Value> value)
-        {
-            var type = value.GetType();
-            writer.AddToMeta(type.FullName);
-            writer.AddToMeta(type.Assembly.FullName);
-
-            writer.AddToMeta("key");
-            writer.AddToMeta("value");
-            _key.CollectMetas(writer, value.Key);
-            _value.CollectMetas(writer, value.Value);
-        }
     }
 
     [BuffConverter(typeof(Dictionary<,>))]
     class DictionaryConverter<Key, Value> : IEnumerableConverter<KeyValuePair<Key, Value>, Dictionary<Key, Value>>
     {
-        //protected override void OnCollectMetas(IBufferWriter writer, Dictionary<Key, Value> value)
-        //{
-
-        //    base.OnCollectMetas(writer, value);
-        //}
         public override Dictionary<Key, Value> OnRead(IBufferReader reader, Type type) => reader.ReadDictionary(ReadOnce);
     }
 }
-//namespace ActionBuffer
-//{
-//    [UnityEditor.InitializeOnLoad]
-//    public class GG
-//    {
-//        private static Dictionary<int, A> dic = new Dictionary<int, A>() {
-//            { 1,new A(){ Id=1} }
-//        };
-//        class A
-//        {
-//            public int Id;
-//        }
-//        [UnityEditor.MenuItem("Tools/AA")]
-//        static void GG1()
-//        {
-//            var bytes = ActionBuffer.BuffConverter.ToBytes(dic);
-//            var result = ActionBuffer.BuffConverter.ToObject(bytes, typeof(Dictionary<int, A>));
-//            Console.WriteLine();
-//        }
-//    }
-//}
