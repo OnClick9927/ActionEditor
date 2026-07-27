@@ -1,3 +1,4 @@
+using ActionBuffer;
 using ActionEditor;
 using System;
 using System.Collections.Generic;
@@ -54,7 +55,7 @@ namespace ActionEditor.Nodes
                 {
                     if (!_null && _type == null)
                     {
-                        _type = EditorEX.GetAllTypes().FirstOrDefault(x => x.FullName == type);
+                        _type = TypeHelper.GetTypeByFullName(type);
                         _null = _type == null;
                     }
                     return _type;

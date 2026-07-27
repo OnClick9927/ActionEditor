@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -496,7 +495,7 @@ namespace ActionEditor
 
 
             AssetNames.Clear();
-            var types = EditorEX.GetImplementationsOf(typeof(Asset));
+            var types = TypeHelper.GetSubTypes(typeof(Asset));
             foreach (var t in types)
             {
                 var typeName = EditorEX.GetTypeName(t);

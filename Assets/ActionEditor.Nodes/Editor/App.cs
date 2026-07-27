@@ -1,5 +1,4 @@
 using ActionBuffer;
-using ActionEditor;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -37,11 +36,10 @@ namespace ActionEditor.Nodes
         {
             GraphAsset asset = App.asset;
             if (asset == null) return null;
-            var find = AppDomain.CurrentDomain.GetAssemblies()
-                        .SelectMany(item => item.GetTypes())
-                        .Where(item => !item.IsAbstract && item.BaseType != null && item.IsSubclassOf(typeof(NodeGraphView)))
-                        .Where(x => x.BaseType.GetGenericArguments()[0] == asset.GetType())
-                        .FirstOrDefault();
+            var find = TypeHelper.GetSubTypes(typeof(NodeGraphView))
+              .Where(x => x.BaseType.GetGenericArguments().FirstOrDefault() == asset.GetType())
+              .FirstOrDefault();
+
             var _view = Activator.CreateInstance(find) as NodeGraphView;
 
             _view.StretchToParentSize();
@@ -75,22 +73,20 @@ namespace ActionEditor.Nodes
         {
             Lan.Load();
             Prefs.Valid();
-            AssetTypes = EditorEX.GetImplementationsOf(typeof(GraphAsset)).ToDictionary(x => x.Name, y => y);
+            AssetTypes = TypeHelper.GetSubTypes(typeof(GraphAsset)).ToDictionary(x => x.Name, y => y);
             AssetNames = AssetTypes.Keys.ToArray();
 
-            var types = AppDomain.CurrentDomain.GetAssemblies()
-                            .SelectMany(item => item.GetTypes()).Where(x => !x.IsAbstract);
+            //var types = AppDomain.CurrentDomain.GetAssemblies()
+            //                .SelectMany(item => item.GetTypes()).Where(x => !x.IsAbstract);
 
-            var find = types
+            var find = TypeHelper.GetSubTypes(typeof(GraphNode))
 
-                             .Where(item => item.IsSubclassOf(typeof(GraphNode)) && item.BaseType != typeof(GraphNode))
+                             .Where(item => item.BaseType != typeof(GraphNode))
                              .Select(x => new { dataType = x.BaseType.GetGenericArguments()[0], node = x });
 
 
             nodeDic = find.ToDictionary(x => x.dataType.IsGenericParameter ? x.dataType.BaseType : x.dataType, x => x.node);
-            var result = types.Where(x => x.IsSubclassOf(typeof(NodeData)) && x != typeof(GroupData))
-                .Where(x => !nodeDic.ContainsKey(x)).ToList();
-
+            var result = TypeHelper.GetSubTypes(typeof(NodeData)).Where(x => x != typeof(GroupData) && !nodeDic.ContainsKey(x));
             foreach (var item in result)
             {
                 var temp = item;

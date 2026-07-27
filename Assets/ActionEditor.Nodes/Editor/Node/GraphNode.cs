@@ -6,7 +6,6 @@ using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
-using static UnityEditor.Experimental.GraphView.Port;
 
 namespace ActionEditor.Nodes
 {

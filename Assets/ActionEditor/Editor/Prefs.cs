@@ -3,6 +3,7 @@ using UnityEngine;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using ActionBuffer;
 
 
 namespace ActionEditor
@@ -49,7 +50,7 @@ namespace ActionEditor
                 public Type GetRealType()
                 {
                     if (_type == null)
-                        _type = EditorEX.GetAllTypes().First(x => x.FullName == type);
+                        _type = TypeHelper.GetTypeByFullName(type);
                     return _type;
                 }
             }
