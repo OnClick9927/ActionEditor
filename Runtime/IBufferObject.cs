@@ -76,16 +76,20 @@ namespace ActionBuffer
         {
             if (map.TryGetValue(type, out var typefield)) return typefield;
             typefield = new TypeFields(type);
-            // 添加当前类型声明的字段
+
+            var baseType = type.BaseType;
+            if (baseType != null && baseType != typeof(object))
             {
-                var _fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
-                                     BindingFlags.Instance);
-                for (int i = 0; i < _fields.Length; i++)
-                {
-                    var field = _fields[i];
-                    typefield.AddField(field);
-                }
+                var baseFields = GetTypeFields(baseType).GetFields();
+                for (int i = 0; i < baseFields.Count; i++)
+                    typefield.AddField(baseFields[i]);
             }
+
+            var declaredFields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
+                                                BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            for (int i = 0; i < declaredFields.Length; i++)
+                typefield.AddField(declaredFields[i]);
+
             map[type] = typefield;
             return typefield;
         }
@@ -126,23 +130,58 @@ namespace ActionBuffer
             return false;
         }
 
-        private static IEnumerable<Type> types;
-        public static IEnumerable<Type> Types => types;
-        private static Dictionary<Type, IEnumerable<Type>> subMap = new Dictionary<Type, IEnumerable<Type>>();
-        public static IEnumerable<Type> GetSubTypes(Type type)
+        private static List<Type> types;
+        public static List<Type> Types => GetConcreteTypes();
+        private static Dictionary<Type, List<Type>> subMap = new();
+
+        private static List<Type> GetConcreteTypes()
+        {
+            if (types != null) return types;
+
+            var result = new List<Type>();
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (int i = 0; i < assemblies.Length; i++)
+            {
+                Type[] assemblyTypes;
+                try
+                {
+                    assemblyTypes = assemblies[i].GetTypes();
+                }
+                catch (ReflectionTypeLoadException exception)
+                {
+                    assemblyTypes = exception.Types;
+                }
+                result.AddRange(assemblyTypes);
+            }
+
+            types = result;
+            return types;
+        }
+
+        public static List<Type> GetSubTypes(Type type)
         {
             if (!subMap.TryGetValue(type, out var result))
             {
-                types = types ?? AppDomain.CurrentDomain.GetAssemblies()
-                    .SelectMany(x => x.GetTypes())
-                    .Where(x => !x.IsAbstract);
-                if (type.IsInterface)
-                    result = types.Where(x => x.GetInterface(type.Name) != null);
-                else if (type.IsGenericType)
-                    result = types.Where(x => IsSubclassOfGeneric(x, type));
-                else
-                    result = types.Where(x => x.IsSubclassOf(type));
-                subMap.Add(type, result);
+                var source = GetConcreteTypes();
+                var matches = new List<Type>();
+                for (int i = 0; i < source.Count; i++)
+                {
+
+                    var candidate = source[i];
+                    if (candidate == type) continue;
+                    if (candidate.IsAbstract) continue;
+
+                    var isMatch = type.IsInterface
+                        ? type.IsAssignableFrom(candidate)
+                        : type.IsGenericType
+                            ? IsSubclassOfGeneric(candidate, type)
+                            : candidate.IsSubclassOf(type);
+                    if (isMatch)
+                        matches.Add(candidate);
+                }
+
+                subMap.Add(type, matches);
+                result = matches;
             }
             return result;
 
@@ -382,24 +421,20 @@ namespace ActionBuffer
             {
                 _nmap = new Dictionary<Type, Type>();
                 _fgenmap = new Dictionary<Type, Type>();
-                var types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes()).Where(x =>
+                for (int i = 0; i < TypeHelper.Types.Count; i++)
                 {
-                    return !x.IsAbstract
-                    && x.BaseType != null
-                    && x.BaseType.IsGenericType
-                    && typeof(BuffConverter).IsAssignableFrom(x)
-                    && x.GetCustomAttribute<BuffConverterAttribute>(false) != null
-                    ;
-                });
-                foreach (var item in types)
-                {
+                    var item = TypeHelper.Types[i];
+                    if (item.IsAbstract || item.BaseType == null || !item.BaseType.IsGenericType ||
+                       !typeof(BuffConverter).IsAssignableFrom(item))
+                        continue;
+
                     var attr = item.GetCustomAttribute<BuffConverterAttribute>(false);
+                    if (attr == null) continue;
                     var _target = attr.type;
                     if (_target.IsGenericType)
                         _fgenmap.Add(_target, item);
                     else
                         _nmap.Add(_target, item);
-
                 }
             }
 
@@ -489,9 +524,24 @@ namespace ActionBuffer
             c.Write(writer, obj);
             return writer as BufferWriter;
         }
+
+        [ThreadStatic] private static BufferWriter pooledWriter;
+
         public static byte[] ToBytes(object obj)
         {
-            return WriteToBytes(obj).GetValidBuffer();
+            var writer = pooledWriter ?? new BufferWriter();
+            pooledWriter = null;
+            writer.Clear();
+            try
+            {
+                var converter = GetConverter(obj.GetType());
+                converter.Write(writer, obj);
+                return writer.GetValidBuffer();
+            }
+            finally
+            {
+                pooledWriter = writer;
+            }
         }
         public static object ToObject(byte[] bytes, Type type)
         {
@@ -782,12 +832,16 @@ namespace ActionBuffer
         }
         private void CheckWriterIndex(int length)
         {
-            if (_index + length > _buffer.Length)
+            var requiredLength = checked(_index + length);
+            if (requiredLength <= _buffer.Length) return;
+
+            var newCapacity = _buffer.Length;
+            while (newCapacity < requiredLength)
             {
-                byte[] bytes = new byte[_buffer.Length * 2];
-                Buffer.BlockCopy(_buffer, 0, bytes, 0, _buffer.Length);
-                _buffer = bytes;
+                var doubled = newCapacity * 2L;
+                newCapacity = doubled > int.MaxValue ? requiredLength : (int)doubled;
             }
+            Array.Resize(ref _buffer, newCapacity);
         }
 
         public void WriteEnum(Enum data)
@@ -917,6 +971,22 @@ namespace ActionBuffer
 
         private Dictionary<string, int> metas;
         private int _index_meta = 0;
+        private sealed class MetadataSchema
+        {
+            public readonly Dictionary<string, int> Metas;
+            public readonly byte[] Buffer;
+
+            public MetadataSchema(Dictionary<string, int> metas, byte[] buffer)
+            {
+                Metas = metas;
+                Buffer = buffer;
+            }
+        }
+
+        private static readonly Dictionary<Type, MetadataSchema> MetadataCache =
+            new Dictionary<Type, MetadataSchema>();
+        private static readonly object MetadataCacheLock = new object();
+
         public void AddToMeta(string meta)
         {
             if (metas.ContainsKey(meta)) return;
@@ -943,8 +1013,40 @@ namespace ActionBuffer
                 BuffConverter.GetConverter(fieldType).CollectMetas(this);
             }
             var subs = TypeHelper.GetSubTypes(type);
-            foreach (var item in subs)
-                BuffConverter.GetConverter(item).CollectMetas(this);
+            for (int i = 0; i < subs.Count; i++)
+            {
+                var sub = subs[i];
+                BuffConverter.GetConverter(sub).CollectMetas(this);
+            }
+        }
+
+        private void WriteMetas(Type type)
+        {
+            MetadataSchema schema;
+            lock (MetadataCacheLock)
+                MetadataCache.TryGetValue(type, out schema);
+
+            if (schema != null)
+            {
+                metas = schema.Metas;
+                _index_meta = metas.Count;
+                WriteBytes(schema.Buffer);
+                return;
+            }
+
+            metas = new Dictionary<string, int>();
+            CollectMetas(type);
+            var start = _index;
+            WriteIEnumerable(metas.Keys, (writer, value) => writer.WriteUTF8(value));
+            var buffer = new byte[_index - start];
+            Buffer.BlockCopy(_buffer, start, buffer, 0, buffer.Length);
+
+            schema = new MetadataSchema(metas, buffer);
+            lock (MetadataCacheLock)
+            {
+                if (!MetadataCache.ContainsKey(type))
+                    MetadataCache.Add(type, schema);
+            }
         }
 
 
@@ -956,9 +1058,7 @@ namespace ActionBuffer
                 buff.BeforeWriteBuffer();
             if (metas == null)
             {
-                metas = new();
-                CollectMetas(type);
-                WriteIEnumerable(metas.Keys, (w, val) => w.WriteUTF8(val));
+                WriteMetas(type);
             }
 
             WriteInt32(metas[type.FullName]);
