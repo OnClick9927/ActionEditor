@@ -136,7 +136,12 @@ namespace ActionBuffer
                 {
                     assemblyTypes = exception.Types;
                 }
-                result.AddRange(assemblyTypes);
+                for (int j = 0; j < assemblyTypes.Length; j++)
+                {
+                    var assemblyType = assemblyTypes[j];
+                    if (assemblyType != null)
+                        result.Add(assemblyType);
+                }
             }
 
             types = result;
@@ -177,7 +182,10 @@ namespace ActionBuffer
         {
             if (string.IsNullOrEmpty(typeFullName))
                 return null;
-            if (_typeMap.TryGetValue(typeFullName, out var type)) return type;
+            string cacheKey = string.IsNullOrEmpty(assemblyName)
+                ? typeFullName
+                : typeFullName + "\n" + assemblyName;
+            if (_typeMap.TryGetValue(cacheKey, out var type)) return type;
             // 如果指定了程序集名称，拼接完整的类型标识
             string fullTypeName = string.IsNullOrEmpty(assemblyName)
                 ? typeFullName
@@ -197,7 +205,7 @@ namespace ActionBuffer
                 }
             }
             //if (type != null)
-            _typeMap[typeFullName] = type;
+            _typeMap[cacheKey] = type;
             return type;
         }
 

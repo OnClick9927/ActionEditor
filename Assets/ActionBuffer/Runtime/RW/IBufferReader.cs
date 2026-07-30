@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 
 namespace ActionBuffer
@@ -12,58 +11,100 @@ namespace ActionBuffer
         {
             var result = ClassPool<List<T>>.Get();
             result.Clear();
-            return ReadIEnumerable(result, read);
+            try
+            {
+                var values = ReadIEnumerable(result, read);
+                if (values != null) return values;
+                result.Clear();
+                ClassPool<List<T>>.Back(result);
+                return null;
+            }
+            catch
+            {
+                result.Clear();
+                ClassPool<List<T>>.Back(result);
+                throw;
+            }
         }
 
         T[] ReadArray<T>(Func<IBufferReader, T> read)
         {
             var list = ClassPool<List<T>>.Get();
             list.Clear();
-            list = ReadIEnumerable(list, read);
-            var result = list.ToArray();
-            list.Clear();
-            ClassPool<List<T>>.Back(list);
-            return result;
+            try
+            {
+                var values = ReadIEnumerable(list, read);
+                return values == null ? null : values.ToArray();
+            }
+            finally
+            {
+                list.Clear();
+                ClassPool<List<T>>.Back(list);
+            }
         }
         HashSet<T> ReadHashSet<T>(Func<IBufferReader, T> read)
         {
             var list = ClassPool<List<T>>.Get();
             list.Clear();
-            list = ReadIEnumerable(list, read);
-            var result = list.ToHashSet();
-            list.Clear();
-            ClassPool<List<T>>.Back(list);
-            return result;
+            try
+            {
+                var values = ReadIEnumerable(list, read);
+                return values == null ? null : new HashSet<T>(values);
+            }
+            finally
+            {
+                list.Clear();
+                ClassPool<List<T>>.Back(list);
+            }
         }
         Stack<T> ReadStack<T>(Func<IBufferReader, T> read)
         {
             var list = ClassPool<List<T>>.Get();
             list.Clear();
-            list = ReadIEnumerable(list, read);
-            Stack<T> result = new Stack<T>(list);
-            list.Clear();
-            ClassPool<List<T>>.Back(list);
-            return result;
+            try
+            {
+                var values = ReadIEnumerable(list, read);
+                if (values == null) return null;
+                var result = new Stack<T>(values.Count);
+                for (int i = values.Count - 1; i >= 0; i--)
+                    result.Push(values[i]);
+                return result;
+            }
+            finally
+            {
+                list.Clear();
+                ClassPool<List<T>>.Back(list);
+            }
         }
         Queue<T> ReadQueue<T>(Func<IBufferReader, T> read)
         {
             var list = ClassPool<List<T>>.Get();
             list.Clear();
-            list = ReadIEnumerable(list, read);
-            Queue<T> result = new Queue<T>(list);
-            list.Clear();
-            ClassPool<List<T>>.Back(list);
-            return result;
+            try
+            {
+                var values = ReadIEnumerable(list, read);
+                return values == null ? null : new Queue<T>(values);
+            }
+            finally
+            {
+                list.Clear();
+                ClassPool<List<T>>.Back(list);
+            }
         }
         Dictionary<Key, Value> ReadDictionary<Key, Value>(Func<IBufferReader, KeyValuePair<Key, Value>> read)
         {
             var list = ClassPool<List<KeyValuePair<Key, Value>>>.Get();
             list.Clear();
-            list = ReadIEnumerable(list, read);
-            var result = new Dictionary<Key, Value>(list);
-            list.Clear();
-            ClassPool<List<KeyValuePair<Key, Value>>>.Back(list);
-            return result;
+            try
+            {
+                var values = ReadIEnumerable(list, read);
+                return values == null ? null : new Dictionary<Key, Value>(values);
+            }
+            finally
+            {
+                list.Clear();
+                ClassPool<List<KeyValuePair<Key, Value>>>.Back(list);
+            }
         }
         bool ReadBool();
         byte ReadByte();
