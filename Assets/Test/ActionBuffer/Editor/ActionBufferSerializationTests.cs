@@ -138,6 +138,84 @@ namespace ActionBuffer.Tests
         }
 
         [TestCaseSource(nameof(Formats))]
+        public void TwoDimensionalArraysRoundTrip(string format)
+        {
+            var result = RoundTrip(new Array2DModel(), format);
+
+            Assert.That(result.Numbers.Rank, Is.EqualTo(2));
+            Assert.That(result.Numbers.GetLength(0), Is.EqualTo(2));
+            Assert.That(result.Numbers.GetLength(1), Is.EqualTo(3));
+            Assert.That(result.Numbers[0, 0], Is.EqualTo(1));
+            Assert.That(result.Numbers[1, 2], Is.EqualTo(6));
+            Assert.That(result.Text[0, 0], Is.EqualTo("a"));
+            Assert.That(result.Text[0, 1], Is.Null);
+            Assert.That(result.Text[1, 1], Is.EqualTo("d"));
+            Assert.That(result.Empty.GetLength(0), Is.Zero);
+            Assert.That(result.Empty.GetLength(1), Is.Zero);
+            Assert.That(result.EmptyRows.GetLength(0), Is.Zero);
+            Assert.That(result.EmptyRows.GetLength(1), Is.EqualTo(3));
+            Assert.That(result.EmptyColumns.GetLength(0), Is.EqualTo(2));
+            Assert.That(result.EmptyColumns.GetLength(1), Is.Zero);
+            Assert.That(result.Null, Is.Null);
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void ExplicitDelegateFieldsRoundTrip(string format)
+        {
+            var source = new SerializableDelegateModel();
+            source.Configure();
+            SerializableDelegateModel.StaticValue = 0;
+
+            var result = RoundTrip(source, format);
+            result.Callback(3);
+
+            Assert.That(result.Value, Is.EqualTo(3));
+            Assert.That(SerializableDelegateModel.StaticValue, Is.EqualTo(3));
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void StaticRootDelegatesRoundTrip(string format)
+        {
+            SerializableDelegateModel.StaticValue = 0;
+            var result = RoundTrip(SerializableDelegateModel.CreateStaticCallback(), format);
+
+            result(4);
+            Assert.That(SerializableDelegateModel.StaticValue, Is.EqualTo(4));
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void DelegatesBoundToOtherObjectTypesRoundTrip(string format)
+        {
+            var source = new ExternalDelegateModel();
+            source.Configure(10);
+
+            var result = RoundTrip(source, format);
+            result.Callback(7);
+
+            var target = result.Callback.Target as ExternalDelegateTarget;
+            Assert.That(target, Is.Not.Null);
+            Assert.That(target.Value, Is.EqualTo(17));
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void DelegateClosuresAreRejected(string format)
+        {
+            var source = new SerializableDelegateModel();
+            source.ConfigureClosure();
+
+            var exception = Assert.Throws<NotSupportedException>(() => Write(source, format));
+            Assert.That(exception.Message, Does.Contain("Closure delegates are not supported"));
+        }
+
+        [Test]
+        public void ArraysWithMoreThanTwoDimensionsAreRejected()
+        {
+            var source = new int[1, 1, 1];
+            var exception = Assert.Throws<NotSupportedException>(() => BufferSerializer.ToJson(source));
+            Assert.That(exception.Message, Does.Contain("only one- and two-dimensional arrays"));
+        }
+
+        [TestCaseSource(nameof(Formats))]
         public void CallbacksRunAfterNestedObjectsAreComplete(string format)
         {
             var source = new CallbackParent { Child = new CallbackChild { Number = 42 } };

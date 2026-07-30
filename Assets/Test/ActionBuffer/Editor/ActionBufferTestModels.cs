@@ -160,6 +160,69 @@ namespace ActionBuffer.Tests
         }
     }
 
+    public sealed class Array2DModel
+    {
+        public int[,] Numbers =
+        {
+            { 1, 2, 3 },
+            { 4, 5, 6 }
+        };
+        public string[,] Text =
+        {
+            { "a", null },
+            { "c", "d" }
+        };
+        public int[,] Empty = new int[0, 0];
+        public int[,] EmptyRows = new int[0, 3];
+        public int[,] EmptyColumns = new int[2, 0];
+        public int[,] Null;
+    }
+
+    public sealed class SerializableDelegateModel
+    {
+        public static int StaticValue;
+        public int Value;
+        [Buffer] public Action<int> Callback;
+
+        public void Configure()
+        {
+            Callback = Add;
+            Callback += AddStatic;
+        }
+
+        public void ConfigureClosure()
+        {
+            int captured = 1;
+            Callback = value => Value += value + captured;
+        }
+
+        public static Action<int> CreateStaticCallback() => AddStatic;
+
+        private void Add(int value) => Value += value;
+        private static void AddStatic(int value) => StaticValue += value;
+    }
+
+    public sealed class ExternalDelegateTarget
+    {
+        public int Value;
+
+        public Action<int> CreateCallback() => Add;
+        private void Add(int value) => Value += value;
+    }
+
+    public sealed class ExternalDelegateModel
+    {
+        [Buffer] public Action<int> Callback;
+
+        public void Configure(int initialValue)
+        {
+            Callback = new ExternalDelegateTarget
+            {
+                Value = initialValue
+            }.CreateCallback();
+        }
+    }
+
     public sealed class CallbackChild : IBufferObject
     {
         public int Number;

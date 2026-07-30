@@ -8,6 +8,8 @@ namespace ActionBuffer
     public interface IBufferReader
     {
         List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read);
+        T[,] ReadArray2D<T>(Func<IBufferReader, T> read) =>
+            throw new NotSupportedException("This reader does not support two-dimensional arrays.");
         T? ReadNullable<T>(Func<IBufferReader, T> read) where T : struct;
         KeyValuePair<TKey, TValue> ReadKeyValuePair<TKey, TValue>(
             Func<IBufferReader, TKey> readKey, Func<IBufferReader, TValue> readValue) =>
@@ -144,5 +146,10 @@ namespace ActionBuffer
         ulong ReadUInt64();
         string ReadUTF8();
         Guid ReadGuid() => Guid.ParseExact(ReadUTF8(), "D");
+    }
+
+    internal interface IObjectContextReader
+    {
+        object CurrentObject { get; }
     }
 }

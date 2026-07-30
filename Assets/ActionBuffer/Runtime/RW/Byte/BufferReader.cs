@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Text;
 namespace ActionBuffer
 {
-    public class BufferReader : IBufferReader
+    public class BufferReader : IBufferReader, IObjectContextReader
     {
         private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
         private static readonly Func<IBufferReader, string> ReadMetadataValue = ReadMetadata;
@@ -16,7 +16,9 @@ namespace ActionBuffer
         private int _precountedReadDepth;
         private bool _suppressNodeCounting;
         private int _objectReadDepth;
+        private object _currentObject;
         private readonly List<IBufferObject> _afterReadCallbacks = new List<IBufferObject>();
+        object IObjectContextReader.CurrentObject => _currentObject;
         public int index
         {
             get { return _index; }
@@ -49,6 +51,7 @@ namespace ActionBuffer
             _precountedReadDepth = 0;
             _suppressNodeCounting = false;
             _objectReadDepth = 0;
+            _currentObject = null;
             _afterReadCallbacks.Clear();
             if (_afterReadCallbacks.Capacity > BufferSerializer.RetainedListCapacity)
                 _afterReadCallbacks.Capacity = 0;
@@ -233,6 +236,38 @@ namespace ActionBuffer
             }
         }
 
+        public T[,] ReadArray2D<T>(Func<IBufferReader, T> read)
+        {
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            EnterNode();
+            try
+            {
+                ushort encodedRows = ReadUInt16();
+                if (encodedRows == ushort.MaxValue) return null;
+                int rows = encodedRows;
+                int columns = ReadUInt16();
+                if (columns == ushort.MaxValue)
+                    throw new FormatException(
+                        $"Array dimensions cannot exceed {ushort.MaxValue - 1}.");
+                long longCount = (long)rows * columns;
+                if (longCount > BufferSerializer.MaxCollectionCount)
+                    throw new FormatException(
+                        $"Collection count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+                int count = (int)longCount;
+                CountNodes(checked(rows + count));
+
+                var result = new T[rows, columns];
+                for (int row = 0; row < rows; row++)
+                for (int column = 0; column < columns; column++)
+                    result[row, column] = ReadPrecounted(read);
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
         public HashSet<T> ReadHashSet<T>(Func<IBufferReader, T> read)
         {
             if (read == null) throw new ArgumentNullException(nameof(read));
@@ -393,6 +428,8 @@ namespace ActionBuffer
         {
             int parentLimit = _limit;
             int fieldCount = 0;
+            var previousObject = _currentObject;
+            _currentObject = instance;
             fields.SetDefaultValues(instance);
             _limit = objectEnd;
             try
@@ -449,6 +486,7 @@ namespace ActionBuffer
             }
             finally
             {
+                _currentObject = previousObject;
                 _limit = parentLimit;
             }
         }

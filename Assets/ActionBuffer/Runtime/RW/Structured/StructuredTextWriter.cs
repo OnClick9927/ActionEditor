@@ -156,6 +156,101 @@ namespace ActionBuffer
             SetValue(node);
         }
 
+        public void WriteArray2D<T>(BufferScan scan, T[,] values,
+            Action<IBufferWriter, BufferScan, T> write)
+        {
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
+            if (write == null) throw new ArgumentNullException(nameof(write));
+            var cachedValues = scan.ReadArray2D<T>(out int rows, out int columns);
+            if (cachedValues == null)
+            {
+                SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
+                return;
+            }
+            if (rows == 0 && columns != 0)
+            {
+                WriteEmptyArrayDimensions(columns);
+                return;
+            }
+
+            var node = StructuredNode.Rent(StructuredNodeKind.Sequence);
+            int valueIndex = 0;
+            try
+            {
+                for (int row = 0; row < rows; row++)
+                {
+                    var rowNode = StructuredNode.Rent(StructuredNodeKind.Sequence);
+                    try
+                    {
+                        for (int column = 0; column < columns; column++)
+                        {
+                            ResetValue();
+                            write(this, scan, cachedValues[valueIndex++]);
+                            var valueNode = TakeValue();
+                            try
+                            {
+                                rowNode.AddItem(valueNode);
+                                valueNode = default;
+                            }
+                            finally
+                            {
+                                StructuredNode.Release(ref valueNode);
+                            }
+                        }
+                        node.AddItem(rowNode);
+                        rowNode = default;
+                    }
+                    finally
+                    {
+                        StructuredNode.Release(ref rowNode);
+                    }
+                }
+            }
+            catch
+            {
+                ResetValue();
+                StructuredNode.Release(ref node);
+                throw;
+            }
+            SetValue(node);
+        }
+
+        private void WriteEmptyArrayDimensions(int columns)
+        {
+            var node = StructuredNode.Rent(StructuredNodeKind.Object);
+            try
+            {
+                var rowsNode = StructuredNode.RentScalar("0", false);
+                try
+                {
+                    node.AddField("$rows", rowsNode);
+                    rowsNode = default;
+                }
+                finally
+                {
+                    StructuredNode.Release(ref rowsNode);
+                }
+
+                var columnsNode = StructuredNode.RentScalar(
+                    columns.ToString(CultureInfo.InvariantCulture), false);
+                try
+                {
+                    node.AddField("$columns", columnsNode);
+                    columnsNode = default;
+                }
+                finally
+                {
+                    StructuredNode.Release(ref columnsNode);
+                }
+            }
+            catch
+            {
+                StructuredNode.Release(ref node);
+                throw;
+            }
+            SetValue(node);
+        }
+
         public void WriteNullable<T>(BufferScan scan, T? value,
             Action<IBufferWriter, BufferScan, T> write) where T : struct
         {
