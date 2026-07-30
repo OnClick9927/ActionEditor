@@ -163,6 +163,7 @@ namespace ActionBuffer
             }
 
             if (!Converters.ContainsKey(typeof(T[]))) { Converters[typeof(T[])] = new ArrayConverter<T>(); changed = true; }
+            if (!Converters.ContainsKey(typeof(T[,]))) { Converters[typeof(T[,])] = new Array2DConverter<T>(); changed = true; }
             if (!Converters.ContainsKey(typeof(List<T>))) { Converters[typeof(List<T>)] = new ListConverter<T>(); changed = true; }
             if (!Converters.ContainsKey(typeof(IEnumerable<T>))) { Converters[typeof(IEnumerable<T>)] = new EnumerableInterfaceConverter<T>(); changed = true; }
             if (!Converters.ContainsKey(typeof(ICollection<T>))) { Converters[typeof(ICollection<T>)] = new CollectionInterfaceConverter<T>(); changed = true; }
@@ -197,6 +198,13 @@ namespace ActionBuffer
             RegisterAot<T>();
             if (Converters.ContainsKey(typeof(T?))) return;
             Converters[typeof(T?)] = new NullableConverter<T>();
+            ConverterVersion++;
+        }
+
+        public static void RegisterAotDelegate<TDelegate>() where TDelegate : Delegate
+        {
+            if (Converters.ContainsKey(typeof(TDelegate))) return;
+            Converters[typeof(TDelegate)] = new DelegateConverter<TDelegate>();
             ConverterVersion++;
         }
 
@@ -582,9 +590,13 @@ namespace ActionBuffer
                 return CreateConverterInstance(typeof(EnumConverter<>).MakeGenericType(type));
             if (type.IsArray)
             {
-                if (type.GetArrayRank() != 1)
-                    throw new NotSupportedException($"Multidimensional array type '{type}' is not supported.");
-                return CreateConverterInstance(typeof(ArrayConverter<>).MakeGenericType(type.GetElementType()));
+                int rank = type.GetArrayRank();
+                if (rank == 1)
+                    return CreateConverterInstance(typeof(ArrayConverter<>).MakeGenericType(type.GetElementType()));
+                if (rank == 2)
+                    return CreateConverterInstance(typeof(Array2DConverter<>).MakeGenericType(type.GetElementType()));
+                throw new NotSupportedException(
+                    $"Array type '{type}' has rank {rank}; only one- and two-dimensional arrays are supported.");
             }
             if (type.IsGenericType)
             {
@@ -598,7 +610,7 @@ namespace ActionBuffer
                     $"Collection type '{type}' must be declared as a directly supported collection or interface.");
 
             if (typeof(Delegate).IsAssignableFrom(type))
-                throw new NotSupportedException("Delegate values and event subscriptions cannot be serialized.");
+                return CreateConverterInstance(typeof(DelegateConverter<>).MakeGenericType(type));
             if (type != typeof(ValueTuple) && type.IsValueType &&
                 TypeHelper.GetTypeFields(type).GetFields().Count == 0)
                 throw new NotSupportedException(
@@ -611,7 +623,8 @@ namespace ActionBuffer
 
         private static bool UsesObjectConverter(Type type)
         {
-            if (ConverterTypes.ContainsKey(type) || type.IsArray) return false;
+            if (ConverterTypes.ContainsKey(type) || type.IsArray ||
+                typeof(Delegate).IsAssignableFrom(type)) return false;
             if (type.IsGenericType && GenericConverterTypes.ContainsKey(type.GetGenericTypeDefinition()))
                 return false;
             if (FindSupportedGenericAncestor(type) != null) return false;

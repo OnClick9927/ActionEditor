@@ -5,7 +5,7 @@ using System.Globalization;
 
 namespace ActionBuffer
 {
-    public abstract class StructuredTextReader : IBufferReader
+    public abstract class StructuredTextReader : IBufferReader, IObjectContextReader
     {
         private StructuredNode _root;
         private StructuredNode _current;
@@ -13,6 +13,8 @@ namespace ActionBuffer
         private bool _hasCurrent;
         private readonly List<IBufferObject> _afterReadCallbacks = new List<IBufferObject>();
         private int _objectReadDepth;
+        private object _currentObject;
+        object IObjectContextReader.CurrentObject => _currentObject;
 
         internal void SetRoot(StructuredNode root)
         {
@@ -31,6 +33,7 @@ namespace ActionBuffer
             _hasRoot = false;
             _hasCurrent = false;
             _objectReadDepth = 0;
+            _currentObject = null;
             _afterReadCallbacks.Clear();
             if (_afterReadCallbacks.Capacity > BufferSerializer.RetainedListCapacity)
                 _afterReadCallbacks.Capacity = 0;
@@ -84,24 +87,33 @@ namespace ActionBuffer
 
         private void ReadFields(StructuredNode node, object instance, TypeHelper.TypeFields fields)
         {
-            fields.SetDefaultValues(instance);
-            for (int i = 0; i < node.FieldCount; i++)
+            var previousObject = _currentObject;
+            _currentObject = instance;
+            try
             {
-                var serializedField = node.GetField(i);
-                var field = fields.FindField(serializedField.Name);
-                if (field == null) continue;
+                fields.SetDefaultValues(instance);
+                for (int i = 0; i < node.FieldCount; i++)
+                {
+                    var serializedField = node.GetField(i);
+                    var field = fields.FindField(serializedField.Name);
+                    if (field == null) continue;
 
-                var previous = _current;
-                _current = serializedField.Value;
-                try
-                {
-                    var converter = field.GetConverter();
-                    field.SetValue(instance, converter.Read(this, field.FieldType));
+                    var previous = _current;
+                    _current = serializedField.Value;
+                    try
+                    {
+                        var converter = field.GetConverter();
+                        field.SetValue(instance, converter.Read(this, field.FieldType));
+                    }
+                    finally
+                    {
+                        _current = previous;
+                    }
                 }
-                finally
-                {
-                    _current = previous;
-                }
+            }
+            finally
+            {
+                _currentObject = previousObject;
             }
         }
 
@@ -158,6 +170,71 @@ namespace ActionBuffer
             var result = new T[node.ItemCount];
             for (int i = 0; i < node.ItemCount; i++)
                 result[i] = ReadItem(node, i, read);
+            return result;
+        }
+
+        public T[,] ReadArray2D<T>(Func<IBufferReader, T> read)
+        {
+            var node = RequireCurrent();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (node.Kind == StructuredNodeKind.Object)
+                return ReadEmptyArray2D<T>(node);
+            RequireKind(node, StructuredNodeKind.Sequence);
+
+            int rows = node.ItemCount;
+            int columns = 0;
+            if (rows > 0)
+            {
+                var firstRow = node.GetItem(0);
+                RequireKind(firstRow, StructuredNodeKind.Sequence);
+                columns = firstRow.ItemCount;
+            }
+            if (rows >= ushort.MaxValue || columns >= ushort.MaxValue)
+                throw new FormatException(
+                    $"Array dimensions cannot exceed {ushort.MaxValue - 1}.");
+            long count = (long)rows * columns;
+            if (count > BufferSerializer.MaxCollectionCount)
+                throw new FormatException(
+                    $"Collection count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+
+            var result = new T[rows, columns];
+            for (int row = 0; row < rows; row++)
+            {
+                var rowNode = node.GetItem(row);
+                RequireKind(rowNode, StructuredNodeKind.Sequence);
+                if (rowNode.ItemCount != columns)
+                    throw new FormatException("Two-dimensional array rows must have the same length.");
+                for (int column = 0; column < columns; column++)
+                    result[row, column] = ReadItem(rowNode, column, read);
+            }
+            return result;
+        }
+
+        private static T[,] ReadEmptyArray2D<T>(StructuredNode node)
+        {
+            int rows = -1;
+            int columns = -1;
+            for (int i = 0; i < node.FieldCount; i++)
+            {
+                var field = node.GetField(i);
+                RequireKind(field.Value, StructuredNodeKind.Scalar);
+                if (field.Name == "$rows")
+                    rows = ParseArrayDimension(field.Value.Scalar);
+                else if (field.Name == "$columns")
+                    columns = ParseArrayDimension(field.Value.Scalar);
+                else
+                    throw new FormatException($"Unknown two-dimensional array property '{field.Name}'.");
+            }
+            if (rows != 0 || columns <= 0 || columns >= ushort.MaxValue)
+                throw new FormatException("Invalid empty two-dimensional array dimensions.");
+            return new T[rows, columns];
+        }
+
+        private static int ParseArrayDimension(string value)
+        {
+            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int result))
+                throw new FormatException($"Invalid two-dimensional array dimension '{value}'.");
             return result;
         }
 

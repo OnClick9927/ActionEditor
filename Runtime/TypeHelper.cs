@@ -95,9 +95,9 @@ namespace ActionBuffer
             internal void AddField(FieldInfo field, bool force = false)
             {
                 if (field.IsDefined(typeof(System.NonSerializedAttribute))) return;
-                if (typeof(Delegate).IsAssignableFrom(field.FieldType))
-                    return;
                 var attr = field.GetCustomAttribute<BufferAttribute>();
+                if (typeof(Delegate).IsAssignableFrom(field.FieldType) && attr == null)
+                    return;
                 if (!force)
                     if (!field.IsPublic && attr == null) return;
                 var name = attr?.bufferName ?? field.Name;
@@ -111,7 +111,9 @@ namespace ActionBuffer
 
             internal void AddField(FieldInfo field, string name)
             {
-                if (field == null || typeof(Delegate).IsAssignableFrom(field.FieldType)) return;
+                if (field == null) return;
+                if (typeof(Delegate).IsAssignableFrom(field.FieldType) &&
+                    field.GetCustomAttribute<BufferAttribute>() == null) return;
                 if (map.TryGetValue(name, out var info))
                     throw new InvalidOperationException(
                         $"Type '{type}' contains duplicate serialized field name '{name}' " +

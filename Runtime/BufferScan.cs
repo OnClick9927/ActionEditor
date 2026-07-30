@@ -75,13 +75,17 @@ namespace ActionBuffer
             private object _values;
             private Type _elementType;
             private Action<object> _release;
+            private byte _rank;
+            private int _length0;
+            private int _length1;
 
             public static CachedEnumerable Capture<T>(IEnumerable<T> source, IComparer<T> comparer)
             {
                 var cached = new CachedEnumerable
                 {
                     _elementType = typeof(T),
-                    _release = CachedEnumerableValues<T>.Release
+                    _release = CachedEnumerableValues<T>.Release,
+                    _rank = 1
                 };
                 if (source == null) return cached;
 
@@ -140,7 +144,9 @@ namespace ActionBuffer
                 {
                     _values = values,
                     _elementType = typeof(T),
-                    _release = CachedEnumerableValues<T>.Release
+                    _release = CachedEnumerableValues<T>.Release,
+                    _rank = 1,
+                    _length0 = source.Length
                 };
                 try
                 {
@@ -157,8 +163,57 @@ namespace ActionBuffer
 
             public List<T> GetValues<T>()
             {
-                if (_elementType != typeof(T))
+                if (_elementType != typeof(T) || _rank != 1)
                     throw new InvalidOperationException("The enumerable scan cache contains an unexpected element type.");
+                return (List<T>)_values;
+            }
+
+            public static CachedEnumerable Capture<T>(T[,] source)
+            {
+                var cached = new CachedEnumerable
+                {
+                    _elementType = typeof(T),
+                    _release = CachedEnumerableValues<T>.Release,
+                    _rank = 2
+                };
+                if (source == null) return cached;
+                if (source.GetLowerBound(0) != 0 || source.GetLowerBound(1) != 0)
+                    throw new NotSupportedException("Only zero-based two-dimensional arrays are supported.");
+
+                int rows = source.GetLength(0);
+                int columns = source.GetLength(1);
+                if (rows >= ushort.MaxValue || columns >= ushort.MaxValue)
+                    throw new FormatException(
+                        $"Array dimensions cannot exceed {ushort.MaxValue - 1}.");
+                long count = (long)rows * columns;
+                if (count > BufferSerializer.MaxCollectionCount)
+                    throw new FormatException(
+                        $"Collection count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+
+                var values = ListPool<T>.Get((int)count);
+                cached._values = values;
+                cached._length0 = rows;
+                cached._length1 = columns;
+                try
+                {
+                    for (int row = 0; row < rows; row++)
+                    for (int column = 0; column < columns; column++)
+                        values.Add(source[row, column]);
+                    return cached;
+                }
+                catch
+                {
+                    cached.Release();
+                    throw;
+                }
+            }
+
+            public List<T> GetArray2DValues<T>(out int rows, out int columns)
+            {
+                if (_elementType != typeof(T) || _rank != 2)
+                    throw new InvalidOperationException("The array scan cache contains an unexpected element type or rank.");
+                rows = _length0;
+                columns = _length1;
                 return (List<T>)_values;
             }
 
@@ -195,6 +250,9 @@ namespace ActionBuffer
         private int _nodeCount;
         private bool _collectMeta;
         private bool _fullField;
+        private object _currentObject;
+
+        internal object CurrentObject => _currentObject;
 
         public BufferScan()
         {
@@ -272,18 +330,27 @@ namespace ActionBuffer
                 if (objectFields.Count > BufferSerializer.MaxObjectFieldCount)
                     throw new FormatException(
                         $"Object field count cannot exceed {BufferSerializer.MaxObjectFieldCount}.");
-                for (int i = 0; i < objectFields.Count; i++)
+                var previousObject = _currentObject;
+                _currentObject = objectValue;
+                try
                 {
-                    var field = objectFields[i];
-                    var fieldValue = field.GetValue(objectValue);
-                    if (!_fullField && TypeHelper.IsNullOrDefault(fieldValue, field.FieldType)) continue;
-                    var converter = field.GetConverter();
-                    cachedObject.AddField(new CachedField(field, converter, fieldValue));
-                    if (cachedObject.FieldCount == 1)
-                        _objects[cachedObjectIndex] = cachedObject;
-                    AddMeta(field.name);
-                    AddMeta(TypeHelper.GetTypeName(field.FieldType));
-                    converter.Scan(this, fieldValue);
+                    for (int i = 0; i < objectFields.Count; i++)
+                    {
+                        var field = objectFields[i];
+                        var fieldValue = field.GetValue(objectValue);
+                        if (!_fullField && TypeHelper.IsNullOrDefault(fieldValue, field.FieldType)) continue;
+                        var converter = field.GetConverter();
+                        cachedObject.AddField(new CachedField(field, converter, fieldValue));
+                        if (cachedObject.FieldCount == 1)
+                            _objects[cachedObjectIndex] = cachedObject;
+                        AddMeta(field.name);
+                        AddMeta(TypeHelper.GetTypeName(field.FieldType));
+                        converter.Scan(this, fieldValue);
+                    }
+                }
+                finally
+                {
+                    _currentObject = previousObject;
                 }
             }
             finally
@@ -357,6 +424,46 @@ namespace ActionBuffer
             }
         }
 
+        internal void ScanArray2D<T>(T[,] values, BuffConverter<T> converter)
+        {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            EnterNode();
+            bool tracked = false;
+            try
+            {
+                if (values != null)
+                {
+                    if (!_activeReferences.Add(values))
+                        throw new InvalidOperationException(
+                            $"Circular reference detected for array type '{values.GetType()}'.");
+                    tracked = true;
+                }
+
+                var cached = CachedEnumerable.Capture(values);
+                try
+                {
+                    _enumerables.Add(cached);
+                }
+                catch
+                {
+                    cached.Release();
+                    throw;
+                }
+
+                var cachedValues = cached.GetArray2DValues<T>(out int rows, out _);
+                if (cachedValues == null) return;
+                for (int row = 0; row < rows; row++)
+                    CountNode();
+                for (int i = 0; i < cachedValues.Count; i++)
+                    converter.ScanValue(this, cachedValues[i]);
+            }
+            finally
+            {
+                if (tracked) _activeReferences.Remove(values);
+                ExitNode();
+            }
+        }
+
         private void EnterNode()
         {
             if (_scanDepth >= MaxDepth)
@@ -405,6 +512,13 @@ namespace ActionBuffer
             return _enumerables[_enumerableIndex++].GetValues<T>();
         }
 
+        internal List<T> ReadArray2D<T>(out int rows, out int columns)
+        {
+            if (_enumerableIndex >= _enumerables.Count)
+                throw new InvalidOperationException("The array scan cache is out of sync.");
+            return _enumerables[_enumerableIndex++].GetArray2DValues<T>(out rows, out columns);
+        }
+
         internal void ResetRead()
         {
             _objectIndex = 0;
@@ -444,6 +558,7 @@ namespace ActionBuffer
                 _activeReferences.Clear();
             _scanDepth = 0;
             _nodeCount = 0;
+            _currentObject = null;
             ResetRead();
         }
 

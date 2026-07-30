@@ -179,6 +179,24 @@ namespace ActionBuffer
                 write(this, scan, cachedValues[i]);
         }
 
+        public void WriteArray2D<T>(BufferScan scan, T[,] values,
+            Action<IBufferWriter, BufferScan, T> write)
+        {
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
+            if (write == null) throw new ArgumentNullException(nameof(write));
+            var cachedValues = scan.ReadArray2D<T>(out int rows, out int columns);
+            if (cachedValues == null)
+            {
+                WriteUInt16(ushort.MaxValue);
+                return;
+            }
+
+            WriteUInt16((ushort)rows);
+            WriteUInt16((ushort)columns);
+            for (int i = 0; i < cachedValues.Count; i++)
+                write(this, scan, cachedValues[i]);
+        }
+
         public void WriteNullable<T>(BufferScan scan, T? value,
             Action<IBufferWriter, BufferScan, T> write) where T : struct
         {
