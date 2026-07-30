@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 
@@ -7,30 +8,32 @@ namespace ActionBuffer
     public interface IBufferReader
     {
         List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read);
+        T? ReadNullable<T>(Func<IBufferReader, T> read) where T : struct;
+        KeyValuePair<TKey, TValue> ReadKeyValuePair<TKey, TValue>(
+            Func<IBufferReader, TKey> readKey, Func<IBufferReader, TValue> readValue) =>
+            throw new NotSupportedException("This reader does not support KeyValuePair values.");
         List<T> ReadList<T>(Func<IBufferReader, T> read)
         {
-            var result = ClassPool<List<T>>.Get();
-            result.Clear();
+            var result = ListPool<T>.Get();
             try
             {
                 var values = ReadIEnumerable(result, read);
                 if (values != null) return values;
                 result.Clear();
-                ClassPool<List<T>>.Back(result);
+                ListPool<T>.Back(result);
                 return null;
             }
             catch
             {
                 result.Clear();
-                ClassPool<List<T>>.Back(result);
+                ListPool<T>.Back(result);
                 throw;
             }
         }
 
         T[] ReadArray<T>(Func<IBufferReader, T> read)
         {
-            var list = ClassPool<List<T>>.Get();
-            list.Clear();
+            var list = ListPool<T>.Get();
             try
             {
                 var values = ReadIEnumerable(list, read);
@@ -39,13 +42,12 @@ namespace ActionBuffer
             finally
             {
                 list.Clear();
-                ClassPool<List<T>>.Back(list);
+                ListPool<T>.Back(list);
             }
         }
         HashSet<T> ReadHashSet<T>(Func<IBufferReader, T> read)
         {
-            var list = ClassPool<List<T>>.Get();
-            list.Clear();
+            var list = ListPool<T>.Get();
             try
             {
                 var values = ReadIEnumerable(list, read);
@@ -54,13 +56,12 @@ namespace ActionBuffer
             finally
             {
                 list.Clear();
-                ClassPool<List<T>>.Back(list);
+                ListPool<T>.Back(list);
             }
         }
         Stack<T> ReadStack<T>(Func<IBufferReader, T> read)
         {
-            var list = ClassPool<List<T>>.Get();
-            list.Clear();
+            var list = ListPool<T>.Get();
             try
             {
                 var values = ReadIEnumerable(list, read);
@@ -73,13 +74,12 @@ namespace ActionBuffer
             finally
             {
                 list.Clear();
-                ClassPool<List<T>>.Back(list);
+                ListPool<T>.Back(list);
             }
         }
         Queue<T> ReadQueue<T>(Func<IBufferReader, T> read)
         {
-            var list = ClassPool<List<T>>.Get();
-            list.Clear();
+            var list = ListPool<T>.Get();
             try
             {
                 var values = ReadIEnumerable(list, read);
@@ -88,13 +88,12 @@ namespace ActionBuffer
             finally
             {
                 list.Clear();
-                ClassPool<List<T>>.Back(list);
+                ListPool<T>.Back(list);
             }
         }
         Dictionary<Key, Value> ReadDictionary<Key, Value>(Func<IBufferReader, KeyValuePair<Key, Value>> read)
         {
-            var list = ClassPool<List<KeyValuePair<Key, Value>>>.Get();
-            list.Clear();
+            var list = ListPool<KeyValuePair<Key, Value>>.Get();
             try
             {
                 var values = ReadIEnumerable(list, read);
@@ -103,7 +102,30 @@ namespace ActionBuffer
             finally
             {
                 list.Clear();
-                ClassPool<List<KeyValuePair<Key, Value>>>.Back(list);
+                ListPool<KeyValuePair<Key, Value>>.Back(list);
+            }
+        }
+        ConcurrentDictionary<Key, Value> ReadConcurrentDictionary<Key, Value>(
+            Func<IBufferReader, KeyValuePair<Key, Value>> read)
+        {
+            var list = ListPool<KeyValuePair<Key, Value>>.Get();
+            try
+            {
+                var values = ReadIEnumerable(list, read);
+                if (values == null) return null;
+                var result = new ConcurrentDictionary<Key, Value>();
+                for (int i = 0; i < values.Count; i++)
+                {
+                    var item = values[i];
+                    if (!result.TryAdd(item.Key, item.Value))
+                        throw new FormatException($"Duplicate dictionary key '{item.Key}'.");
+                }
+                return result;
+            }
+            finally
+            {
+                list.Clear();
+                ListPool<KeyValuePair<Key, Value>>.Back(list);
             }
         }
         bool ReadBool();
@@ -116,11 +138,11 @@ namespace ActionBuffer
         int ReadInt32();
         long ReadInt64();
         T ReadObject<T>();
-        T ReadObject<T>(object instance, TypeHelper.TypeFields fields);
 
         ushort ReadUInt16();
         uint ReadUInt32();
         ulong ReadUInt64();
         string ReadUTF8();
+        Guid ReadGuid() => Guid.ParseExact(ReadUTF8(), "D");
     }
 }

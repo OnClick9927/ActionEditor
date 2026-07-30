@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using System.Xml.Linq;
+using System.Xml;
 
 namespace ActionBuffer
 {
@@ -10,37 +10,67 @@ namespace ActionBuffer
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
             Clear();
-            var root = XmlParsing.Parse(data);
-            SetRoot(root);
-        }
-    }
-
-    internal static class XmlParsing
-    {
-        public static StructuredNode Parse(string xml)
-        {
-            var settings = new System.Xml.XmlReaderSettings
+            if (data.Length > BufferSerializer.MaxTextLength)
+                throw new FormatException(
+                    $"XML length cannot exceed {BufferSerializer.MaxTextLength} characters.");
+            var root = default(StructuredNode);
+            try
             {
-                DtdProcessing = System.Xml.DtdProcessing.Prohibit,
+                root = Parse(data);
+                SetRoot(root);
+                root = default;
+            }
+            finally
+            {
+                StructuredNode.Release(ref root);
+            }
+        }
+
+        private static StructuredNode Parse(string xml)
+        {
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
                 XmlResolver = null,
-                IgnoreComments = true
+                IgnoreComments = true,
+                MaxCharactersInDocument = BufferSerializer.MaxTextLength
             };
 
-            XDocument document;
             using (var stringReader = new StringReader(xml))
             using (var reader = System.Xml.XmlReader.Create(stringReader, settings))
-                document = XDocument.Load(reader, LoadOptions.SetLineInfo);
+            {
+                if (reader.MoveToContent() != XmlNodeType.Element || reader.LocalName != "ActionBuffer")
+                    throw Error(reader, "XML root element must be 'ActionBuffer'.");
 
-            if (document.Root == null || document.Root.Name.LocalName != "ActionBuffer")
-                throw new FormatException("XML root element must be 'ActionBuffer'.");
-            return ParseNode(document.Root);
+                int nodeCount = 0;
+                var root = ParseNode(reader, 0, ref nodeCount);
+                try
+                {
+                    if (reader.MoveToContent() != XmlNodeType.None)
+                        throw Error(reader, "Unexpected content after the ActionBuffer root element.");
+                    return root;
+                }
+                catch
+                {
+                    StructuredNode.Release(ref root);
+                    throw;
+                }
+            }
         }
 
-        private static StructuredNode ParseNode(XElement element)
+        private static StructuredNode ParseNode(System.Xml.XmlReader reader, int depth, ref int nodeCount)
         {
-            string kindName = (string)element.Attribute("kind");
+            if (depth >= BufferScan.MaxDepth)
+                throw Error(reader, $"XML depth cannot exceed {BufferScan.MaxDepth}.");
+            if (nodeCount >= BufferSerializer.MaxNodeCount)
+                throw Error(reader, $"XML node count cannot exceed {BufferSerializer.MaxNodeCount}.");
+            nodeCount++;
+            if (reader.NodeType != XmlNodeType.Element)
+                throw Error(reader, "Expected an XML node element.");
+
+            string kindName = reader.GetAttribute("kind");
             if (string.IsNullOrEmpty(kindName))
-                throw Error(element, "Missing required 'kind' attribute.");
+                throw Error(reader, "Missing required 'kind' attribute.");
 
             StructuredNodeKind kind;
             switch (kindName)
@@ -49,62 +79,110 @@ namespace ActionBuffer
                 case "scalar": kind = StructuredNodeKind.Scalar; break;
                 case "object": kind = StructuredNodeKind.Object; break;
                 case "sequence": kind = StructuredNodeKind.Sequence; break;
-                default: throw Error(element, $"Unknown node kind '{kindName}'.");
+                default: throw Error(reader, $"Unknown node kind '{kindName}'.");
             }
 
-            var node = kind == StructuredNodeKind.Scalar
-                ? StructuredNode.RentScalar(element.Value, true)
-                : StructuredNode.Rent(kind);
+            if (kind == StructuredNodeKind.Scalar)
+            {
+                string scalar = reader.ReadElementContentAsString();
+                EnsureScalarLength(scalar, reader);
+                return StructuredNode.RentScalar(scalar, true);
+            }
+
+            var node = StructuredNode.Rent(kind);
+            var fieldNames = kind == StructuredNodeKind.Object ? HashSetPool<string>.Get() : null;
             try
             {
                 if (kind == StructuredNodeKind.Object)
                 {
-                    node.TypeName = (string)element.Attribute("type");
-                    node.AssemblyName = (string)element.Attribute("assembly");
-                    foreach (var child in element.Elements())
+                    node.TypeName = reader.GetAttribute("type");
+                    node.AssemblyName = reader.GetAttribute("assembly");
+                    EnsureScalarLength(node.TypeName, reader);
+                    EnsureScalarLength(node.AssemblyName, reader);
+                }
+
+                bool empty = reader.IsEmptyElement;
+                reader.ReadStartElement();
+                if (empty) return node;
+
+                while (reader.MoveToContent() != XmlNodeType.EndElement)
+                {
+                    if (reader.NodeType != XmlNodeType.Element)
+                        throw Error(reader, $"{kind} nodes cannot contain text content.");
+
+                    if (kind == StructuredNodeKind.Object)
                     {
-                        if (child.Name.LocalName != "Field")
-                            throw Error(child, "Object nodes may only contain Field elements.");
-                        string name = (string)child.Attribute("name");
+                        if (reader.LocalName != "Field")
+                            throw Error(reader, "Object nodes may only contain Field elements.");
+                        string name = reader.GetAttribute("name");
                         if (name == null)
-                            throw Error(child, "Field element is missing the 'name' attribute.");
-                        EnsureUniqueField(node, name, child);
-                        node.AddField(name, ParseNode(child));
+                            throw Error(reader, "Field element is missing the 'name' attribute.");
+                        if (node.FieldCount >= BufferSerializer.MaxObjectFieldCount)
+                            throw Error(reader,
+                                $"XML object field count cannot exceed {BufferSerializer.MaxObjectFieldCount}.");
+                        EnsureScalarLength(name, reader);
+                        if (!fieldNames.Add(name))
+                            throw Error(reader, $"Duplicate field '{name}'.");
+                        var value = ParseNode(reader, depth + 1, ref nodeCount);
+                        try
+                        {
+                            node.AddField(name, value);
+                            value = default;
+                        }
+                        finally
+                        {
+                            StructuredNode.Release(ref value);
+                        }
                     }
-                }
-                else if (kind == StructuredNodeKind.Sequence)
-                {
-                    foreach (var child in element.Elements())
+                    else if (kind == StructuredNodeKind.Sequence)
                     {
-                        if (child.Name.LocalName != "Item")
-                            throw Error(child, "Sequence nodes may only contain Item elements.");
-                        node.AddItem(ParseNode(child));
+                        if (reader.LocalName != "Item")
+                            throw Error(reader, "Sequence nodes may only contain Item elements.");
+                        if (node.ItemCount >= BufferSerializer.MaxCollectionCount)
+                            throw Error(reader,
+                                $"XML sequence count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+                        var value = ParseNode(reader, depth + 1, ref nodeCount);
+                        try
+                        {
+                            node.AddItem(value);
+                            value = default;
+                        }
+                        finally
+                        {
+                            StructuredNode.Release(ref value);
+                        }
+                    }
+                    else
+                    {
+                        throw Error(reader, $"{kind} nodes cannot contain child elements.");
                     }
                 }
-                else if (element.HasElements)
-                {
-                    throw Error(element, $"{kind} nodes cannot contain child elements.");
-                }
+
+                reader.ReadEndElement();
                 return node;
             }
             catch
             {
-                StructuredNode.Release(node);
+                StructuredNode.Release(ref node);
                 throw;
+            }
+            finally
+            {
+                HashSetPool<string>.Back(fieldNames);
             }
         }
 
-        private static void EnsureUniqueField(StructuredNode node, string name, XElement element)
+        private static void EnsureScalarLength(string value, System.Xml.XmlReader reader)
         {
-            for (int i = 0; i < node.Fields.Count; i++)
-                if (node.Fields[i].Name == name)
-                    throw Error(element, $"Duplicate field '{name}'.");
+            if (value != null && value.Length > BufferSerializer.MaxScalarLength)
+                throw Error(reader,
+                    $"XML scalar length cannot exceed {BufferSerializer.MaxScalarLength} characters.");
         }
 
-        private static FormatException Error(XElement element, string message)
+        private static FormatException Error(System.Xml.XmlReader reader, string message)
         {
-            var info = (System.Xml.IXmlLineInfo)element;
-            return info.HasLineInfo()
+            var info = reader as IXmlLineInfo;
+            return info != null && info.HasLineInfo()
                 ? new FormatException($"XML line {info.LineNumber}: {message}")
                 : new FormatException(message);
         }

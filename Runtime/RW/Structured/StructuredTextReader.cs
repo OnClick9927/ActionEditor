@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 
@@ -8,25 +9,36 @@ namespace ActionBuffer
     {
         private StructuredNode _root;
         private StructuredNode _current;
+        private bool _hasRoot;
+        private bool _hasCurrent;
+        private readonly List<IBufferObject> _afterReadCallbacks = new List<IBufferObject>();
+        private int _objectReadDepth;
 
         internal void SetRoot(StructuredNode root)
         {
             Clear();
-            _root = root ?? throw new ArgumentNullException(nameof(root));
+            _root = root;
             _current = root;
+            _hasRoot = true;
+            _hasCurrent = true;
         }
 
         public virtual void Clear()
         {
-            var root = _root;
-            _root = null;
-            _current = null;
-            StructuredNode.Release(root);
+            if (_hasRoot)
+                StructuredNode.Release(ref _root);
+            _current = default;
+            _hasRoot = false;
+            _hasCurrent = false;
+            _objectReadDepth = 0;
+            _afterReadCallbacks.Clear();
+            if (_afterReadCallbacks.Capacity > BufferSerializer.RetainedListCapacity)
+                _afterReadCallbacks.Capacity = 0;
         }
 
         private StructuredNode RequireCurrent()
         {
-            if (_current == null)
+            if (!_hasCurrent)
                 throw new InvalidOperationException("The reader has not been initialized.");
             return _current;
         }
@@ -39,47 +51,43 @@ namespace ActionBuffer
 
         private Type ResolveType(Type declaredType, StructuredNode node)
         {
-            if (string.IsNullOrEmpty(node.TypeName)) return declaredType;
-
-            var actualType = TypeHelper.GetTypeByFullName(node.TypeName, node.AssemblyName);
-            if (actualType == null)
-                throw new FormatException($"Cannot resolve type '{node.TypeName}'.");
-            if (!declaredType.IsAssignableFrom(actualType))
-                throw new FormatException($"Type '{actualType}' is not assignable to '{declaredType}'.");
-            return actualType;
+            if (string.IsNullOrEmpty(node.TypeName) && (declaredType.IsAbstract || declaredType.IsInterface))
+                throw new FormatException($"Type metadata is required to instantiate '{declaredType}'.");
+            return TypeHelper.ResolveSerializedType(declaredType, node.TypeName, node.AssemblyName);
         }
 
         public T ReadObject<T>()
         {
-            var node = RequireCurrent();
-            if (node.Kind == StructuredNodeKind.Null) return default;
-            RequireKind(node, StructuredNodeKind.Object);
+            _objectReadDepth++;
+            try
+            {
+                var node = RequireCurrent();
+                if (node.Kind == StructuredNodeKind.Null) return default;
+                RequireKind(node, StructuredNodeKind.Object);
 
-            var actualType = ResolveType(typeof(T), node);
-            var instance = TypeHelper.CreateInstance(actualType);
-            ReadFields(node, instance, TypeHelper.GetTypeFields(actualType));
-            InvokeAfterRead(instance);
-            return (T)instance;
-        }
-
-        public T ReadObject<T>(object instance, TypeHelper.TypeFields fields)
-        {
-            var node = RequireCurrent();
-            if (node.Kind == StructuredNodeKind.Null) return default;
-            RequireKind(node, StructuredNodeKind.Object);
-            if (instance == null) throw new ArgumentNullException(nameof(instance));
-            if (fields == null) throw new ArgumentNullException(nameof(fields));
-
-            ReadFields(node, instance, fields);
-            InvokeAfterRead(instance);
-            return (T)instance;
+                var actualType = ResolveType(typeof(T), node);
+                var instance = TypeHelper.CreateInstance(actualType);
+                ReadFields(node, instance, TypeHelper.GetTypeFields(actualType));
+                if (instance is IBufferObject callback)
+                    _afterReadCallbacks.Add(callback);
+                if (_objectReadDepth == 1)
+                    InvokeAfterReadCallbacks();
+                return (T)instance;
+            }
+            finally
+            {
+                _objectReadDepth--;
+                if (_objectReadDepth == 0)
+                    _afterReadCallbacks.Clear();
+            }
         }
 
         private void ReadFields(StructuredNode node, object instance, TypeHelper.TypeFields fields)
         {
-            for (int i = 0; i < node.Fields.Count; i++)
+            fields.SetDefaultValues(instance);
+            for (int i = 0; i < node.FieldCount; i++)
             {
-                var serializedField = node.Fields[i];
+                var serializedField = node.GetField(i);
                 var field = fields.FindField(serializedField.Name);
                 if (field == null) continue;
 
@@ -87,7 +95,7 @@ namespace ActionBuffer
                 _current = serializedField.Value;
                 try
                 {
-                    var converter = BuffConverter.GetConverter(field.FieldType);
+                    var converter = field.GetConverter();
                     field.SetValue(instance, converter.Read(this, field.FieldType));
                 }
                 finally
@@ -97,10 +105,10 @@ namespace ActionBuffer
             }
         }
 
-        private static void InvokeAfterRead(object instance)
+        private void InvokeAfterReadCallbacks()
         {
-            if (instance is IBufferObject bufferObject)
-                bufferObject.AfterReadBuffer();
+            for (int i = 0; i < _afterReadCallbacks.Count; i++)
+                _afterReadCallbacks[i].AfterReadBuffer();
         }
 
         public List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read)
@@ -108,11 +116,17 @@ namespace ActionBuffer
             var node = RequireCurrent();
             if (node.Kind == StructuredNodeKind.Null) return null;
             RequireKind(node, StructuredNodeKind.Sequence);
+            if (result == null) throw new ArgumentNullException(nameof(result));
+            if (read == null) throw new ArgumentNullException(nameof(read));
 
-            for (int i = 0; i < node.Items.Count; i++)
+            int requiredCapacity = checked(result.Count + node.ItemCount);
+            if (result.Capacity < requiredCapacity)
+                result.Capacity = requiredCapacity;
+
+            for (int i = 0; i < node.ItemCount; i++)
             {
                 var previous = _current;
-                _current = node.Items[i];
+                _current = node.GetItem(i);
                 try
                 {
                     result.Add(read(this));
@@ -123,6 +137,139 @@ namespace ActionBuffer
                 }
             }
             return result;
+        }
+
+        public List<T> ReadList<T>(Func<IBufferReader, T> read)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            var result = new List<T>(node.ItemCount);
+            for (int i = 0; i < node.ItemCount; i++)
+                result.Add(ReadItem(node, i, read));
+            return result;
+        }
+
+        public T[] ReadArray<T>(Func<IBufferReader, T> read)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            var result = new T[node.ItemCount];
+            for (int i = 0; i < node.ItemCount; i++)
+                result[i] = ReadItem(node, i, read);
+            return result;
+        }
+
+        public HashSet<T> ReadHashSet<T>(Func<IBufferReader, T> read)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            var result = new HashSet<T>();
+            for (int i = 0; i < node.ItemCount; i++)
+                result.Add(ReadItem(node, i, read));
+            return result;
+        }
+
+        public Queue<T> ReadQueue<T>(Func<IBufferReader, T> read)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            var result = new Queue<T>(node.ItemCount);
+            for (int i = 0; i < node.ItemCount; i++)
+                result.Enqueue(ReadItem(node, i, read));
+            return result;
+        }
+
+        public Dictionary<TKey, TValue> ReadDictionary<TKey, TValue>(
+            Func<IBufferReader, KeyValuePair<TKey, TValue>> read)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            var result = new Dictionary<TKey, TValue>(node.ItemCount);
+            for (int i = 0; i < node.ItemCount; i++)
+            {
+                var item = ReadItem(node, i, read);
+                result.Add(item.Key, item.Value);
+            }
+            return result;
+        }
+
+        public ConcurrentDictionary<TKey, TValue> ReadConcurrentDictionary<TKey, TValue>(
+            Func<IBufferReader, KeyValuePair<TKey, TValue>> read)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            var result = new ConcurrentDictionary<TKey, TValue>();
+            for (int i = 0; i < node.ItemCount; i++)
+            {
+                var item = ReadItem(node, i, read);
+                if (!result.TryAdd(item.Key, item.Value))
+                    throw new FormatException($"Duplicate dictionary key '{item.Key}'.");
+            }
+            return result;
+        }
+
+        private StructuredNode RequireSequence()
+        {
+            var node = RequireCurrent();
+            if (node.Kind != StructuredNodeKind.Null)
+                RequireKind(node, StructuredNodeKind.Sequence);
+            return node;
+        }
+
+        private T ReadItem<T>(StructuredNode node, int index, Func<IBufferReader, T> read)
+        {
+            var previous = _current;
+            _current = node.GetItem(index);
+            try
+            {
+                return read(this);
+            }
+            finally
+            {
+                _current = previous;
+            }
+        }
+
+        public T? ReadNullable<T>(Func<IBufferReader, T> read) where T : struct
+        {
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            var node = RequireCurrent();
+            return node.Kind == StructuredNodeKind.Null ? (T?)null : read(this);
+        }
+
+        public KeyValuePair<TKey, TValue> ReadKeyValuePair<TKey, TValue>(
+            Func<IBufferReader, TKey> readKey, Func<IBufferReader, TValue> readValue)
+        {
+            if (readKey == null) throw new ArgumentNullException(nameof(readKey));
+            if (readValue == null) throw new ArgumentNullException(nameof(readValue));
+            var node = RequireCurrent();
+            if (node.Kind == StructuredNodeKind.Null) return default;
+            RequireKind(node, StructuredNodeKind.Object);
+
+            TKey key = default;
+            TValue value = default;
+            for (int i = 0; i < node.FieldCount; i++)
+            {
+                var field = node.GetField(i);
+                var previous = _current;
+                _current = field.Value;
+                try
+                {
+                    if (field.Name == "key") key = readKey(this);
+                    else if (field.Name == "value") value = readValue(this);
+                }
+                finally
+                {
+                    _current = previous;
+                }
+            }
+            return new KeyValuePair<TKey, TValue>(key, value);
         }
 
         private string ReadScalar(bool allowNull = false)

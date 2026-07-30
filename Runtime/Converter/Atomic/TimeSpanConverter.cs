@@ -2,18 +2,28 @@
 
 namespace ActionBuffer
 {
-    [BuffConverter(typeof(TimeSpan))]
     class TimeSpanConverter : AtomicBuffConverter<TimeSpan>
     {
-        BuffConverter<long> converter = GetConverter<long>();
+        private static BuffConverter<long> _converter;
+        private static int _converterVersion = -1;
+        private static BuffConverter<long> Converter
+        {
+            get
+            {
+                if (_converterVersion == BufferSerializer.ConverterVersion) return _converter;
+                _converter = BufferSerializer.GetConverter<long>();
+                _converterVersion = BufferSerializer.ConverterVersion;
+                return _converter;
+            }
+        }
         protected override TimeSpan OnRead(IBufferReader reader, Type type)
         {
-            return TimeSpan.FromTicks(converter.ReadValue(reader, typeof(long)));
+            return TimeSpan.FromTicks(Converter.ReadValue(reader, typeof(long)));
         }
 
-        protected override void OnWrite(IBufferWriter writer, TimeSpan value)
+        protected override void OnWrite(IBufferWriter writer, BufferScan scan, TimeSpan value)
         {
-            converter.WriteValue(writer, value.Ticks);
+            Converter.WriteValue(writer, scan, value.Ticks);
         }
     }
 }

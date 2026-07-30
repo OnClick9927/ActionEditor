@@ -1,44 +1,66 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 namespace ActionBuffer
 {
     public class BufferReader : IBufferReader
     {
+        private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
+        private static readonly Func<IBufferReader, string> ReadMetadataValue = ReadMetadata;
         private byte[] _buffer;
         private int _index = 0;
+        private int _depth;
+        private int _nodeCount;
+        private int _limit;
+        private int _precountedReadDepth;
+        private bool _suppressNodeCounting;
+        private int _objectReadDepth;
+        private readonly List<IBufferObject> _afterReadCallbacks = new List<IBufferObject>();
         public int index
         {
             get { return _index; }
             set
             {
-
-                if (value < 0) value = 0;
-                if (value >= _buffer.Length) value = _buffer.Length + 1;
+                if (_buffer == null) throw new InvalidOperationException("The reader has not been initialized.");
+                if (value < 0 || value > _buffer.Length)
+                    throw new ArgumentOutOfRangeException(nameof(value));
                 _index = value;
             }
         }
         public void Init(byte[] data)
         {
+            if (data == null) throw new ArgumentNullException(nameof(data));
+            if (data.Length > BufferSerializer.MaxBinaryLength)
+                throw new FormatException(
+                    $"Binary data length cannot exceed {BufferSerializer.MaxBinaryLength} bytes.");
             Clear();
             _buffer = data;
+            _limit = data.Length;
         }
 
         public void Clear()
         {
             _buffer = null;
             _index = 0;
+            _depth = 0;
+            _nodeCount = 0;
+            _limit = 0;
+            _precountedReadDepth = 0;
+            _suppressNodeCounting = false;
+            _objectReadDepth = 0;
+            _afterReadCallbacks.Clear();
+            if (_afterReadCallbacks.Capacity > BufferSerializer.RetainedListCapacity)
+                _afterReadCallbacks.Capacity = 0;
             if (metas == null) return;
             metas.Clear();
-            ClassPool<List<string>>.Back(metas);
+            ListPool<string>.Back(metas);
             metas = null;
         }
         private void CheckReaderIndex(int length)
         {
-            if (_index + length > Capacity)
-            {
-                throw new Exception("IndexOutOfRangeException");
-            }
+            if (length < 0 || _buffer == null || _index < 0 || _index > _limit - length)
+                throw new FormatException("Unexpected end of binary data.");
         }
         public bool IsValid
         {
@@ -52,13 +74,12 @@ namespace ActionBuffer
         }
         public int Capacity
         {
-            get { return _buffer.Length; }
+            get { return _buffer?.Length ?? 0; }
         }
         public Enum ReadEnum(Type type)
         {
-            long value = ReadInt64();
-            return Enum.ToObject(type, value) as Enum;
-            //WriteInt64(value);
+            if (type == null || !type.IsEnum) throw new ArgumentException("Expected an enum type.", nameof(type));
+            return Enum.ToObject(type, ReadUInt64()) as Enum;
         }
         public byte ReadByte()
         {
@@ -75,7 +96,9 @@ namespace ActionBuffer
         public bool ReadBool()
         {
             CheckReaderIndex(1);
-            return _buffer[_index++] == 1;
+            byte value = _buffer[_index++];
+            if (value > 1) throw new FormatException($"Invalid Boolean value '{value}'.");
+            return value == 1;
         }
         public short ReadInt16()
         {
@@ -120,127 +143,408 @@ namespace ActionBuffer
         {
             return (ulong)ReadInt64();
         }
+        public Guid ReadGuid()
+        {
+            CheckReaderIndex(16);
+            var value = new Guid(new ReadOnlySpan<byte>(_buffer, _index, 16));
+            _index += 16;
+            return value;
+        }
         public string ReadUTF8()
         {
-            ushort count = ReadUInt16();
+            int count = ReadInt32();
+            if (count == -1)
+                return null;
+            if (count < -1)
+                throw new FormatException($"Invalid binary scalar length '{count}'.");
             if (count == 0)
                 return string.Empty;
+            if (count > BufferSerializer.MaxScalarLength)
+                throw new FormatException(
+                    $"Binary scalar length cannot exceed {BufferSerializer.MaxScalarLength} bytes.");
             CheckReaderIndex(count);
-            string value = Encoding.UTF8.GetString(_buffer, _index, count);
+            string value;
+            try
+            {
+                value = Utf8.GetString(_buffer, _index, count);
+            }
+            catch (DecoderFallbackException exception)
+            {
+                throw new FormatException("Binary scalar contains invalid UTF-8 data.", exception);
+            }
             _index += count;
             return value;
         }
         public List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read)
         {
-            ushort count = ReadUInt16();
+            EnterNode();
+            try
+            {
+                if (!TryReadCollectionCount(out int count))
+                    return null;
 
-            List<T> values = result;
-            for (int i = 0; i < count; i++)
-                values.Add(read(this));
-            return values;
+                if (result == null) throw new ArgumentNullException(nameof(result));
+                if (read == null) throw new ArgumentNullException(nameof(read));
+                List<T> values = result;
+                int requiredCapacity = checked(values.Count + count);
+                if (values.Capacity < requiredCapacity)
+                    values.Capacity = requiredCapacity;
+                for (int i = 0; i < count; i++)
+                    values.Add(ReadPrecounted(read));
+                return values;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        public List<T> ReadList<T>(Func<IBufferReader, T> read)
+        {
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            EnterNode();
+            try
+            {
+                if (!TryReadCollectionCount(out int count)) return null;
+                var result = new List<T>(count);
+                for (int i = 0; i < count; i++) result.Add(ReadPrecounted(read));
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        public T[] ReadArray<T>(Func<IBufferReader, T> read)
+        {
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            EnterNode();
+            try
+            {
+                if (!TryReadCollectionCount(out int count)) return null;
+                var result = new T[count];
+                for (int i = 0; i < count; i++) result[i] = ReadPrecounted(read);
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        public HashSet<T> ReadHashSet<T>(Func<IBufferReader, T> read)
+        {
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            EnterNode();
+            try
+            {
+                if (!TryReadCollectionCount(out int count)) return null;
+                var result = new HashSet<T>();
+                for (int i = 0; i < count; i++) result.Add(ReadPrecounted(read));
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        public Queue<T> ReadQueue<T>(Func<IBufferReader, T> read)
+        {
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            EnterNode();
+            try
+            {
+                if (!TryReadCollectionCount(out int count)) return null;
+                var result = new Queue<T>(count);
+                for (int i = 0; i < count; i++) result.Enqueue(ReadPrecounted(read));
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        public Dictionary<TKey, TValue> ReadDictionary<TKey, TValue>(
+            Func<IBufferReader, KeyValuePair<TKey, TValue>> read)
+        {
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            EnterNode();
+            try
+            {
+                if (!TryReadCollectionCount(out int count)) return null;
+                var result = new Dictionary<TKey, TValue>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    var item = ReadPrecounted(read);
+                    result.Add(item.Key, item.Value);
+                }
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        public ConcurrentDictionary<TKey, TValue> ReadConcurrentDictionary<TKey, TValue>(
+            Func<IBufferReader, KeyValuePair<TKey, TValue>> read)
+        {
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            EnterNode();
+            try
+            {
+                if (!TryReadCollectionCount(out int count)) return null;
+                var result = new ConcurrentDictionary<TKey, TValue>();
+                for (int i = 0; i < count; i++)
+                {
+                    var item = ReadPrecounted(read);
+                    if (!result.TryAdd(item.Key, item.Value))
+                        throw new FormatException($"Duplicate dictionary key '{item.Key}'.");
+                }
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        private bool TryReadCollectionCount(out int count)
+        {
+            ushort encodedCount = ReadUInt16();
+            if (encodedCount == ushort.MaxValue)
+            {
+                count = 0;
+                return false;
+            }
+            count = encodedCount;
+            if (count > BufferSerializer.MaxCollectionCount)
+                throw new FormatException(
+                    $"Collection count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+            CountNodes(count);
+            return true;
+        }
+
+        public T? ReadNullable<T>(Func<IBufferReader, T> read) where T : struct
+        {
+            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (!ReadBool()) return null;
+            CountNodes(1);
+            return ReadPrecounted(read);
+        }
+
+        public KeyValuePair<TKey, TValue> ReadKeyValuePair<TKey, TValue>(
+            Func<IBufferReader, TKey> readKey, Func<IBufferReader, TValue> readValue)
+        {
+            if (readKey == null) throw new ArgumentNullException(nameof(readKey));
+            if (readValue == null) throw new ArgumentNullException(nameof(readValue));
+            CountNodes(2);
+            return new KeyValuePair<TKey, TValue>(ReadPrecounted(readKey), ReadPrecounted(readValue));
         }
         private List<string> metas;
 
-        public T ReadObject<T>(object instance, TypeHelper.TypeFields fields)
+        private void EnsureMetas()
         {
-            if (metas == null)
+            if (metas != null) return;
+
+            metas = ListPool<string>.Get();
+            var previousSuppression = _suppressNodeCounting;
+            _suppressNodeCounting = true;
+            List<string> values;
+            try
             {
-                metas = ClassPool<List<string>>.Get();
-                metas.Clear();
-                ReadIEnumerable(metas, (r) => r.ReadUTF8());
+                values = ReadIEnumerable(metas, ReadMetadataValue);
             }
-            var typeName = metas[ReadInt32()];
-            var assemblyName = metas[ReadInt32()];
-            Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
-            var ObjEnd = ReadInt32();
-            if (type == null)
+            finally
             {
-                this._index = ObjEnd;
-                return default;
+                _suppressNodeCounting = previousSuppression;
             }
-            //object t = instance;
-
-            //var typeField = TypeHelper.GetTypeFields(type);
-            while (ObjEnd - this._index > 12)
+            if (values == null)
+                throw new FormatException("The binary metadata table cannot be null.");
+            for (int i = 0; i < metas.Count; i++)
             {
-                var FieldEndIndex = ReadInt32();
-                var fieldName = metas[this.ReadInt32()];
-                var TypeName = metas[this.ReadInt32()];
+                if (metas[i] == null)
+                    throw new FormatException("The binary metadata table cannot contain null values.");
+            }
+        }
 
-                TypeName = TypeHelper.GetRealTypeName(TypeName);
+        private static string ReadMetadata(IBufferReader reader) => reader.ReadUTF8();
 
-                var field = fields.FindField(fieldName);
-                if (field != null && field.FieldType.FullName != TypeName)
+        private string ReadMeta()
+        {
+            int metaIndex = ReadInt32();
+            if (metaIndex < 0 || metaIndex >= metas.Count)
+                throw new FormatException($"Invalid binary metadata index '{metaIndex}'.");
+            return metas[metaIndex];
+        }
+
+        private int ReadEndIndex(string name)
+        {
+            int end = ReadInt32();
+            if (end < _index || end > _limit)
+                throw new FormatException($"Invalid binary {name} end index '{end}'.");
+            return end;
+        }
+
+        private void ReadFields(object instance, TypeHelper.TypeFields fields, int objectEnd)
+        {
+            int parentLimit = _limit;
+            int fieldCount = 0;
+            fields.SetDefaultValues(instance);
+            _limit = objectEnd;
+            try
+            {
+                while (_index < objectEnd)
                 {
-                    field = null;
-                }
-                if (field != null)
+                    if (++fieldCount > BufferSerializer.MaxObjectFieldCount)
+                        throw new FormatException(
+                            $"Binary object field count cannot exceed {BufferSerializer.MaxObjectFieldCount}.");
+                    CountNodes(1);
+                    if (objectEnd - _index < 12)
+                        throw new FormatException("Incomplete binary field header.");
 
-                {
-                    object value = null;
-                    var fieldType = field.FieldType;
-                    var convert = BuffConverter.GetConverter(fieldType);
-                    value = convert.Read(this, fieldType);
-                    field.SetValue(instance, value);
+                    int fieldEnd = ReadInt32();
+                    string fieldName = ReadMeta();
+                    string serializedTypeName = TypeHelper.GetRealTypeName(ReadMeta());
+                    if (fieldEnd < _index || fieldEnd > objectEnd)
+                        throw new FormatException($"Invalid binary field end index '{fieldEnd}'.");
+
+                    var field = fields.FindField(fieldName);
+                    if (field == null)
+                    {
+                        _index = fieldEnd;
+                        continue;
+                    }
+                    if (field.FieldType.FullName != serializedTypeName)
+                        throw new FormatException(
+                            $"Binary field '{fieldName}' changed type from '{serializedTypeName}' to '{field.FieldType.FullName}'.");
+
+                    int objectLimit = _limit;
+                    _limit = fieldEnd;
+                    try
+                    {
+                        var fieldType = field.FieldType;
+                        var convert = field.GetConverter();
+                        _precountedReadDepth++;
+                        try
+                        {
+                            field.SetValue(instance, convert.Read(this, fieldType));
+                        }
+                        finally
+                        {
+                            _precountedReadDepth--;
+                        }
+                        if (_index != fieldEnd)
+                            throw new FormatException(
+                                $"Binary field '{fieldName}' consumed {_index} bytes but ends at {fieldEnd}.");
+                    }
+                    finally
+                    {
+                        _limit = objectLimit;
+                    }
                 }
-                this._index = FieldEndIndex;
             }
-            this._index = ObjEnd;
-            if (instance is IBufferObject buff)
-                buff.AfterReadBuffer();
-
-            return (T)instance;
+            finally
+            {
+                _limit = parentLimit;
+            }
         }
 
         public T ReadObject<T>()
         {
-            if (metas == null)
+            EnterNode();
+            _objectReadDepth++;
+            try
             {
-                metas = ClassPool<List<string>>.Get();
-                metas.Clear();
-                ReadIEnumerable(metas, (r) => r.ReadUTF8());
+                var result = ReadNewObject<T>();
+                if (_objectReadDepth == 1)
+                    InvokeAfterReadCallbacks();
+                return result;
             }
-            var typeName = metas[ReadInt32()];
-            var assemblyName = metas[ReadInt32()];
-            Type type = TypeHelper.GetTypeByFullName(typeName, assemblyName);
-            var ObjEnd = ReadInt32();
-            if (type == null)
+            finally
             {
-                this._index = ObjEnd;
-                return default;
+                _objectReadDepth--;
+                if (_objectReadDepth == 0)
+                    _afterReadCallbacks.Clear();
+                ExitNode();
             }
+        }
+
+        private T ReadNewObject<T>()
+        {
+            EnsureMetas();
+
+            int typeIndex = ReadInt32();
+            if (typeIndex == -1) return default;
+            if (typeIndex < 0 || typeIndex >= metas.Count)
+                throw new FormatException($"Invalid binary metadata index '{typeIndex}'.");
+
+            string typeName = metas[typeIndex];
+            string assemblyName = ReadMeta();
+            Type type = TypeHelper.ResolveSerializedType(typeof(T), typeName, assemblyName);
+            int objectEnd = ReadEndIndex("object");
+
             object t = TypeHelper.CreateInstance(type);
-
             var typeField = TypeHelper.GetTypeFields(type);
-            while (ObjEnd - this._index > 12)
-            {
-                var FieldEndIndex = ReadInt32();
-                var fieldName = metas[this.ReadInt32()];
-                var TypeName = metas[this.ReadInt32()];
-
-                TypeName = TypeHelper.GetRealTypeName(TypeName);
-
-                var field = typeField.FindField(fieldName);
-                if (field != null && field.FieldType.FullName != TypeName)
-                {
-                    field = null;
-                }
-                if (field != null)
-
-                {
-                    object value = null;
-                    var fieldType = field.FieldType;
-                    var convert = BuffConverter.GetConverter(fieldType);
-                    value = convert.Read(this, fieldType);
-                    field.SetValue(t, value);
-                }
-                this._index = FieldEndIndex;
-            }
-            this._index = ObjEnd;
-            if (t is IBufferObject buff)
-                buff.AfterReadBuffer();
+            ReadFields(t, typeField, objectEnd);
+            _index = objectEnd;
+            if (t is IBufferObject callback)
+                _afterReadCallbacks.Add(callback);
 
             return (T)t;
+        }
+
+        public void EnsureFullyConsumed()
+        {
+            if (_buffer == null)
+                throw new InvalidOperationException("The reader has not been initialized.");
+            if (_index != _buffer.Length)
+                throw new FormatException($"Binary data contains {_buffer.Length - _index} trailing bytes.");
+        }
+
+        private void EnterNode()
+        {
+            if (_depth >= BufferScan.MaxDepth)
+                throw new FormatException($"Binary serialization depth cannot exceed {BufferScan.MaxDepth}.");
+            if (_precountedReadDepth == 0)
+                CountNodes(1);
+            _depth++;
+        }
+
+        private void CountNodes(int count)
+        {
+            if (_suppressNodeCounting) return;
+            if (count < 0 || _nodeCount > BufferSerializer.MaxNodeCount - count)
+                throw new FormatException(
+                    $"Binary node count cannot exceed {BufferSerializer.MaxNodeCount}.");
+            _nodeCount += count;
+        }
+
+        private T ReadPrecounted<T>(Func<IBufferReader, T> read)
+        {
+            _precountedReadDepth++;
+            try
+            {
+                return read(this);
+            }
+            finally
+            {
+                _precountedReadDepth--;
+            }
+        }
+
+        private void InvokeAfterReadCallbacks()
+        {
+            for (int i = 0; i < _afterReadCallbacks.Count; i++)
+                _afterReadCallbacks[i].AfterReadBuffer();
+        }
+
+        private void ExitNode()
+        {
+            _depth--;
         }
 
 
