@@ -49,11 +49,11 @@ namespace ActionEditor.Nodes
             this._groups.AddRange(groups);
 
         }
-        public byte[] ToBytes() => BuffConverter.ToBytes(this);
+        public byte[] ToBytes() => BufferSerializer.ToBytes(this);
 
         public static GraphAsset FromBytes(Type type, byte[] buffer)
         {
-            var asset = BuffConverter.ToObject(buffer, type) as GraphAsset;
+            var asset = BufferSerializer.ToObject(buffer, type) as GraphAsset;
             asset.Valid();
             return asset;
         }

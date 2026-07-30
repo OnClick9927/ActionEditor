@@ -190,7 +190,7 @@ namespace ActionEditor.Nodes
         public Rect position => App.window.position;
         public new List<GraphPort> ports => base.ports.ToList().ConvertAll(x => x as GraphPort);
 
-        public new List<GraphNode> nodes => base.nodes.ToList().ConvertAll(x => x as GraphNode);
+        public new List<GraphNode> nodes => base.nodes.OfType<GraphNode>().ToList();
         public List<GraphConnection> connections => base.edges.ToList().ConvertAll(x => x as GraphConnection);
         public List<GraphGroup> groups => graphElements.ToList().Where(x => x is GraphGroup).Cast<GraphGroup>().ToList();
         public List<GraphNode> selectedNodes { get { return selection.Where(x => x is GraphNode).Select(x => x as GraphNode).ToList(); } }
