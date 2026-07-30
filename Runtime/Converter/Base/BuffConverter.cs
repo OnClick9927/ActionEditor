@@ -134,6 +134,75 @@ namespace ActionBuffer
         }
         public static T ToObject<T>(string data) => (T)ToObject(data, typeof(T));
 
+        public static string ToYaml(object obj, bool typeInfo = true, bool fullField = false)
+        {
+            var writer = ClassPool<YamlWriter>.Get();
+            try
+            {
+                writer.typeInfo = typeInfo;
+                writer.fullField = fullField;
+                WriteObject(writer, obj);
+                return writer.GetYaml();
+            }
+            finally
+            {
+                writer.Clear();
+                ClassPool<YamlWriter>.Back(writer);
+            }
+        }
+
+        public static object FromYaml(string data, Type type)
+        {
+            var reader = ClassPool<YamlReader>.Get();
+            try
+            {
+                reader.Init(data);
+                return ReadObject(reader, type);
+            }
+            finally
+            {
+                reader.Clear();
+                ClassPool<YamlReader>.Back(reader);
+            }
+        }
+
+        public static T FromYaml<T>(string data) => (T)FromYaml(data, typeof(T));
+
+        public static string ToXml(object obj, bool pretty = true, bool typeInfo = true, bool fullField = false)
+        {
+            var writer = ClassPool<XmlWriter>.Get();
+            try
+            {
+                writer.prettyPrint = pretty;
+                writer.typeInfo = typeInfo;
+                writer.fullField = fullField;
+                WriteObject(writer, obj);
+                return writer.GetXml();
+            }
+            finally
+            {
+                writer.Clear();
+                ClassPool<XmlWriter>.Back(writer);
+            }
+        }
+
+        public static object FromXml(string data, Type type)
+        {
+            var reader = ClassPool<XmlReader>.Get();
+            try
+            {
+                reader.Init(data);
+                return ReadObject(reader, type);
+            }
+            finally
+            {
+                reader.Clear();
+                ClassPool<XmlReader>.Back(reader);
+            }
+        }
+
+        public static T FromXml<T>(string data) => (T)FromXml(data, typeof(T));
+
         public static byte[] ToBytes(object obj)
         {
             var writer = ClassPool<BufferWriter>.Get();

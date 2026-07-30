@@ -11,6 +11,7 @@ namespace ActionBuffer
 
         public void Init(string data)
         {
+            if (data == null) throw new ArgumentNullException(nameof(data));
             Clear();
             _json = data;
         }
@@ -65,42 +66,77 @@ namespace ActionBuffer
         {
             SkipWhitespace();
             Expect('"');
-            StringBuilder sb = new StringBuilder();
-            while (true)
+            var sb = ClassPool<StringBuilder>.Get();
+            sb.Clear();
+            try
             {
-                char c = Read();
-                if (c == '"') break;
-                if (c == '\\')
+                while (true)
                 {
-                    c = Read();
-                    switch (c)
+                    char c = Read();
+                    if (c == '\0') throw new FormatException("Unterminated JSON string.");
+                    if (c == '"') break;
+                    if (c == '\\')
                     {
-                        case '"': sb.Append('"'); break;
-                        case '\\': sb.Append('\\'); break;
-                        case '/': sb.Append('/'); break;
-                        case 'b': sb.Append('\b'); break;
-                        case 'f': sb.Append('\f'); break;
-                        case 'n': sb.Append('\n'); break;
-                        case 'r': sb.Append('\r'); break;
-                        case 't': sb.Append('\t'); break;
-                        case 'u':
-                            char[] hexChars = new char[4];
-                            hexChars[0] = Read();
-                            hexChars[1] = Read();
-                            hexChars[2] = Read();
-                            hexChars[3] = Read();
-                            string hex = new string(hexChars);
-                            sb.Append((char)Convert.ToInt32(hex, 16));
-                            break;
-                        default: throw new FormatException(string.Format("Invalid escape sequence \\{0}", c));
+                        c = Read();
+                        switch (c)
+                        {
+                            case '"': sb.Append('"'); break;
+                            case '\\': sb.Append('\\'); break;
+                            case '/': sb.Append('/'); break;
+                            case 'b': sb.Append('\b'); break;
+                            case 'f': sb.Append('\f'); break;
+                            case 'n': sb.Append('\n'); break;
+                            case 'r': sb.Append('\r'); break;
+                            case 't': sb.Append('\t'); break;
+                            case 'u': sb.Append(ReadUnicodeEscape()); break;
+                            default: throw new FormatException(string.Format("Invalid escape sequence \\{0}", c));
+                        }
+                    }
+                    else
+                    {
+                        if (c < 0x20) throw new FormatException("JSON strings cannot contain unescaped control characters.");
+                        sb.Append(c);
                     }
                 }
-                else
-                {
-                    sb.Append(c);
-                }
+                return sb.ToString();
             }
-            return sb.ToString();
+            finally
+            {
+                sb.Clear();
+                ClassPool<StringBuilder>.Back(sb);
+            }
+        }
+
+        private char ReadUnicodeEscape()
+        {
+            int value = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                char c = Read();
+                int digit = c >= '0' && c <= '9' ? c - '0'
+                    : c >= 'a' && c <= 'f' ? c - 'a' + 10
+                    : c >= 'A' && c <= 'F' ? c - 'A' + 10
+                    : -1;
+                if (digit < 0) throw new FormatException("Invalid JSON Unicode escape sequence.");
+                value = (value << 4) | digit;
+            }
+            return (char)value;
+        }
+
+        private bool TryReadNull()
+        {
+            SkipWhitespace();
+            if (_pos + 4 > _json.Length ||
+                _json[_pos] != 'n' || _json[_pos + 1] != 'u' ||
+                _json[_pos + 2] != 'l' || _json[_pos + 3] != 'l')
+                return false;
+
+            int end = _pos + 4;
+            if (end < _json.Length && !char.IsWhiteSpace(_json[end]) &&
+                _json[end] != ',' && _json[end] != ']' && _json[end] != '}')
+                return false;
+            _pos = end;
+            return true;
         }
 
         private void SkipValue()
@@ -110,25 +146,37 @@ namespace ActionBuffer
             if (c == '{')
             {
                 Read();
-                int depth = 1;
-                while (depth > 0)
+                SkipWhitespace();
+                if (Peek() == '}')
                 {
-                    c = Read();
-                    if (c == '{') depth++;
-                    else if (c == '}') depth--;
-                    else if (c == '"') { while (Read() != '"') { } }
+                    Read();
+                    return;
+                }
+                while (true)
+                {
+                    ReadString();
+                    Expect(':');
+                    SkipValue();
+                    SkipWhitespace();
+                    if (Peek() == '}') { Read(); return; }
+                    Expect(',');
                 }
             }
             else if (c == '[')
             {
                 Read();
-                int depth = 1;
-                while (depth > 0)
+                SkipWhitespace();
+                if (Peek() == ']')
                 {
-                    c = Read();
-                    if (c == '[') depth++;
-                    else if (c == ']') depth--;
-                    else if (c == '"') { while (Read() != '"') { } }
+                    Read();
+                    return;
+                }
+                while (true)
+                {
+                    SkipValue();
+                    SkipWhitespace();
+                    if (Peek() == ']') { Read(); return; }
+                    Expect(',');
                 }
             }
             else if (c == '"')
@@ -137,14 +185,16 @@ namespace ActionBuffer
             }
             else
             {
-                // 数字、true、false、null
+                int start = _pos;
                 while (!char.IsWhiteSpace(Peek()) && Peek() != ',' && Peek() != ']' && Peek() != '}')
                     Read();
+                if (_pos == start) throw new FormatException($"Expected a JSON value at position {_pos}.");
             }
         }
 
         public T ReadObject<T>()
         {
+            if (TryReadNull()) return default;
             Expect('{');
             SkipWhitespace();
 
@@ -244,6 +294,7 @@ namespace ActionBuffer
         }
         public T ReadObject<T>(object instance, TypeHelper.TypeFields fields)
         {
+            if (TryReadNull()) return default;
             Expect('{');
             SkipWhitespace();
 
@@ -345,6 +396,7 @@ namespace ActionBuffer
         public List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read)
         {
             SkipWhitespace();
+            if (TryReadNull()) return null;
             Expect('[');
             List<T> list = result;
             bool first = true;
@@ -388,7 +440,7 @@ namespace ActionBuffer
         public ushort ReadUInt16() { return (ushort)ReadInt64(); }
         public uint ReadUInt32() { return (uint)ReadInt64(); }
         public ulong ReadUInt64() { return (ulong)ReadInt64(); }
-        public string ReadUTF8() { return ReadString(); }
+        public string ReadUTF8() { return TryReadNull() ? null : ReadString(); }
 
         public Enum ReadEnum(Type type)
         {
