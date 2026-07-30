@@ -6,8 +6,8 @@ namespace ActionBuffer
 {
     public abstract class StructuredTextWriter : IBufferWriter
     {
-        private BufferScan _scan;
         private StructuredNode _value;
+        private bool _hasValue;
         private bool _typeInfo;
         private bool _fullField;
 
@@ -26,104 +26,102 @@ namespace ActionBuffer
             set { _fullField = value; }
         }
 
-        public void Init(BufferScan scan)
+        public void Init()
         {
             ResetValue();
-            ReleaseScan();
-            _scan = scan ?? throw new ArgumentNullException(nameof(scan));
-            scan.ResetRead();
         }
 
         public virtual void Clear()
         {
             ResetValue();
-            ReleaseScan();
             _typeInfo = false;
             _fullField = false;
         }
 
         internal StructuredNode GetRoot()
         {
-            if (_value == null)
+            if (!_hasValue)
                 throw new InvalidOperationException("The writer has no serialized value.");
             return _value;
         }
 
-        private BufferScan RequireScan()
-        {
-            if (_scan == null)
-                throw new InvalidOperationException("The writer requires a completed BufferScan.");
-            return _scan;
-        }
-
-        private void ReleaseScan()
-        {
-            var scan = _scan;
-            _scan = null;
-            BufferScan.Back(scan);
-        }
-
         private void ResetValue()
         {
-            var value = _value;
-            _value = null;
-            StructuredNode.Release(value);
+            if (!_hasValue) return;
+            StructuredNode.Release(ref _value);
+            _hasValue = false;
         }
 
         private void SetValue(StructuredNode value)
         {
-            if (_value != null)
-                StructuredNode.Release(_value);
+            ResetValue();
             _value = value;
+            _hasValue = true;
         }
 
         private StructuredNode TakeValue()
         {
-            var value = _value;
-            _value = null;
-            if (value == null)
+            if (!_hasValue)
                 throw new InvalidOperationException("A converter did not write a value.");
+
+            var value = _value;
+            _value = default;
+            _hasValue = false;
             return value;
         }
 
-        public void WriteObject<T>(T value, TypeHelper.TypeFields fields)
+        public void WriteObject<T>(BufferScan scan, T value, TypeHelper.TypeFields fields)
         {
-            var cached = RequireScan().ReadObject();
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
+            var cached = scan.ReadObject();
             if (cached.Value == null)
             {
                 SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
                 return;
             }
-
             var node = StructuredNode.Rent(StructuredNodeKind.Object);
             try
             {
+                if (!_typeInfo && cached.Type != typeof(T))
+                    throw new InvalidOperationException(
+                        $"Writing runtime type '{cached.Type}' through '{typeof(T)}' requires typeInfo=true.");
                 if (_typeInfo)
                 {
                     node.TypeName = cached.Type.FullName;
                     node.AssemblyName = cached.Type.Assembly.FullName;
                 }
 
-                for (int i = 0; i < cached.Fields.Count; i++)
+                for (int i = 0; i < cached.FieldCount; i++)
                 {
-                    var cachedField = cached.Fields[i];
+                    var cachedField = cached.GetField(i);
                     ResetValue();
-                    cachedField.Converter.Write(this, cachedField.Value);
-                    node.AddField(cachedField.Field.name, TakeValue());
+                    cachedField.Converter.Write(this, scan, cachedField.Value);
+                    var valueNode = TakeValue();
+                    try
+                    {
+                        node.AddField(cachedField.Field.name, valueNode);
+                        valueNode = default;
+                    }
+                    finally
+                    {
+                        StructuredNode.Release(ref valueNode);
+                    }
                 }
             }
             catch
             {
                 ResetValue();
-                StructuredNode.Release(node);
+                StructuredNode.Release(ref node);
                 throw;
             }
             SetValue(node);
         }
 
-        public void WriteIEnumerable<T>(IEnumerable<T> values, Action<IBufferWriter, T> write)
+        public void WriteIEnumerable<T>(BufferScan scan, IEnumerable<T> values,
+            Action<IBufferWriter, BufferScan, T> write)
         {
-            var cachedValues = RequireScan().ReadEnumerable<T>();
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
+            var cachedValues = scan.ReadEnumerable<T>();
             if (cachedValues == null)
             {
                 SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
@@ -136,14 +134,82 @@ namespace ActionBuffer
                 for (int i = 0; i < cachedValues.Count; i++)
                 {
                     ResetValue();
-                    write(this, cachedValues[i]);
-                    node.AddItem(TakeValue());
+                    write(this, scan, cachedValues[i]);
+                    var valueNode = TakeValue();
+                    try
+                    {
+                        node.AddItem(valueNode);
+                        valueNode = default;
+                    }
+                    finally
+                    {
+                        StructuredNode.Release(ref valueNode);
+                    }
                 }
             }
             catch
             {
                 ResetValue();
-                StructuredNode.Release(node);
+                StructuredNode.Release(ref node);
+                throw;
+            }
+            SetValue(node);
+        }
+
+        public void WriteNullable<T>(BufferScan scan, T? value,
+            Action<IBufferWriter, BufferScan, T> write) where T : struct
+        {
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
+            if (write == null) throw new ArgumentNullException(nameof(write));
+            if (!value.HasValue)
+            {
+                SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
+                return;
+            }
+            write(this, scan, value.Value);
+        }
+
+        public void WriteKeyValuePair<TKey, TValue>(BufferScan scan, KeyValuePair<TKey, TValue> value,
+            Action<IBufferWriter, BufferScan, TKey> writeKey,
+            Action<IBufferWriter, BufferScan, TValue> writeValue)
+        {
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
+            if (writeKey == null) throw new ArgumentNullException(nameof(writeKey));
+            if (writeValue == null) throw new ArgumentNullException(nameof(writeValue));
+
+            var node = StructuredNode.Rent(StructuredNodeKind.Object);
+            try
+            {
+                ResetValue();
+                writeKey(this, scan, value.Key);
+                var keyNode = TakeValue();
+                try
+                {
+                    node.AddField("key", keyNode);
+                    keyNode = default;
+                }
+                finally
+                {
+                    StructuredNode.Release(ref keyNode);
+                }
+
+                ResetValue();
+                writeValue(this, scan, value.Value);
+                var valueNode = TakeValue();
+                try
+                {
+                    node.AddField("value", valueNode);
+                    valueNode = default;
+                }
+                finally
+                {
+                    StructuredNode.Release(ref valueNode);
+                }
+            }
+            catch
+            {
+                ResetValue();
+                StructuredNode.Release(ref node);
                 throw;
             }
             SetValue(node);

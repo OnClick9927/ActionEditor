@@ -1,109 +1,272 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Globalization;
 using System.Text;
+
 namespace ActionBuffer
 {
-    public class JsonReader : IBufferReader
+    public class JsonReader : StructuredTextReader
     {
         private string _json;
-        private int _pos;
+        private int _position;
+        private int _nodeCount;
 
         public void Init(string data)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
             Clear();
+            if (data.Length > BufferSerializer.MaxTextLength)
+                throw new FormatException(
+                    $"JSON length cannot exceed {BufferSerializer.MaxTextLength} characters.");
             _json = data;
+
+            StructuredNode root = default;
+            try
+            {
+                root = ParseDocument();
+                SetRoot(root);
+                root = default;
+            }
+            finally
+            {
+                StructuredNode.Release(ref root);
+                ResetParser();
+            }
         }
 
-        public void Clear()
+        public override void Clear()
+        {
+            ResetParser();
+            base.Clear();
+        }
+
+        private void ResetParser()
         {
             _json = null;
-            _pos = 0;
+            _position = 0;
+            _nodeCount = 0;
         }
 
-        private char Peek()
-        {
-            return _pos < _json.Length ? _json[_pos] : '\0';
-        }
-
-        private char Read()
-        {
-            return _pos < _json.Length ? _json[_pos++] : '\0';
-        }
-
-        private void SkipWhitespace()
-        {
-            while (char.IsWhiteSpace(Peek()))
-                Read();
-        }
-
-        public void Expect(char expected)
+        private StructuredNode ParseDocument()
         {
             SkipWhitespace();
-            if (Peek() != expected)
-                throw new FormatException(string.Format("Expected '{0}' at position {1}", expected, _pos));
-            Read();
-        }
+            if (IsEnd)
+                throw Error("JSON input is empty.");
 
-        private string ReadNumber()
-        {
-            SkipWhitespace();
-            int start = _pos;
-            if (Peek() == '-') Read();
-            while (char.IsDigit(Peek())) Read();
-            if (Peek() == '.') { Read(); while (char.IsDigit(Peek())) Read(); }
-            if (Peek() == 'e' || Peek() == 'E')
+            var root = ParseValue(0);
+            try
             {
-                Read();
-                if (Peek() == '+' || Peek() == '-') Read();
-                while (char.IsDigit(Peek())) Read();
+                SkipWhitespace();
+                if (!IsEnd)
+                    throw Error("Unexpected trailing content.");
+                return root;
             }
-            return _json.Substring(start, _pos - start);
+            catch
+            {
+                StructuredNode.Release(ref root);
+                throw;
+            }
+        }
+
+        private StructuredNode ParseValue(int depth)
+        {
+            if (depth >= BufferScan.MaxDepth)
+                throw Error($"JSON depth cannot exceed {BufferScan.MaxDepth}.");
+            CountNode();
+            SkipWhitespace();
+            if (IsEnd)
+                throw Error("Expected a JSON value.");
+
+            switch (Peek())
+            {
+                case '{': return ParseObject(depth);
+                case '[': return ParseSequence(depth);
+                case '"': return StructuredNode.RentScalar(ReadString(), true);
+                case 't':
+                    ReadLiteral("true");
+                    return StructuredNode.RentScalar("true", false);
+                case 'f':
+                    ReadLiteral("false");
+                    return StructuredNode.RentScalar("false", false);
+                case 'n':
+                    ReadLiteral("null");
+                    return StructuredNode.Rent(StructuredNodeKind.Null);
+                default:
+                    return StructuredNode.RentScalar(ReadNumber(), false);
+            }
+        }
+
+        private StructuredNode ParseObject(int depth)
+        {
+            Expect('{');
+            var node = StructuredNode.Rent(StructuredNodeKind.Object);
+            var fieldNames = HashSetPool<string>.Get();
+            try
+            {
+                SkipWhitespace();
+                if (TryRead('}'))
+                    return node;
+
+                while (true)
+                {
+                    if (node.FieldCount >= BufferSerializer.MaxObjectFieldCount)
+                        throw Error(
+                            $"JSON object field count cannot exceed {BufferSerializer.MaxObjectFieldCount}.");
+                    string name = ReadString();
+                    Expect(':');
+                    var value = ParseValue(depth + 1);
+                    try
+                    {
+                        if (name == "$type")
+                        {
+                            RequireMetadataScalar(name, value);
+                            if (node.TypeName != null)
+                                throw Error("Duplicate metadata '$type'.");
+                            node.TypeName = value.Scalar;
+                        }
+                        else if (name == "$assembly")
+                        {
+                            RequireMetadataScalar(name, value);
+                            if (node.AssemblyName != null)
+                                throw Error("Duplicate metadata '$assembly'.");
+                            node.AssemblyName = value.Scalar;
+                        }
+                        else
+                        {
+                            name = StructuredNode.DecodeTextFieldName(name);
+                            if (!fieldNames.Add(name))
+                                throw Error($"Duplicate JSON field '{name}'.");
+                            node.AddField(name, value);
+                            value = default;
+                        }
+                    }
+                    finally
+                    {
+                        StructuredNode.Release(ref value);
+                    }
+
+                    SkipWhitespace();
+                    if (TryRead('}'))
+                        return node;
+                    Expect(',');
+                }
+            }
+            catch
+            {
+                StructuredNode.Release(ref node);
+                throw;
+            }
+            finally
+            {
+                HashSetPool<string>.Back(fieldNames);
+            }
+        }
+
+        private StructuredNode ParseSequence(int depth)
+        {
+            Expect('[');
+            var node = StructuredNode.Rent(StructuredNodeKind.Sequence);
+            try
+            {
+                SkipWhitespace();
+                if (TryRead(']'))
+                    return node;
+
+                while (true)
+                {
+                    if (node.ItemCount >= BufferSerializer.MaxCollectionCount)
+                        throw Error(
+                            $"JSON sequence count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+                    var value = ParseValue(depth + 1);
+                    try
+                    {
+                        node.AddItem(value);
+                        value = default;
+                    }
+                    finally
+                    {
+                        StructuredNode.Release(ref value);
+                    }
+                    SkipWhitespace();
+                    if (TryRead(']'))
+                        return node;
+                    Expect(',');
+                }
+            }
+            catch
+            {
+                StructuredNode.Release(ref node);
+                throw;
+            }
         }
 
         private string ReadString()
         {
             SkipWhitespace();
-            Expect('"');
-            var sb = ClassPool<StringBuilder>.Get();
-            sb.Clear();
+            if (IsEnd || Read() != '"')
+                throw Error("Expected a JSON string.");
+
+            int start = _position;
+            while (!IsEnd)
+            {
+                char current = Peek();
+                if (current == '"')
+                {
+                    int length = _position - start;
+                    EnsureScalarLength(length);
+                    _position++;
+                    return length == 0 ? string.Empty : _json.Substring(start, length);
+                }
+                if (current < 0x20)
+                    throw Error("JSON strings cannot contain unescaped control characters.");
+                if (current == '\\') break;
+                _position++;
+            }
+            if (IsEnd)
+                throw Error("Unterminated JSON string.");
+
+            var builder = ClassPool<StringBuilder>.Get();
+            builder.Clear();
             try
             {
-                while (true)
+                builder.Append(_json, start, _position - start);
+                while (!IsEnd)
                 {
                     char c = Read();
-                    if (c == '\0') throw new FormatException("Unterminated JSON string.");
-                    if (c == '"') break;
-                    if (c == '\\')
+                    if (c == '"')
+                        return builder.ToString();
+                    if (c < 0x20)
+                        throw Error("JSON strings cannot contain unescaped control characters.");
+                    if (c != '\\')
                     {
-                        c = Read();
-                        switch (c)
-                        {
-                            case '"': sb.Append('"'); break;
-                            case '\\': sb.Append('\\'); break;
-                            case '/': sb.Append('/'); break;
-                            case 'b': sb.Append('\b'); break;
-                            case 'f': sb.Append('\f'); break;
-                            case 'n': sb.Append('\n'); break;
-                            case 'r': sb.Append('\r'); break;
-                            case 't': sb.Append('\t'); break;
-                            case 'u': sb.Append(ReadUnicodeEscape()); break;
-                            default: throw new FormatException(string.Format("Invalid escape sequence \\{0}", c));
-                        }
+                        builder.Append(c);
+                        EnsureScalarLength(builder.Length);
+                        continue;
                     }
-                    else
+
+                    if (IsEnd)
+                        throw Error("Incomplete JSON escape sequence.");
+                    c = Read();
+                    switch (c)
                     {
-                        if (c < 0x20) throw new FormatException("JSON strings cannot contain unescaped control characters.");
-                        sb.Append(c);
+                        case '"': builder.Append('"'); break;
+                        case '\\': builder.Append('\\'); break;
+                        case '/': builder.Append('/'); break;
+                        case 'b': builder.Append('\b'); break;
+                        case 'f': builder.Append('\f'); break;
+                        case 'n': builder.Append('\n'); break;
+                        case 'r': builder.Append('\r'); break;
+                        case 't': builder.Append('\t'); break;
+                        case 'u': builder.Append(ReadUnicodeEscape()); break;
+                        default: throw Error($"Unsupported JSON escape sequence '\\{c}'.");
                     }
+                    EnsureScalarLength(builder.Length);
                 }
-                return sb.ToString();
+                throw Error("Unterminated JSON string.");
             }
             finally
             {
-                sb.Clear();
-                ClassPool<StringBuilder>.Back(sb);
+                builder.Clear();
+                ClassPool<StringBuilder>.Back(builder);
             }
         }
 
@@ -112,342 +275,138 @@ namespace ActionBuffer
             int value = 0;
             for (int i = 0; i < 4; i++)
             {
+                if (IsEnd)
+                    throw Error("Incomplete JSON Unicode escape sequence.");
                 char c = Read();
                 int digit = c >= '0' && c <= '9' ? c - '0'
                     : c >= 'a' && c <= 'f' ? c - 'a' + 10
                     : c >= 'A' && c <= 'F' ? c - 'A' + 10
                     : -1;
-                if (digit < 0) throw new FormatException("Invalid JSON Unicode escape sequence.");
+                if (digit < 0)
+                    throw Error("Invalid JSON Unicode escape sequence.");
                 value = (value << 4) | digit;
             }
             return (char)value;
         }
 
-        private bool TryReadNull()
+        private string ReadNumber()
         {
             SkipWhitespace();
-            if (_pos + 4 > _json.Length ||
-                _json[_pos] != 'n' || _json[_pos + 1] != 'u' ||
-                _json[_pos + 2] != 'l' || _json[_pos + 3] != 'l')
-                return false;
+            int start = _position;
 
-            int end = _pos + 4;
-            if (end < _json.Length && !char.IsWhiteSpace(_json[end]) &&
-                _json[end] != ',' && _json[end] != ']' && _json[end] != '}')
-                return false;
-            _pos = end;
-            return true;
-        }
+            if (TryRead('-') && IsEnd)
+                throw Error("Incomplete JSON number.");
 
-        private void SkipValue()
-        {
-            SkipWhitespace();
-            char c = Peek();
-            if (c == '{')
+            if (TryRead('0'))
             {
-                Read();
-                SkipWhitespace();
-                if (Peek() == '}')
-                {
-                    Read();
-                    return;
-                }
-                while (true)
-                {
-                    ReadString();
-                    Expect(':');
-                    SkipValue();
-                    SkipWhitespace();
-                    if (Peek() == '}') { Read(); return; }
-                    Expect(',');
-                }
-            }
-            else if (c == '[')
-            {
-                Read();
-                SkipWhitespace();
-                if (Peek() == ']')
-                {
-                    Read();
-                    return;
-                }
-                while (true)
-                {
-                    SkipValue();
-                    SkipWhitespace();
-                    if (Peek() == ']') { Read(); return; }
-                    Expect(',');
-                }
-            }
-            else if (c == '"')
-            {
-                ReadString();
+                if (!IsEnd && IsDigit(Peek()))
+                    throw Error("JSON numbers cannot contain leading zeroes.");
             }
             else
             {
-                int start = _pos;
-                while (!char.IsWhiteSpace(Peek()) && Peek() != ',' && Peek() != ']' && Peek() != '}')
+                if (IsEnd || Peek() < '1' || Peek() > '9')
+                    throw Error("Expected a JSON number.");
+                while (!IsEnd && IsDigit(Peek()))
                     Read();
-                if (_pos == start) throw new FormatException($"Expected a JSON value at position {_pos}.");
             }
+
+            if (TryRead('.'))
+            {
+                int fractionStart = _position;
+                while (!IsEnd && IsDigit(Peek()))
+                    Read();
+                if (_position == fractionStart)
+                    throw Error("JSON fractions require at least one digit.");
+            }
+
+            if (TryRead('e') || TryRead('E'))
+            {
+                if (!TryRead('+'))
+                    TryRead('-');
+                int exponentStart = _position;
+                while (!IsEnd && IsDigit(Peek()))
+                    Read();
+                if (_position == exponentStart)
+                    throw Error("JSON exponents require at least one digit.");
+            }
+
+            if (!IsEnd && !IsValueTerminator(Peek()))
+                throw Error("Invalid character after JSON number.");
+            EnsureScalarLength(_position - start);
+            return _json.Substring(start, _position - start);
         }
 
-        public T ReadObject<T>()
+        private void CountNode()
         {
-            if (TryReadNull()) return default;
-            Expect('{');
-            SkipWhitespace();
-
-            // 空对象
-            if (Peek() == '}')
-            {
-                Read();
-                T empty = (T)TypeHelper.CreateInstance(typeof(T));
-                IBufferObject bufferObj = empty as IBufferObject;
-                if (bufferObj != null) bufferObj.AfterReadBuffer();
-                return empty;
-            }
-
-            // 保存快照，用于回退（无类型信息时）
-            int snapshot = _pos;
-            string firstKey = ReadString();
-            Expect(':');
-
-            Type actualType = typeof(T);
-            object instance = null;
-
-            // 情况1：第一个字段是 $type，则读取类型信息
-            if (firstKey == "$type")
-            {
-                string typeFullName = ReadString();
-                string assemblyName = null;
-
-                // 读取 $assembly
-                SkipWhitespace();
-                if (Peek() == ',')
-                {
-                    Read();
-                    SkipWhitespace();
-                    string nextKey = ReadString();
-                    if (nextKey == "$assembly")
-                    {
-                        Expect(':');
-                        assemblyName = ReadString();
-                        // 跳过 $assembly 后面的逗号（如果存在）
-                        SkipWhitespace();
-                        if (Peek() == ',')
-                            Read();
-                    }
-                    else
-                    {
-                        throw new FormatException("Expected $assembly after $type");
-                    }
-                }
-
-                actualType = TypeHelper.GetTypeByFullName(typeFullName, assemblyName);
-                if (actualType == null)
-                    throw new Exception(string.Format("Cannot resolve type: {0}, {1}", typeFullName, assemblyName));
-
-                instance = TypeHelper.CreateInstance(actualType);
-            }
-            else
-            {
-                // 情况2：没有 $type，回退到快照并使用泛型类型 T
-                _pos = snapshot;
-                instance = TypeHelper.CreateInstance(actualType);
-            }
-
-            var typeFields = TypeHelper.GetTypeFields(actualType);
-            bool firstField = true;
-
-            // 循环读取剩余字段（普通字段）
-            while (true)
-            {
-                SkipWhitespace();
-                if (Peek() == '}')
-                {
-                    Read();
-                    break;
-                }
-                if (!firstField) Expect(',');
-                firstField = false;
-
-                string fieldName = ReadString();
-                Expect(':');
-                var field = typeFields.FindField(fieldName);
-                if (field == null)
-                {
-                    SkipValue();
-                }
-                else
-                {
-                    var converter = BuffConverter.GetConverter(field.FieldType);
-                    object value = converter.Read(this, field.FieldType);
-                    field.SetValue(instance, value);
-                }
-            }
-
-            IBufferObject bufferObjFinal = instance as IBufferObject;
-            if (bufferObjFinal != null)
-                bufferObjFinal.AfterReadBuffer();
-            return (T)instance;
-        }
-        public T ReadObject<T>(object instance, TypeHelper.TypeFields fields)
-        {
-            if (TryReadNull()) return default;
-            Expect('{');
-            SkipWhitespace();
-
-            // 空对象
-            if (Peek() == '}')
-            {
-                Read();
-                //T empty = (T)TypeHelper.CreateInstance(typeof(T));
-                IBufferObject bufferObj = instance as IBufferObject;
-                if (bufferObj != null) bufferObj.AfterReadBuffer();
-                return (T)instance;
-            }
-
-            // 保存快照，用于回退（无类型信息时）
-            int snapshot = _pos;
-            string firstKey = ReadString();
-            Expect(':');
-
-            Type actualType = typeof(T);
-            //object instance = null;
-
-            // 情况1：第一个字段是 $type，则读取类型信息
-            if (firstKey == "$type")
-            {
-                string typeFullName = ReadString();
-                string assemblyName = null;
-
-                // 读取 $assembly
-                SkipWhitespace();
-                if (Peek() == ',')
-                {
-                    Read();
-                    SkipWhitespace();
-                    string nextKey = ReadString();
-                    if (nextKey == "$assembly")
-                    {
-                        Expect(':');
-                        assemblyName = ReadString();
-                        // 跳过 $assembly 后面的逗号（如果存在）
-                        SkipWhitespace();
-                        if (Peek() == ',')
-                            Read();
-                    }
-                    else
-                    {
-                        throw new FormatException("Expected $assembly after $type");
-                    }
-                }
-
-                //actualType = TypeHelper.GetTypeByFullName(typeFullName, assemblyName);
-                //if (actualType == null)
-                //    throw new Exception(string.Format("Cannot resolve type: {0}, {1}", typeFullName, assemblyName));
-
-                //instance = TypeHelper.CreateInstance(actualType);
-            }
-            else
-            {
-                // 情况2：没有 $type，回退到快照并使用泛型类型 T
-                _pos = snapshot;
-                //instance = TypeHelper.CreateInstance(actualType);
-            }
-
-            //var typeFields = TypeHelper.GetTypeFields(actualType);
-            bool firstField = true;
-
-            // 循环读取剩余字段（普通字段）
-            while (true)
-            {
-                SkipWhitespace();
-                if (Peek() == '}')
-                {
-                    Read();
-                    break;
-                }
-                if (!firstField) Expect(',');
-                firstField = false;
-
-                string fieldName = ReadString();
-                Expect(':');
-                var field = fields.FindField(fieldName);
-                if (field == null)
-                {
-                    SkipValue();
-                }
-                else
-                {
-                    var converter = BuffConverter.GetConverter(field.FieldType);
-                    object value = converter.Read(this, field.FieldType);
-                    field.SetValue(instance, value);
-                }
-            }
-
-            IBufferObject bufferObjFinal = instance as IBufferObject;
-            if (bufferObjFinal != null)
-                bufferObjFinal.AfterReadBuffer();
-            return (T)instance;
+            if (_nodeCount >= BufferSerializer.MaxNodeCount)
+                throw Error($"JSON node count cannot exceed {BufferSerializer.MaxNodeCount}.");
+            _nodeCount++;
         }
 
-        public List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read)
+        private void EnsureScalarLength(int length)
         {
-            SkipWhitespace();
-            if (TryReadNull()) return null;
-            Expect('[');
-            List<T> list = result;
-            bool first = true;
-            while (true)
-            {
-                SkipWhitespace();
-                if (Peek() == ']')
-                {
-                    Read();
-                    break;
-                }
-                if (!first) Expect(',');
-                first = false;
-                list.Add(read(this));
-            }
-            return list;
+            if (length > BufferSerializer.MaxScalarLength)
+                throw Error(
+                    $"JSON scalar length cannot exceed {BufferSerializer.MaxScalarLength} characters.");
         }
-        public bool ReadBool()
+
+        private void ReadLiteral(string value)
+        {
+            for (int i = 0; i < value.Length; i++)
+            {
+                if (IsEnd || Read() != value[i])
+                    throw Error($"Expected JSON literal '{value}'.");
+            }
+            if (!IsEnd && !IsValueTerminator(Peek()))
+                throw Error($"Invalid character after JSON literal '{value}'.");
+        }
+
+        private static void RequireMetadataScalar(string name, StructuredNode value)
+        {
+            if (value.Kind != StructuredNodeKind.Scalar || !value.Quoted)
+                throw new FormatException($"JSON metadata '{name}' must be a string.");
+        }
+
+        private void Expect(char expected)
         {
             SkipWhitespace();
-            if (Peek() == 't')
+            if (IsEnd || Read() != expected)
+                throw Error($"Expected '{expected}'.");
+        }
+
+        private bool TryRead(char value)
+        {
+            if (!IsEnd && Peek() == value)
             {
-                Expect('t'); Expect('r'); Expect('u'); Expect('e');
+                _position++;
                 return true;
             }
-            if (Peek() == 'f')
-            {
-                Expect('f'); Expect('a'); Expect('l'); Expect('s'); Expect('e');
-                return false;
-            }
-            throw new FormatException("Expected boolean");
+            return false;
         }
 
-        public byte ReadByte() { return (byte)ReadInt64(); }
-        public char ReadChar() { return ReadUTF8()[0]; }
-        public double ReadDouble() { return double.Parse(ReadNumber(), CultureInfo.InvariantCulture); }
-        public float ReadFloat() { return float.Parse(ReadNumber(), CultureInfo.InvariantCulture); }
-        public short ReadInt16() { return (short)ReadInt64(); }
-        public int ReadInt32() { return (int)ReadInt64(); }
-        public long ReadInt64() { return long.Parse(ReadNumber(), CultureInfo.InvariantCulture); }
-        public ushort ReadUInt16() { return (ushort)ReadInt64(); }
-        public uint ReadUInt32() { return (uint)ReadInt64(); }
-        public ulong ReadUInt64() { return (ulong)ReadInt64(); }
-        public string ReadUTF8() { return TryReadNull() ? null : ReadString(); }
-
-        public Enum ReadEnum(Type type)
+        private void SkipWhitespace()
         {
-            string value = ReadString();
-            return (Enum)Enum.Parse(type, value);
+            while (!IsEnd)
+            {
+                char c = Peek();
+                if (c != ' ' && c != '\t' && c != '\r' && c != '\n')
+                    break;
+                _position++;
+            }
         }
 
+        private static bool IsDigit(char value) => value >= '0' && value <= '9';
 
+        private static bool IsValueTerminator(char value)
+        {
+            return value == ',' || value == ']' || value == '}' ||
+                   value == ' ' || value == '\t' || value == '\r' || value == '\n';
+        }
+
+        private bool IsEnd => _position >= _json.Length;
+        private char Peek() => _json[_position];
+        private char Read() => _json[_position++];
+        private FormatException Error(string message) =>
+            new FormatException($"JSON position {_position}: {message}");
     }
 }

@@ -1,258 +1,232 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Globalization;
 using System.Text;
+
 namespace ActionBuffer
 {
-    public class JsonWriter : IBufferWriter
+    public class JsonWriter : StructuredTextWriter
     {
-        private readonly StringBuilder _sb = new StringBuilder();
-        private readonly Stack<WriteContext> _contexts = new Stack<WriteContext>();
-        private BufferScan scan;
-        private bool _prettyPrint, _typeInfo, _fullField;
-        private int _indentLevel;
+        private readonly StringBuilder _builder = new StringBuilder();
+        private bool _prettyPrint;
 
-        public bool CollectMeta => false;
-        public bool FullField => _fullField;
-
-        public JsonWriter() { }
-
-        public void Init(BufferScan scan)
-        {
-            ResetOutput();
-            ReleaseScan();
-            this.scan = scan ?? throw new ArgumentNullException(nameof(scan));
-            scan.ResetRead();
-        }
-
-        public void Clear()
-        {
-            ResetOutput();
-            ReleaseScan();
-            _prettyPrint = false;
-            _typeInfo = false;
-            _fullField = false;
-        }
-
-        private void ResetOutput()
-        {
-            _sb.Clear();
-            _contexts.Clear();
-            _indentLevel = 0;
-        }
-
-        private void ReleaseScan()
-        {
-            var currentScan = scan;
-            scan = null;
-            BufferScan.Back(currentScan);
-        }
-
-        private BufferScan RequireScan()
-        {
-            if (scan == null)
-                throw new InvalidOperationException("JsonWriter requires a completed BufferScan before writing objects or collections.");
-            return scan;
-        }
         public bool prettyPrint
         {
             get { return _prettyPrint; }
             set { _prettyPrint = value; }
         }
-        public bool typeInfo
+
+        public string GetJson()
         {
-            get { return _typeInfo; }
-            set { _typeInfo = value; }
-        }
-        public bool fullField
-        {
-            get { return _fullField; }
-            set { _fullField = value; }
-        }
-        private struct WriteContext
-        {
-            public bool IsArray;
-            public bool HasElements;
-        }
-        private void WriteIndent()
-        {
-            if (!_prettyPrint) return;
-            _sb.Append('\n');
-            _sb.Append(' ', _indentLevel * 2);
+            _builder.Clear();
+            Write(GetRoot(), _builder, _prettyPrint);
+            return _builder.ToString();
         }
 
-        private void WriteSpaceIfPretty()
+        public override void Clear()
         {
-            if (_prettyPrint) _sb.Append(' ');
+            _builder.Clear();
+            if (_builder.Capacity > BufferSerializer.RetainedTextCapacity)
+                _builder.Capacity = 1024;
+            _prettyPrint = false;
+            base.Clear();
         }
 
-        private void PushContext(bool isArray)
+        private static void Write(StructuredNode node, StringBuilder builder, bool prettyPrint)
         {
-            _contexts.Push(new WriteContext { IsArray = isArray, HasElements = false });
-            if (_prettyPrint)
+            if (builder == null) throw new ArgumentNullException(nameof(builder));
+            WriteNode(node, builder, prettyPrint, 0);
+        }
+
+        private static void WriteNode(StructuredNode node, StringBuilder builder, bool prettyPrint, int indent)
+        {
+            switch (node.Kind)
             {
-                _indentLevel++;
-                //WriteIndent();
+                case StructuredNodeKind.Null:
+                    builder.Append("null");
+                    break;
+                case StructuredNodeKind.Scalar:
+                    WriteScalar(node, builder);
+                    break;
+                case StructuredNodeKind.Object:
+                    WriteObject(node, builder, prettyPrint, indent);
+                    break;
+                case StructuredNodeKind.Sequence:
+                    WriteSequence(node, builder, prettyPrint, indent);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(node));
             }
+            EnsureLength(builder);
         }
 
-        private void PopContext()
+        private static void WriteObject(StructuredNode node, StringBuilder builder, bool prettyPrint, int indent)
         {
-            if (_prettyPrint)
+            builder.Append('{');
+            int memberIndex = 0;
+
+            if (!string.IsNullOrEmpty(node.TypeName))
             {
-                _indentLevel--;
-                WriteIndent();
+                WritePropertyPrefix("$type", memberIndex++, builder, prettyPrint, indent);
+                WriteString(node.TypeName, builder);
+                WritePropertyPrefix("$assembly", memberIndex++, builder, prettyPrint, indent);
+                WriteString(node.AssemblyName ?? string.Empty, builder);
             }
-            _contexts.Pop();
+
+            for (int i = 0; i < node.FieldCount; i++)
+            {
+                var field = node.GetField(i);
+                WritePropertyPrefix(StructuredNode.EncodeTextFieldName(field.Name), memberIndex++, builder, prettyPrint, indent);
+                WriteNode(field.Value, builder, prettyPrint, indent + 1);
+            }
+
+            if (prettyPrint && memberIndex > 0)
+            {
+                builder.Append('\n');
+                AppendIndent(builder, indent);
+            }
+            builder.Append('}');
         }
 
-        private void WriteCommaIfNeeded()
+        private static void WritePropertyPrefix(string name, int index, StringBuilder builder, bool prettyPrint, int indent)
         {
-            if (_contexts.Count == 0) return;
-            WriteContext ctx = _contexts.Pop();
-            if (ctx.HasElements)
-                _sb.Append(',');
+            if (index > 0)
+                builder.Append(',');
+            if (prettyPrint)
+            {
+                builder.Append('\n');
+                AppendIndent(builder, indent + 1);
+            }
+            WriteString(name, builder);
+            builder.Append(':');
+            if (prettyPrint)
+                builder.Append(' ');
+        }
+
+        private static void WriteSequence(StructuredNode node, StringBuilder builder, bool prettyPrint, int indent)
+        {
+            builder.Append('[');
+            for (int i = 0; i < node.ItemCount; i++)
+            {
+                if (i > 0)
+                    builder.Append(',');
+                if (prettyPrint)
+                {
+                    builder.Append('\n');
+                    AppendIndent(builder, indent + 1);
+                }
+                WriteNode(node.GetItem(i), builder, prettyPrint, indent + 1);
+            }
+            if (prettyPrint && node.ItemCount > 0)
+            {
+                builder.Append('\n');
+                AppendIndent(builder, indent);
+            }
+            builder.Append(']');
+        }
+
+        private static void WriteScalar(StructuredNode node, StringBuilder builder)
+        {
+            if (node.Quoted || !IsJsonLiteral(node.Scalar))
+                WriteString(node.Scalar ?? string.Empty, builder);
             else
-                ctx.HasElements = true;
-            _contexts.Push(ctx);
+                builder.Append(node.Scalar);
         }
 
-        public void WriteRaw(string value)
+        private static bool IsJsonLiteral(string value)
         {
-            _sb.Append(value);
+            if (value == "true" || value == "false") return true;
+            if (string.IsNullOrEmpty(value)) return false;
+
+            int index = 0;
+            if (value[index] == '-')
+            {
+                index++;
+                if (index == value.Length) return false;
+            }
+
+            if (value[index] == '0')
+            {
+                index++;
+            }
+            else
+            {
+                if (value[index] < '1' || value[index] > '9') return false;
+                while (index < value.Length && value[index] >= '0' && value[index] <= '9')
+                    index++;
+            }
+
+            if (index < value.Length && value[index] == '.')
+            {
+                index++;
+                int fractionStart = index;
+                while (index < value.Length && value[index] >= '0' && value[index] <= '9')
+                    index++;
+                if (index == fractionStart) return false;
+            }
+
+            if (index < value.Length && (value[index] == 'e' || value[index] == 'E'))
+            {
+                index++;
+                if (index < value.Length && (value[index] == '+' || value[index] == '-'))
+                    index++;
+                int exponentStart = index;
+                while (index < value.Length && value[index] >= '0' && value[index] <= '9')
+                    index++;
+                if (index == exponentStart) return false;
+            }
+
+            return index == value.Length;
         }
 
-        private void WriteString(string value)
+        private static void WriteString(string value, StringBuilder builder)
         {
             if (value == null)
             {
-                WriteRaw("null");
+                builder.Append("null");
                 return;
             }
-            _sb.Append('"');
+
+            builder.Append('"');
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
                 switch (c)
                 {
-                    case '"': _sb.Append("\\\""); break;
-                    case '\\': _sb.Append("\\\\"); break;
-                    case '\b': _sb.Append("\\b"); break;
-                    case '\f': _sb.Append("\\f"); break;
-                    case '\n': _sb.Append("\\n"); break;
-                    case '\r': _sb.Append("\\r"); break;
-                    case '\t': _sb.Append("\\t"); break;
+                    case '"': builder.Append("\\\""); break;
+                    case '\\': builder.Append("\\\\"); break;
+                    case '\b': builder.Append("\\b"); break;
+                    case '\f': builder.Append("\\f"); break;
+                    case '\n': builder.Append("\\n"); break;
+                    case '\r': builder.Append("\\r"); break;
+                    case '\t': builder.Append("\\t"); break;
                     default:
                         if (c < 0x20)
-                            _sb.Append(string.Format("\\u{0:X4}", (int)c));
+                        {
+                            builder.Append("\\u");
+                            builder.Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+                        }
                         else
-                            _sb.Append(c);
+                        {
+                            builder.Append(c);
+                        }
                         break;
                 }
+                EnsureLength(builder);
             }
-            _sb.Append('"');
+            builder.Append('"');
+            EnsureLength(builder);
         }
 
-        public string GetJson()
+        private static void AppendIndent(StringBuilder builder, int indent)
         {
-            return _sb.ToString();
+            builder.Append(' ', indent * 2);
         }
 
-        private void WriteTypeInfo(Type type)
+        private static void EnsureLength(StringBuilder builder)
         {
-            if (!typeInfo) return;
-            WriteString("$type");
-            WriteRaw(":");
-            WriteSpaceIfPretty();
-            WriteString(type.FullName);
-            WriteRaw(",");
-
-            //WriteCommaIfNeeded();
-            WriteIndent();
-            WriteString("$assembly");
-            WriteRaw(":");
-            WriteSpaceIfPretty();
-            WriteString(type.Assembly.FullName);
-            //WriteRaw(",");
-            WriteCommaIfNeeded();
-
+            if (builder.Length > BufferSerializer.MaxTextLength)
+                throw new FormatException(
+                    $"JSON output length cannot exceed {BufferSerializer.MaxTextLength} characters.");
         }
-
-        //public void WriteObject<T>(T value)
-        //{
-        //    WriteObject(value, value == null ? null : TypeHelper.GetTypeFields(value.GetType()));
-
-        //}
-        public void WriteObject<T>(T value, TypeHelper.TypeFields _fields)
-        {
-            var cached = RequireScan().ReadObject();
-            if (cached.Value == null)
-            {
-                WriteRaw("null");
-                return;
-            }
-
-            PushContext(false);
-            WriteRaw("{");
-            if (_prettyPrint) WriteIndent();
-
-            WriteTypeInfo(cached.Type);
-
-            int _count = 0;
-            for (int i = 0; i < cached.Fields.Count; i++)
-            {
-                var cachedField = cached.Fields[i];
-
-                WriteCommaIfNeeded();
-                if (typeInfo || _count++ != 0)
-                    WriteIndent();
-                WriteString(cachedField.Field.name);
-                WriteRaw(":");
-                WriteSpaceIfPretty();
-                cachedField.Converter.Write(this, cachedField.Value);
-            }
-
-            PopContext();
-            WriteRaw("}");
-        }
-
-        public void WriteIEnumerable<T>(IEnumerable<T> values, Action<IBufferWriter, T> write)
-        {
-            var cachedValues = RequireScan().ReadEnumerable<T>();
-            if (cachedValues == null)
-            {
-                WriteRaw("null");
-                return;
-            }
-
-            PushContext(true);
-            WriteRaw("[");
-            if (_prettyPrint && cachedValues.Count > 0) WriteIndent();
-            for (int i = 0; i < cachedValues.Count; i++)
-            {
-                if (i > 0)
-                {
-                    WriteRaw(",");
-                    if (_prettyPrint) WriteIndent();
-                }
-                write(this, cachedValues[i]);
-            }
-
-            PopContext();
-            WriteRaw("]");
-        }
-        public void WriteBool(bool value) { WriteRaw(value ? "true" : "false"); }
-        public void WriteByte(byte value) { WriteRaw(value.ToString()); }
-        public void WriteChar(char value) { WriteString(value.ToString()); }
-        public void WriteDouble(double value) { WriteRaw(value.ToString("R", CultureInfo.InvariantCulture)); }
-        public void WriteFloat(float value) { WriteRaw(value.ToString("R", CultureInfo.InvariantCulture)); }
-        public void WriteInt16(short value) { WriteRaw(value.ToString()); }
-        public void WriteInt32(int value) { WriteRaw(value.ToString()); }
-        public void WriteInt64(long value) { WriteRaw(value.ToString()); }
-        public void WriteUInt16(ushort value) { WriteRaw(value.ToString()); }
-        public void WriteUInt32(uint value) { WriteRaw(value.ToString()); }
-        public void WriteUInt64(ulong value) { WriteRaw(value.ToString()); }
-        public void WriteUTF8(string value) { WriteString(value); }
-        public void WriteEnum(Enum data) { WriteString(data.ToString()); }
     }
 }

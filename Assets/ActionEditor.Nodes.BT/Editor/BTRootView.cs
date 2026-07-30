@@ -1,4 +1,3 @@
-using System.Linq;
 using UnityEditor.Experimental.GraphView;
 
 namespace ActionEditor.Nodes.BT
@@ -14,12 +13,25 @@ namespace ActionEditor.Nodes.BT
         public override void OnBTTreeChanged(BTTree tree)
         {
             base.OnBTTreeChanged(tree);
-            running = false;
-            if (tree != null)
+            running = IsCurrentTreeRunning(BTTree.instance, App.asset.guid);
+        }
+
+        private static bool IsCurrentTreeRunning(BTTree tree, string guid)
+        {
+            if (tree == null)
+                return false;
+            if (tree.guid == guid)
+                return true;
+
+            var subTrees = tree.subs;
+            if (subTrees == null)
+                return false;
+            for (int i = 0; i < subTrees.Count; i++)
             {
-                running = BTTree.instance.guid == App.asset.guid ||
-                BTTree.instance.subs.Any(x => x.guid == App.asset.guid);
+                if (IsCurrentTreeRunning(subTrees[i], guid))
+                    return true;
             }
+            return false;
         }
         protected override bool IsRunning()
         {

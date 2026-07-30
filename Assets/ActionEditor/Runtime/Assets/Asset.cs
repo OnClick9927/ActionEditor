@@ -92,11 +92,11 @@ namespace ActionEditor
 
 
 
-        public byte[] ToBytes() => BuffConverter.ToBytes(this);
+        public byte[] ToBytes() => BufferSerializer.ToBytes(this);
 
         public static Asset FromBytes(Type type, byte[] buffer)
         {
-            var asset = BuffConverter.ToObject(buffer, type) as Asset;
+            var asset = BufferSerializer.ToObject(buffer, type) as Asset;
             asset.Validate();
             return asset;
         }

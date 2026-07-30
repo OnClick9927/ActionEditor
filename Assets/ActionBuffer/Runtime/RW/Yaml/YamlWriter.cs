@@ -11,20 +11,19 @@ namespace ActionBuffer
         public string GetYaml()
         {
             _builder.Clear();
-            YamlWriting.Write(GetRoot(), _builder);
+            Write(GetRoot(), _builder);
             return _builder.ToString();
         }
 
         public override void Clear()
         {
             _builder.Clear();
+            if (_builder.Capacity > BufferSerializer.RetainedTextCapacity)
+                _builder.Capacity = 1024;
             base.Clear();
         }
-    }
 
-    internal static class YamlWriting
-    {
-        public static void Write(StructuredNode node, StringBuilder builder)
+        private static void Write(StructuredNode node, StringBuilder builder)
         {
             if (IsBlock(node))
                 WriteBlock(node, builder, 0);
@@ -33,13 +32,14 @@ namespace ActionBuffer
                 WriteInline(node, builder);
                 builder.Append('\n');
             }
+            EnsureLength(builder);
         }
 
         private static bool IsBlock(StructuredNode node)
         {
             if (node.Kind == StructuredNodeKind.Object)
-                return node.Fields.Count > 0 || !string.IsNullOrEmpty(node.TypeName);
-            return node.Kind == StructuredNodeKind.Sequence && node.Items.Count > 0;
+                return node.FieldCount > 0 || !string.IsNullOrEmpty(node.TypeName);
+            return node.Kind == StructuredNodeKind.Sequence && node.ItemCount > 0;
         }
 
         private static void WriteBlock(StructuredNode node, StringBuilder builder, int indent)
@@ -52,10 +52,11 @@ namespace ActionBuffer
                     WriteScalarEntry("$assembly", node.AssemblyName ?? string.Empty, builder, indent);
                 }
 
-                for (int i = 0; i < node.Fields.Count; i++)
+                for (int i = 0; i < node.FieldCount; i++)
                 {
-                    var field = node.Fields[i];
-                    WriteEntry(field.Name, field.Value, builder, indent);
+                    var field = node.GetField(i);
+                    WriteEntry(StructuredNode.EncodeTextFieldName(field.Name), field.Value, builder, indent);
+                    EnsureLength(builder);
                 }
                 return;
             }
@@ -63,11 +64,11 @@ namespace ActionBuffer
             if (node.Kind != StructuredNodeKind.Sequence)
                 throw new InvalidOperationException($"Cannot write {node.Kind} as a YAML block.");
 
-            for (int i = 0; i < node.Items.Count; i++)
+            for (int i = 0; i < node.ItemCount; i++)
             {
                 AppendIndent(builder, indent);
                 builder.Append('-');
-                var item = node.Items[i];
+                var item = node.GetItem(i);
                 if (IsBlock(item))
                 {
                     builder.Append('\n');
@@ -79,6 +80,7 @@ namespace ActionBuffer
                     WriteInline(item, builder);
                     builder.Append('\n');
                 }
+                EnsureLength(builder);
             }
         }
 
@@ -121,6 +123,7 @@ namespace ActionBuffer
                         AppendQuoted(node.Scalar ?? string.Empty, builder);
                     else
                         builder.Append(node.Scalar);
+                    EnsureLength(builder);
                     break;
                 case StructuredNodeKind.Object:
                     builder.Append("{}");
@@ -168,8 +171,17 @@ namespace ActionBuffer
                         }
                         break;
                 }
+                EnsureLength(builder);
             }
             builder.Append('"');
+            EnsureLength(builder);
+        }
+
+        private static void EnsureLength(StringBuilder builder)
+        {
+            if (builder.Length > BufferSerializer.MaxTextLength)
+                throw new FormatException(
+                    $"YAML output length cannot exceed {BufferSerializer.MaxTextLength} characters.");
         }
     }
 }

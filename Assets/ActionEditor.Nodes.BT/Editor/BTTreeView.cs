@@ -87,7 +87,7 @@ namespace ActionEditor.Nodes.BT
                 {
                     if (BTTree.instance != null)
                     {
-                        if (App.asset.guid == BTTree.instance.guid || BTTree.instance.subs.Any(x => x.guid == App.asset.guid))
+                        if (FindRunningTree(BTTree.instance, App.asset.guid) != null)
                         {
                             Runing_BlackBoard = true;
                         }
@@ -169,17 +169,36 @@ namespace ActionEditor.Nodes.BT
 
             BTTree.onInstanceChanged += BTTree_onInstanceChanged;
         }
+        private static BTTree FindRunningTree(BTTree tree, string guid)
+        {
+            if (tree == null)
+                return null;
+            if (tree.guid == guid)
+                return tree;
+
+            var subTrees = tree.subs;
+            if (subTrees == null)
+                return null;
+            for (int i = 0; i < subTrees.Count; i++)
+            {
+                var result = FindRunningTree(subTrees[i], guid);
+                if (result != null)
+                    return result;
+            }
+            return null;
+        }
+
         private void BTTree_onInstanceChanged(BTTree tree)
         {
-            if (tree != null && tree.guid != this.graph.guid)
-                tree = null;
+            tree = FindRunningTree(tree, this.graph.guid);
             this.runningTree = tree;
             OnBTTreeChanged(tree);
 
-            for (int i = 0; this.nodes.Count > i; i++)
+            var nodes = this.nodes;
+            for (int i = 0; nodes.Count > i; i++)
             {
-                var node = this.nodes[i] as IBTNodeView;
-                node.OnBTTreeChanged(tree);
+                if (nodes[i] is IBTNodeView node)
+                    node.OnBTTreeChanged(tree);
             }
         }
         protected virtual void OnBTTreeChanged(BTTree tree)
