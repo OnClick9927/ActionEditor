@@ -9,6 +9,13 @@ using UnityEngine.UIElements;
 
 namespace ActionEditor.Nodes
 {
+    public static class GraphWindowBridge
+    {
+        public static void SetLeftSidebar(VisualElement content) =>
+            App.window?.SetLeftSidebar(content);
+
+        public static void Repaint() => App.window?.Repaint();
+    }
 
     class GraphWindow : EditorWindow, ISearchWindowProvider
     {
@@ -128,6 +135,8 @@ namespace ActionEditor.Nodes
 
         private NodeGraphView view;
         private VisualElement left;
+        private VisualElement leftSidebar;
+        private VisualElement graphHost;
         //private Label saveTime;
         private GridView grid;
         private TwoPaneSplitView split;
@@ -148,6 +157,18 @@ namespace ActionEditor.Nodes
             split.orientation = TwoPaneSplitViewOrientation.Horizontal;
             split.style.flexGrow = 1; // 让分割视图占满父容器
             left = new VisualElement();
+            left.style.flexDirection = FlexDirection.Row;
+            left.style.flexGrow = 1;
+            leftSidebar = new VisualElement();
+            leftSidebar.style.display = DisplayStyle.None;
+            leftSidebar.style.width = 240;
+            leftSidebar.style.minWidth = 180;
+            leftSidebar.style.flexShrink = 0;
+            graphHost = new VisualElement();
+            graphHost.style.flexGrow = 1;
+            graphHost.style.minWidth = 0;
+            left.Add(leftSidebar);
+            left.Add(graphHost);
             right = new IMGUIContainer(this.DrawInspector);
 
             // 6. 将两个面板添加到分割视图（必须按 0、1 顺序）
@@ -220,15 +241,26 @@ namespace ActionEditor.Nodes
 
             if (view != null)
             {
-                view.parent.Remove(view);
+                view.RemoveFromHierarchy();
             }
             view = null;
-            left.Clear();
-            view = App.CreateView(left);
+            SetLeftSidebar(null);
+            graphHost.Clear();
+            view = App.CreateView(graphHost);
             left.visible = view != null;
             grid.visible = !left.visible;
             if (view != null)
                 this.titleContent = new GUIContent(EditorEX.GetTypeName(App.asset));
+        }
+
+        internal void SetLeftSidebar(VisualElement content)
+        {
+            leftSidebar.Clear();
+            leftSidebar.style.display = content == null ? DisplayStyle.None : DisplayStyle.Flex;
+            if (content == null) return;
+
+            content.style.flexGrow = 1;
+            leftSidebar.Add(content);
         }
 
         private class GridView : GraphView
