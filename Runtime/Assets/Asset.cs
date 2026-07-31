@@ -1,4 +1,4 @@
-﻿using ActionBuffer;
+using ActionBuffer;
 using System;
 using System.Collections.Generic;
 
@@ -92,11 +92,11 @@ namespace ActionEditor
 
 
 
-        public byte[] ToBytes() => BufferSerializer.ToBytes(this);
+        public byte[] ToBytes() => BuffSerializer.ToBytes(this);
 
         public static Asset FromBytes(Type type, byte[] buffer)
         {
-            var asset = BufferSerializer.ToObject(buffer, type) as Asset;
+            var asset = BuffSerializer.FromBytes(buffer, type) as Asset;
             asset.Validate();
             return asset;
         }
