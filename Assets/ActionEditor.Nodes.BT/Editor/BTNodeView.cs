@@ -9,6 +9,7 @@ namespace ActionEditor.Nodes.BT
 {
     interface IBTNodeView
     {
+        bool IsTreeNodeRunning { get; }
         void OnBTTreeChanged(BTTree tree);
     }
     public class BTNodeView<T> : GraphNode<T>, IBTNodeView where T : BTNode, new()
@@ -16,6 +17,7 @@ namespace ActionEditor.Nodes.BT
         private GraphConnection flow;
         ProgressBar progress;
         public BTNode runningNode { get; protected set; }
+        bool IBTNodeView.IsTreeNodeRunning => IsRunning();
         protected new Port GeneratePort(Direction portDir, Type type, Port.Capacity capacity = Port.Capacity.Single, string name = "")
         {
             var port = base.GeneratePort(portDir, type, capacity, name);
