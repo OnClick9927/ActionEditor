@@ -1,4 +1,4 @@
-﻿using ActionBuffer;
+using ActionBuffer;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -49,11 +49,11 @@ namespace ActionEditor.Nodes
             this._groups.AddRange(groups);
 
         }
-        public byte[] ToBytes() => BufferSerializer.ToBytes(this);
+        public byte[] ToBytes() => BuffSerializer.ToBytes(this);
 
         public static GraphAsset FromBytes(Type type, byte[] buffer)
         {
-            var asset = BufferSerializer.ToObject(buffer, type) as GraphAsset;
+            var asset = BuffSerializer.FromBytes(buffer, type) as GraphAsset;
             asset.Valid();
             return asset;
         }
