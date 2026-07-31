@@ -78,6 +78,8 @@ namespace ActionEditor.Nodes.BT
             private static readonly string[] SubTreeDepthLabels =
                 CreateSubTreeDepthLabels();
             private static Texture2D _runningIcon;
+            private static GUIStyle _nodeLabelStyle;
+            private static GUIStyle _selectedNodeLabelStyle;
             private static GUIStyle _subTreeMarkerStyle;
             private readonly BTTreeView<T> _owner;
             private readonly Dictionary<int, int> _visibleRowIndices =
@@ -144,8 +146,22 @@ namespace ActionEditor.Nodes.BT
 
                 bool fromSubTree = entry.SubTreeDepth > 0;
                 var baseArgs = args;
+                string displayName = baseArgs.label;
+                baseArgs.label = string.Empty;
                 if (fromSubTree) baseArgs.rowRect.xMax -= SubTreeMarkerWidth;
                 base.RowGUI(baseArgs);
+
+                if (!args.isRenaming)
+                {
+                    Rect labelRect = GetRenameRect(args.rowRect, args.row, item);
+                    labelRect.y = args.rowRect.y;
+                    labelRect.height = args.rowRect.height;
+                    if (fromSubTree)
+                        labelRect.xMax = Mathf.Min(labelRect.xMax,
+                            args.rowRect.xMax - SubTreeMarkerWidth);
+                    GUI.Label(labelRect, displayName,
+                        GetNodeLabelStyle(args.selected && args.focused));
+                }
 
                 if (running)
                 {
@@ -167,6 +183,23 @@ namespace ActionEditor.Nodes.BT
                     GetSubTreeMarkerStyle());
                 GUI.Label(args.rowRect, new GUIContent(string.Empty, entry.SourcePath),
                     GUIStyle.none);
+            }
+
+            private static GUIStyle GetNodeLabelStyle(bool selected)
+            {
+                if (_nodeLabelStyle == null)
+                {
+                    _nodeLabelStyle = new GUIStyle(EditorStyles.label)
+                    {
+                        alignment = TextAnchor.MiddleLeft,
+                        contentOffset = new Vector2(0, 1),
+                        padding = new RectOffset(),
+                        clipping = TextClipping.Clip
+                    };
+                    _selectedNodeLabelStyle = new GUIStyle(_nodeLabelStyle);
+                    _selectedNodeLabelStyle.normal.textColor = Color.white;
+                }
+                return selected ? _selectedNodeLabelStyle : _nodeLabelStyle;
             }
 
             private static string[] CreateSubTreeDepthLabels()
