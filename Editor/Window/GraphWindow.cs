@@ -9,6 +9,11 @@ using UnityEngine.UIElements;
 
 namespace ActionEditor.Nodes
 {
+    public interface IGraphInspectorOverride
+    {
+        bool DrawInspectorOverride();
+    }
+
     public static class GraphWindowBridge
     {
         public static void SetLeftSidebar(VisualElement content) =>
@@ -136,7 +141,11 @@ namespace ActionEditor.Nodes
         private NodeGraphView view;
         private VisualElement left;
         private VisualElement leftSidebar;
+        private VisualElement leftSidebarResizeHandle;
         private VisualElement graphHost;
+        private bool resizingLeftSidebar;
+        private float resizeStartX;
+        private float resizeStartWidth;
         //private Label saveTime;
         private GridView grid;
         private TwoPaneSplitView split;
@@ -162,12 +171,22 @@ namespace ActionEditor.Nodes
             leftSidebar = new VisualElement();
             leftSidebar.style.display = DisplayStyle.None;
             leftSidebar.style.width = 240;
-            leftSidebar.style.minWidth = 180;
+            leftSidebar.style.minWidth = 200;
             leftSidebar.style.flexShrink = 0;
+            leftSidebarResizeHandle = new VisualElement();
+            leftSidebarResizeHandle.style.display = DisplayStyle.None;
+            leftSidebarResizeHandle.style.width = 4;
+            leftSidebarResizeHandle.style.flexShrink = 0;
+            leftSidebarResizeHandle.style.backgroundColor = new Color(0f, 0f, 0f, 0.3f);
+            leftSidebarResizeHandle.RegisterCallback<PointerDownEvent>(BeginResizeLeftSidebar);
+            leftSidebarResizeHandle.RegisterCallback<PointerMoveEvent>(ResizeLeftSidebar);
+            leftSidebarResizeHandle.RegisterCallback<PointerUpEvent>(EndResizeLeftSidebar);
+            leftSidebarResizeHandle.RegisterCallback<PointerCaptureOutEvent>(CancelResizeLeftSidebar);
             graphHost = new VisualElement();
             graphHost.style.flexGrow = 1;
             graphHost.style.minWidth = 0;
             left.Add(leftSidebar);
+            left.Add(leftSidebarResizeHandle);
             left.Add(graphHost);
             right = new IMGUIContainer(this.DrawInspector);
 
@@ -229,7 +248,12 @@ namespace ActionEditor.Nodes
 
 
         }
-        private void DrawInspector() => view?.DrawInspector();
+        private void DrawInspector()
+        {
+            if (view is IGraphInspectorOverride inspector && inspector.DrawInspectorOverride())
+                return;
+            view?.DrawInspector();
+        }
         private void OnDisable() => App.OnWindowDisable();
 
         List<SearchTreeEntry> ISearchWindowProvider.CreateSearchTree(SearchWindowContext context) => view?.CreateSearchTree(context);
@@ -257,10 +281,49 @@ namespace ActionEditor.Nodes
         {
             leftSidebar.Clear();
             leftSidebar.style.display = content == null ? DisplayStyle.None : DisplayStyle.Flex;
+            leftSidebarResizeHandle.style.display = content == null
+                ? DisplayStyle.None
+                : DisplayStyle.Flex;
             if (content == null) return;
 
             content.style.flexGrow = 1;
             leftSidebar.Add(content);
+        }
+
+        private void BeginResizeLeftSidebar(PointerDownEvent evt)
+        {
+            if (evt.button != 0) return;
+            resizingLeftSidebar = true;
+            resizeStartX = evt.position.x;
+            resizeStartWidth = leftSidebar.resolvedStyle.width;
+            leftSidebarResizeHandle.CapturePointer(evt.pointerId);
+            evt.StopPropagation();
+        }
+
+        private void ResizeLeftSidebar(PointerMoveEvent evt)
+        {
+            if (!resizingLeftSidebar ||
+                !leftSidebarResizeHandle.HasPointerCapture(evt.pointerId)) return;
+
+            float width = resizeStartWidth + evt.position.x - resizeStartX;
+            float maxWidth = left.resolvedStyle.width - 200;
+            if (!float.IsNaN(maxWidth) && maxWidth >= 200)
+                width = Mathf.Min(width, maxWidth);
+            leftSidebar.style.width = Mathf.Max(200, width);
+            evt.StopPropagation();
+        }
+
+        private void EndResizeLeftSidebar(PointerUpEvent evt)
+        {
+            if (!resizingLeftSidebar || evt.button != 0) return;
+            resizingLeftSidebar = false;
+            leftSidebarResizeHandle.ReleasePointer(evt.pointerId);
+            evt.StopPropagation();
+        }
+
+        private void CancelResizeLeftSidebar(PointerCaptureOutEvent evt)
+        {
+            resizingLeftSidebar = false;
         }
 
         private class GridView : GraphView
