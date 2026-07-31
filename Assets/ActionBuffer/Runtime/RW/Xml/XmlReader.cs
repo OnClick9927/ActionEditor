@@ -6,17 +6,45 @@ namespace ActionBuffer
 {
     public sealed class XmlReader : StructuredTextReader
     {
-        public void Init(string data)
+        private readonly struct ParseLimits
+        {
+            internal readonly int MaxTextLength;
+            internal readonly int MaxDepth;
+            internal readonly int MaxNodeCount;
+            internal readonly int MaxCollectionCount;
+            internal readonly int MaxObjectFieldCount;
+            internal readonly int MaxScalarLength;
+
+            internal ParseLimits(int maxTextLength, int maxDepth, int maxNodeCount,
+                int maxCollectionCount, int maxObjectFieldCount, int maxScalarLength)
+            {
+                MaxTextLength = maxTextLength;
+                MaxDepth = maxDepth;
+                MaxNodeCount = maxNodeCount;
+                MaxCollectionCount = maxCollectionCount;
+                MaxObjectFieldCount = maxObjectFieldCount;
+                MaxScalarLength = maxScalarLength;
+            }
+        }
+
+        public void Init(string data, BuffSettings settings = null)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
-            Clear();
-            if (data.Length > BufferSerializer.MaxTextLength)
+            Prepare(settings);
+            var limits = new ParseLimits(
+                BuffSettings.MaxTextLength,
+                BuffSettings.MaxDepth,
+                BuffSettings.MaxNodeCount,
+                BuffSettings.MaxCollectionCount,
+                BuffSettings.MaxObjectFieldCount,
+                BuffSettings.MaxScalarLength);
+            if (data.Length > limits.MaxTextLength)
                 throw new FormatException(
-                    $"XML length cannot exceed {BufferSerializer.MaxTextLength} characters.");
+                    $"XML length cannot exceed {limits.MaxTextLength} characters.");
             var root = default(StructuredNode);
             try
             {
-                root = Parse(data);
+                root = Parse(data, limits);
                 SetRoot(root);
                 root = default;
             }
@@ -26,14 +54,14 @@ namespace ActionBuffer
             }
         }
 
-        private static StructuredNode Parse(string xml)
+        private StructuredNode Parse(string xml, ParseLimits limits)
         {
             var settings = new XmlReaderSettings
             {
                 DtdProcessing = DtdProcessing.Prohibit,
                 XmlResolver = null,
                 IgnoreComments = true,
-                MaxCharactersInDocument = BufferSerializer.MaxTextLength
+                MaxCharactersInDocument = limits.MaxTextLength
             };
 
             using (var stringReader = new StringReader(xml))
@@ -43,7 +71,7 @@ namespace ActionBuffer
                     throw Error(reader, "XML root element must be 'ActionBuffer'.");
 
                 int nodeCount = 0;
-                var root = ParseNode(reader, 0, ref nodeCount);
+                var root = ParseNode(reader, 0, ref nodeCount, limits);
                 try
                 {
                     if (reader.MoveToContent() != XmlNodeType.None)
@@ -58,13 +86,14 @@ namespace ActionBuffer
             }
         }
 
-        private static StructuredNode ParseNode(System.Xml.XmlReader reader, int depth, ref int nodeCount)
+        private StructuredNode ParseNode(System.Xml.XmlReader reader, int depth,
+            ref int nodeCount, ParseLimits limits)
         {
-            int maxDepth = BufferSerializerSettings.DefaultSetting.MaxDepth;
+            int maxDepth = limits.MaxDepth;
             if (depth >= maxDepth)
                 throw Error(reader, $"XML depth cannot exceed {maxDepth}.");
-            if (nodeCount >= BufferSerializer.MaxNodeCount)
-                throw Error(reader, $"XML node count cannot exceed {BufferSerializer.MaxNodeCount}.");
+            if (nodeCount >= limits.MaxNodeCount)
+                throw Error(reader, $"XML node count cannot exceed {limits.MaxNodeCount}.");
             nodeCount++;
             if (reader.NodeType != XmlNodeType.Element)
                 throw Error(reader, "Expected an XML node element.");
@@ -86,15 +115,17 @@ namespace ActionBuffer
             if (kind == StructuredNodeKind.Scalar)
             {
                 string scalar = reader.ReadElementContentAsString();
-                EnsureScalarLength(scalar, reader);
-                return StructuredNode.RentScalar(scalar, true);
+                EnsureScalarLength(scalar, reader, limits.MaxScalarLength);
+                return RentScalar(scalar, true);
             }
 
-            var node = StructuredNode.Rent(kind);
-            var fieldNames = kind == StructuredNodeKind.Object ? HashSetPool<string>.Get() : null;
+            var node = RentNode(kind);
+            var fieldNames = kind == StructuredNodeKind.Object
+                ? ClassPool.GetHashSet<string>()
+                : null;
             try
             {
-                if (kind == StructuredNodeKind.Object)
+                if (kind == StructuredNodeKind.Object || kind == StructuredNodeKind.Sequence)
                 {
                     string id = reader.GetAttribute("id");
                     string reference = reader.GetAttribute("ref");
@@ -109,10 +140,13 @@ namespace ActionBuffer
                     {
                         node.ReferenceId = ParseReferenceId(id, reader);
                     }
-                    node.TypeName = reader.GetAttribute("type");
-                    node.AssemblyName = reader.GetAttribute("assembly");
-                    EnsureScalarLength(node.TypeName, reader);
-                    EnsureScalarLength(node.AssemblyName, reader);
+                    if (kind == StructuredNodeKind.Object)
+                    {
+                        node.TypeName = reader.GetAttribute("type");
+                        node.AssemblyName = reader.GetAttribute("assembly");
+                        EnsureScalarLength(node.TypeName, reader, limits.MaxScalarLength);
+                        EnsureScalarLength(node.AssemblyName, reader, limits.MaxScalarLength);
+                    }
                 }
 
                 bool empty = reader.IsEmptyElement;
@@ -133,13 +167,13 @@ namespace ActionBuffer
                         string name = reader.GetAttribute("name");
                         if (name == null)
                             throw Error(reader, "Field element is missing the 'name' attribute.");
-                        if (node.FieldCount >= BufferSerializer.MaxObjectFieldCount)
+                        if (node.FieldCount >= limits.MaxObjectFieldCount)
                             throw Error(reader,
-                                $"XML object field count cannot exceed {BufferSerializer.MaxObjectFieldCount}.");
-                        EnsureScalarLength(name, reader);
+                                $"XML object field count cannot exceed {limits.MaxObjectFieldCount}.");
+                        EnsureScalarLength(name, reader, limits.MaxScalarLength);
                         if (!fieldNames.Add(name))
                             throw Error(reader, $"Duplicate field '{name}'.");
-                        var value = ParseNode(reader, depth + 1, ref nodeCount);
+                        var value = ParseNode(reader, depth + 1, ref nodeCount, limits);
                         try
                         {
                             node.AddField(name, value);
@@ -154,10 +188,10 @@ namespace ActionBuffer
                     {
                         if (reader.LocalName != "Item")
                             throw Error(reader, "Sequence nodes may only contain Item elements.");
-                        if (node.ItemCount >= BufferSerializer.MaxCollectionCount)
+                        if (node.ItemCount >= limits.MaxCollectionCount)
                             throw Error(reader,
-                                $"XML sequence count cannot exceed {BufferSerializer.MaxCollectionCount}.");
-                        var value = ParseNode(reader, depth + 1, ref nodeCount);
+                                $"XML sequence count cannot exceed {limits.MaxCollectionCount}.");
+                        var value = ParseNode(reader, depth + 1, ref nodeCount, limits);
                         try
                         {
                             node.AddItem(value);
@@ -184,7 +218,7 @@ namespace ActionBuffer
             }
             finally
             {
-                HashSetPool<string>.Back(fieldNames);
+                ClassPool.BackHashSet(fieldNames);
             }
         }
 
@@ -195,11 +229,12 @@ namespace ActionBuffer
             return result;
         }
 
-        private static void EnsureScalarLength(string value, System.Xml.XmlReader reader)
+        private static void EnsureScalarLength(string value, System.Xml.XmlReader reader,
+            int maxScalarLength)
         {
-            if (value != null && value.Length > BufferSerializer.MaxScalarLength)
+            if (value != null && value.Length > maxScalarLength)
                 throw Error(reader,
-                    $"XML scalar length cannot exceed {BufferSerializer.MaxScalarLength} characters.");
+                    $"XML scalar length cannot exceed {maxScalarLength} characters.");
         }
 
         private static FormatException Error(System.Xml.XmlReader reader, string message)

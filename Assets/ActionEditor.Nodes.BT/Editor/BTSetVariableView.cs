@@ -15,15 +15,17 @@ namespace ActionEditor.Nodes.BT
             BTTree tree = App.asset as BTTree;
             if (tree == null || tree.Blackboard == null) return;
 
-            var fields = TypeHelper.GetTypeFields(tree.Blackboard.GetType());
-            var result = fields.GetFields()
-                .FindAll(x => x.DeclaringType != typeof(Blackboard)
-                    && BTVariableConditionView.IsSupportType(x.FieldType));
-           
-            var names = result.ConvertAll(x => x.name);
-            var index = names.IndexOf(data.fieldName);
+            BTVariableConditionView.GetSupportedFields(tree.Blackboard.GetType(),
+                out var result, out var names);
+            if (result.Length == 0)
+            {
+                EditorGUILayout.HelpBox("No supported Blackboard variables.", MessageType.Info);
+                return;
+            }
+
+            var index = Array.IndexOf(names, data.fieldName);
             index = index < 0 ? 0 : index;
-            index = EditorGUILayout.Popup("Variable", index, names.ToArray());
+            index = EditorGUILayout.Popup("Variable", index, names);
             var field = result[index];
             data.fieldName = names[index];
             data.variableType = BTVariableConditionView.GetVariableType(field.FieldType);

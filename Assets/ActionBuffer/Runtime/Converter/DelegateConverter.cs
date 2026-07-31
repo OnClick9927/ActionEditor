@@ -26,12 +26,11 @@ namespace ActionBuffer
         private const byte ObjectReferenceTarget = 2;
         private static readonly int InvokeParameterCount =
             typeof(TDelegate).GetMethod("Invoke").GetParameters().Length;
+        private readonly object _methodSync = new object();
         private readonly Dictionary<MethodInfo, MethodDescriptor> _methodDescriptors =
             new Dictionary<MethodInfo, MethodDescriptor>();
-        private readonly Func<IBufferReader, DelegateMethodReference> _readReference;
-        private readonly Action<IBufferWriter, BufferScan, DelegateMethodReference> _writeReference;
-        private BuffConverter<DelegateMethodReference> _referenceConverter;
-        private long _converterVersion = -1;
+        private readonly Dictionary<MethodCacheKey, MethodInfo> _resolvedMethods =
+            new Dictionary<MethodCacheKey, MethodInfo>();
 
         private sealed class MethodDescriptor
         {
@@ -39,20 +38,33 @@ namespace ActionBuffer
             internal int ParameterCount;
         }
 
-        public DelegateConverter()
+        private readonly struct MethodCacheKey : IEquatable<MethodCacheKey>
         {
-            _readReference = ReadReference;
-            _writeReference = WriteReference;
-        }
+            private readonly Type _declaringType;
+            private readonly string _name;
+            private readonly string _signature;
 
-        private BuffConverter<DelegateMethodReference> GetReferenceConverter(
-            BufferSerializerSettings settings)
-        {
-            long version = BufferSerializer.GetResolverVersion(settings);
-            if (_converterVersion == version) return _referenceConverter;
-            _referenceConverter = BufferSerializer.GetConverter<DelegateMethodReference>(settings);
-            _converterVersion = version;
-            return _referenceConverter;
+            internal MethodCacheKey(Type declaringType, string name, string signature)
+            {
+                _declaringType = declaringType;
+                _name = name;
+                _signature = signature;
+            }
+
+            public bool Equals(MethodCacheKey other) =>
+                _declaringType == other._declaringType &&
+                string.Equals(_name, other._name, StringComparison.Ordinal) &&
+                string.Equals(_signature, other._signature, StringComparison.Ordinal);
+            public override bool Equals(object obj) => obj is MethodCacheKey other && Equals(other);
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = _declaringType.GetHashCode();
+                    hash = hash * 397 ^ (_name?.GetHashCode() ?? 0);
+                    return hash * 397 ^ (_signature?.GetHashCode() ?? 0);
+                }
+            }
         }
 
         protected override void OnScan(BufferScan scan, TDelegate value)
@@ -60,43 +72,45 @@ namespace ActionBuffer
             if (value == null)
             {
                 scan.ScanEnumerable<DelegateMethodReference>(null,
-                    GetReferenceConverter(scan.Settings));
+                    ConverterCache<DelegateMethodReference>.Get(scan), trackReference: false);
                 return;
             }
 
             var invocationList = value.GetInvocationList();
-            var references = ListPool<DelegateMethodReference>.Get(invocationList.Length);
+            var references = ClassPool.GetList<DelegateMethodReference>(invocationList.Length);
             try
             {
                 for (int i = 0; i < invocationList.Length; i++)
                     references.Add(CreateReference(scan, invocationList[i]));
-                scan.ScanEnumerable(references, GetReferenceConverter(scan.Settings));
+                scan.ScanEnumerable(references,
+                    ConverterCache<DelegateMethodReference>.Get(scan), trackReference: false);
             }
             finally
             {
-                ListPool<DelegateMethodReference>.Back(references);
+                ClassPool.BackList(references);
             }
         }
 
         protected override void OnWrite(IBufferWriter writer, BufferScan scan, TDelegate value) =>
-            writer.WriteIEnumerable<DelegateMethodReference>(scan, null, _writeReference);
+            writer.WriteIEnumerable(scan, ConverterCache<DelegateMethodReference>.Get(scan));
 
         protected override TDelegate OnRead(IBufferReader reader, Type type)
         {
-            var references = ListPool<DelegateMethodReference>.Get();
+            var references = ClassPool.GetList<DelegateMethodReference>();
             try
             {
-                var values = reader.ReadIEnumerable(references, _readReference);
+                var values = reader.ReadIEnumerable(references,
+                    ConverterCache<DelegateMethodReference>.Get(reader));
                 if (values == null) return null;
 
-                Delegate result = null;
+                var delegates = new Delegate[values.Count];
                 for (int i = 0; i < values.Count; i++)
-                    result = Delegate.Combine(result, CreateDelegate(reader, values[i]));
-                return (TDelegate)(object)result;
+                    delegates[i] = CreateDelegate(reader, values[i]);
+                return (TDelegate)(object)Delegate.Combine(delegates);
             }
             finally
             {
-                ListPool<DelegateMethodReference>.Back(references);
+                ClassPool.BackList(references);
             }
         }
 
@@ -129,7 +143,7 @@ namespace ActionBuffer
                     throw new NotSupportedException(
                         $"Delegate '{typeof(TDelegate)}' uses compiler-generated closure target '{targetType}'. " +
                         "Closure delegates are not supported.");
-                if (!BufferSerializer.GetConverter(targetType, scan.Settings).UsesObjectLayout)
+                if (!ConverterResolver.Get(targetType, scan.Settings).UsesObjectLayout)
                     throw new NotSupportedException(
                         $"Delegate target type '{targetType}' must use object-field serialization.");
                 binding = ObjectReferenceTarget;
@@ -159,20 +173,7 @@ namespace ActionBuffer
                 throw new FormatException(
                     $"Cannot resolve delegate declaring type '{reference.DeclaringType}, {reference.AssemblyName}'.");
 
-            MethodInfo match = null;
-            var methods = declaringType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
-                                                   BindingFlags.Static | BindingFlags.Instance |
-                                                   BindingFlags.DeclaredOnly);
-            for (int i = 0; i < methods.Length; i++)
-            {
-                var candidate = methods[i];
-                if (candidate.Name != reference.MethodName || candidate.IsGenericMethod ||
-                    GetMethodDescriptor(candidate).Reference.Signature != reference.Signature) continue;
-                if (match != null)
-                    throw new FormatException(
-                        $"Delegate method '{reference.DeclaringType}.{reference.MethodName}' is ambiguous.");
-                match = candidate;
-            }
+            var match = ResolveMethod(declaringType, reference);
             if (match == null)
                 throw new FormatException(
                     $"Cannot resolve delegate method '{reference.DeclaringType}.{reference.MethodName}'.");
@@ -208,36 +209,58 @@ namespace ActionBuffer
             return result;
         }
 
-        private DelegateMethodReference ReadReference(IBufferReader reader) =>
-            GetReferenceConverter(BufferSerializerSettings.DefaultSetting)
-                .ReadValue(reader, typeof(DelegateMethodReference));
-
-        private void WriteReference(IBufferWriter writer, BufferScan scan,
-            DelegateMethodReference reference) =>
-            GetReferenceConverter(scan.Settings).WriteValue(writer, scan, reference);
+        private MethodInfo ResolveMethod(Type declaringType, DelegateMethodReference reference)
+        {
+            var key = new MethodCacheKey(declaringType, reference.MethodName, reference.Signature);
+            lock (_methodSync)
+            {
+                if (_resolvedMethods.TryGetValue(key, out var cached)) return cached;
+                MethodInfo match = null;
+                var methods = declaringType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
+                                                       BindingFlags.Static | BindingFlags.Instance |
+                                                       BindingFlags.DeclaredOnly);
+                for (int i = 0; i < methods.Length; i++)
+                {
+                    var candidate = methods[i];
+                    if (candidate.Name != reference.MethodName || candidate.IsGenericMethod ||
+                        GetMethodDescriptor(candidate).Reference.Signature != reference.Signature)
+                        continue;
+                    if (match != null)
+                        throw new FormatException(
+                            $"Delegate method '{reference.DeclaringType}.{reference.MethodName}' is ambiguous.");
+                    match = candidate;
+                }
+                if (match != null)
+                    _resolvedMethods.Add(key, match);
+                return match;
+            }
+        }
 
         private MethodDescriptor GetMethodDescriptor(MethodInfo method)
         {
-            if (_methodDescriptors.TryGetValue(method, out var descriptor)) return descriptor;
-            var declaringType = method.DeclaringType;
-            descriptor = new MethodDescriptor
+            lock (_methodSync)
             {
-                ParameterCount = method.GetParameters().Length,
-                Reference = new DelegateMethodReference
+                if (_methodDescriptors.TryGetValue(method, out var cached)) return cached;
+                var declaringType = method.DeclaringType;
+                var descriptor = new MethodDescriptor
                 {
-                    DeclaringType = declaringType.FullName,
-                    AssemblyName = declaringType.Assembly.FullName,
-                    MethodName = method.Name,
-                    Signature = GetMethodSignature(method)
-                }
-            };
-            _methodDescriptors.Add(method, descriptor);
-            return descriptor;
+                    ParameterCount = method.GetParameters().Length,
+                    Reference = new DelegateMethodReference
+                    {
+                        DeclaringType = declaringType.FullName,
+                        AssemblyName = declaringType.Assembly.FullName,
+                        MethodName = method.Name,
+                        Signature = GetMethodSignature(method)
+                    }
+                };
+                _methodDescriptors.Add(method, descriptor);
+                return descriptor;
+            }
         }
 
         private static string GetMethodSignature(MethodInfo method)
         {
-            var builder = ClassPool<StringBuilder>.Get();
+            var builder = ClassPool.Get<StringBuilder>();
             builder.Clear();
             try
             {
@@ -253,7 +276,7 @@ namespace ActionBuffer
             finally
             {
                 builder.Clear();
-                ClassPool<StringBuilder>.Back(builder);
+                ClassPool.Back(builder);
             }
         }
 
@@ -304,5 +327,6 @@ namespace ActionBuffer
             builder.Append(',');
             builder.Append(type.Assembly.GetName().Name);
         }
+
     }
 }

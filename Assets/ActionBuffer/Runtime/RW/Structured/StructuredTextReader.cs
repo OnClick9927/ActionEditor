@@ -5,13 +5,16 @@ using System.Globalization;
 
 namespace ActionBuffer
 {
-    public abstract class StructuredTextReader : IBufferReader, IObjectContextReader
+    public abstract class StructuredTextReader : IBufferReader, IObjectContextReader,
+        IBuffSerializerContext, ITypedEnumReader, IReferenceResolver
     {
         private StructuredNode _root;
         private StructuredNode _current;
+        private StructuredNodeStorage _nodeStorage;
         private bool _hasRoot;
         private bool _hasCurrent;
         private readonly List<IBufferObject> _afterReadCallbacks = new List<IBufferObject>();
+        private bool _deferCallbacks;
         private sealed class ReferenceEntry
         {
             internal object Value;
@@ -22,31 +25,58 @@ namespace ActionBuffer
             new Dictionary<int, ReferenceEntry>();
         private int _objectReadDepth;
         private object _currentObject;
+        private BuffSettings _settings;
         object IObjectContextReader.CurrentObject => _currentObject;
+        BuffSettings IBuffSerializerContext.Settings => _settings;
         object IObjectContextReader.GetOrCreateReference(int referenceId, Type type) =>
             GetOrCreateReference(referenceId, type, false);
 
         internal void SetRoot(StructuredNode root)
         {
-            Clear();
             _root = root;
             _current = root;
             _hasRoot = true;
             _hasCurrent = true;
         }
 
+        protected void Prepare(BuffSettings settings)
+        {
+            Clear();
+            _nodeStorage = ClassPool.Get<StructuredNodeStorage>();
+            _nodeStorage.Clear();
+            _settings = settings ?? BuffSettings.DefaultSetting;
+        }
+
+        internal StructuredNode RentNode(StructuredNodeKind kind) =>
+            StructuredNode.Rent(_nodeStorage, kind);
+
+        internal StructuredNode RentScalar(string value, bool quoted) =>
+            StructuredNode.RentScalar(_nodeStorage, value, quoted);
+
+        internal StructuredNode RentScalarSlice(string source, int start, int length,
+            bool quoted) => StructuredNode.RentScalarSlice(_nodeStorage, source, start,
+            length, quoted);
+
         public virtual void Clear()
         {
             if (_hasRoot)
                 StructuredNode.Release(ref _root);
+            if (_nodeStorage != null)
+            {
+                _nodeStorage.Clear();
+                ClassPool.Back(_nodeStorage);
+                _nodeStorage = null;
+            }
             _current = default;
             _hasRoot = false;
             _hasCurrent = false;
             _objectReadDepth = 0;
             _currentObject = null;
+            _settings = null;
+            _deferCallbacks = false;
             _references.Clear();
             _afterReadCallbacks.Clear();
-            if (_afterReadCallbacks.Capacity > BufferSerializer.RetainedListCapacity)
+            if (_afterReadCallbacks.Capacity > BuffSettings.RetainedListCapacity)
                 _afterReadCallbacks.Capacity = 0;
         }
 
@@ -67,7 +97,8 @@ namespace ActionBuffer
         {
             if (string.IsNullOrEmpty(node.TypeName) && (declaredType.IsAbstract || declaredType.IsInterface))
                 throw new FormatException($"Type metadata is required to instantiate '{declaredType}'.");
-            return TypeHelper.ResolveSerializedType(declaredType, node.TypeName, node.AssemblyName);
+            return BuffSerializer.ResolveSerializedType(
+                declaredType, node.TypeName, node.AssemblyName, _settings);
         }
 
         public T ReadObject<T>()
@@ -89,14 +120,17 @@ namespace ActionBuffer
                 ReadFields(node, instance, TypeHelper.GetTypeFields(actualType));
                 if (instance is IBufferObject callback)
                     _afterReadCallbacks.Add(callback);
-                if (_objectReadDepth == 1)
+                if (_objectReadDepth == 1 && !_deferCallbacks)
+                {
+                    EnsureReferencesResolved();
                     InvokeAfterReadCallbacks();
+                }
                 return (T)instance;
             }
             finally
             {
                 _objectReadDepth--;
-                if (_objectReadDepth == 0)
+                if (_objectReadDepth == 0 && !_deferCallbacks)
                     _afterReadCallbacks.Clear();
             }
         }
@@ -104,32 +138,36 @@ namespace ActionBuffer
         private void ReadFields(StructuredNode node, object instance, TypeHelper.TypeFields fields)
         {
             var previousObject = _currentObject;
+            var presentFields = ClassPool.GetHashSet<TypeHelper.TypeFields.Field>();
             _currentObject = instance;
             try
             {
-                fields.SetDefaultValues(instance);
-                for (int i = 0; i < node.FieldCount; i++)
+                var serializedFields = node.GetFieldEnumerator();
+                while (serializedFields.MoveNext())
                 {
-                    var serializedField = node.GetField(i);
+                    var serializedField = serializedFields.Current;
                     var field = fields.FindField(serializedField.Name);
                     if (field == null) continue;
+                    presentFields.Add(field);
 
                     var previous = _current;
                     _current = serializedField.Value;
                     try
                     {
-                        var converter = field.GetConverter(BufferSerializerSettings.DefaultSetting);
-                        field.SetValue(instance, converter.Read(this, field.FieldType));
+                        var converter = ConverterResolver.Get(field.FieldType, _settings);
+                        field.ReadAndSet(this, instance, converter);
                     }
                     finally
                     {
                         _current = previous;
                     }
                 }
+                fields.SetMissingDefaultValues(instance, presentFields);
             }
             finally
             {
                 _currentObject = previousObject;
+                ClassPool.BackHashSet(presentFields);
             }
         }
 
@@ -175,6 +213,20 @@ namespace ActionBuffer
             return entry.Value;
         }
 
+        private void DefineCollectionReference(int referenceId, object value, Type type)
+        {
+            if (referenceId < 0) return;
+            if (_references.ContainsKey(referenceId))
+                throw new FormatException(
+                    $"Duplicate object definition for reference id '{referenceId}'.");
+            _references.Add(referenceId, new ReferenceEntry
+            {
+                Value = value,
+                Type = type,
+                Defined = true
+            });
+        }
+
         internal void EnsureReferencesResolved()
         {
             foreach (var item in _references)
@@ -185,25 +237,29 @@ namespace ActionBuffer
             }
         }
 
-        public List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read)
+        public List<T> ReadIEnumerable<T>(List<T> result, BuffConverter<T> converter)
         {
             var node = RequireCurrent();
             if (node.Kind == StructuredNodeKind.Null) return null;
+            if (node.IsReference)
+                return (List<T>)GetExistingReference(node.ReferenceId, typeof(List<T>));
             RequireKind(node, StructuredNodeKind.Sequence);
             if (result == null) throw new ArgumentNullException(nameof(result));
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            DefineCollectionReference(node.ReferenceId, result, typeof(List<T>));
 
             int requiredCapacity = checked(result.Count + node.ItemCount);
             if (result.Capacity < requiredCapacity)
                 result.Capacity = requiredCapacity;
 
-            for (int i = 0; i < node.ItemCount; i++)
+            var items = node.GetItemEnumerator();
+            while (items.MoveNext())
             {
                 var previous = _current;
-                _current = node.GetItem(i);
+                _current = items.Current;
                 try
                 {
-                    result.Add(read(this));
+                    result.Add(converter.ReadValue(this, typeof(T)));
                 }
                 finally
                 {
@@ -213,43 +269,56 @@ namespace ActionBuffer
             return result;
         }
 
-        public List<T> ReadList<T>(Func<IBufferReader, T> read)
+        public List<T> ReadList<T>(BuffConverter<T> converter)
         {
             var node = RequireSequence();
             if (node.Kind == StructuredNodeKind.Null) return null;
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (node.IsReference)
+                return (List<T>)GetExistingReference(node.ReferenceId, typeof(List<T>));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             var result = new List<T>(node.ItemCount);
-            for (int i = 0; i < node.ItemCount; i++)
-                result.Add(ReadItem(node, i, read));
+            DefineCollectionReference(node.ReferenceId, result, typeof(List<T>));
+            var items = node.GetItemEnumerator();
+            while (items.MoveNext())
+                result.Add(ReadItem(items.Current, converter));
             return result;
         }
 
-        public T[] ReadArray<T>(Func<IBufferReader, T> read)
+        public T[] ReadArray<T>(BuffConverter<T> converter)
         {
             var node = RequireSequence();
             if (node.Kind == StructuredNodeKind.Null) return null;
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (node.IsReference)
+                return (T[])GetExistingReference(node.ReferenceId, typeof(T[]));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             var result = new T[node.ItemCount];
-            for (int i = 0; i < node.ItemCount; i++)
-                result[i] = ReadItem(node, i, read);
+            DefineCollectionReference(node.ReferenceId, result, typeof(T[]));
+            int resultIndex = 0;
+            var items = node.GetItemEnumerator();
+            while (items.MoveNext())
+                result[resultIndex++] = ReadItem(items.Current, converter);
             return result;
         }
 
-        public Array ReadMultiDimensionalArray<T>(int rank, Func<IBufferReader, T> read)
+        public Array ReadMultiDimensionalArray<T>(int rank, BuffConverter<T> converter)
         {
             var node = RequireCurrent();
             if (node.Kind == StructuredNodeKind.Null) return null;
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             if (rank < 2 || rank > 5) throw new ArgumentOutOfRangeException(nameof(rank));
+            var arrayType = typeof(T).MakeArrayType(rank);
+            if (node.IsReference)
+                return (Array)GetExistingReference(node.ReferenceId, arrayType);
             RequireKind(node, StructuredNodeKind.Object);
 
             StructuredNode dimensions = default;
             StructuredNode values = default;
             bool hasDimensions = false;
             bool hasValues = false;
-            for (int fieldIndex = 0; fieldIndex < node.FieldCount; fieldIndex++)
+            var fields = node.GetFieldEnumerator();
+            while (fields.MoveNext())
             {
-                var field = node.GetField(fieldIndex);
+                var field = fields.Current;
                 if (field.Name == "dimensions" && !hasDimensions)
                 {
                     dimensions = field.Value;
@@ -285,7 +354,7 @@ namespace ActionBuffer
             bool hasZeroLength = false;
             for (int dimension = 0; dimension < rank; dimension++)
                 hasZeroLength |= shape.GetLength(dimension) == 0;
-            int maxCollectionCount = BufferSerializerSettings.DefaultSetting.MaxCollectionCount;
+            int maxCollectionCount = BuffSettings.MaxCollectionCount;
             long count = hasZeroLength ? 0 : 1;
             if (!hasZeroLength)
             {
@@ -303,71 +372,119 @@ namespace ActionBuffer
                     $"Array dimensions require {count} values but found {values.ItemCount}.");
 
             var result = MultiDimensionalArrayHelper.Create<T>(shape);
-            for (int index = 0; index < values.ItemCount; index++)
-                MultiDimensionalArrayHelper.SetValue(result, shape, index,
-                    ReadItem(values, index, read));
+            DefineCollectionReference(node.ReferenceId, result, arrayType);
+            int valueIndex = 0;
+            var valueItems = values.GetItemEnumerator();
+            while (valueItems.MoveNext())
+                MultiDimensionalArrayHelper.SetValue(result, shape, valueIndex++,
+                    ReadItem(valueItems.Current, converter));
             return result;
         }
 
         private static int ParseArrayDimension(StructuredNode node)
         {
             RequireKind(node, StructuredNodeKind.Scalar);
-            if (!int.TryParse(node.Scalar, NumberStyles.None, CultureInfo.InvariantCulture,
-                    out int result) || result < 0 || result >= ushort.MaxValue)
+            ulong result = ParseUnsignedScalar(node);
+            if (result >= ushort.MaxValue)
+                throw new FormatException("Invalid multi-dimensional array dimension.");
+            return (int)result;
+        }
+
+        public HashSet<T> ReadHashSet<T>(BuffConverter<T> converter)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (node.IsReference)
+                return (HashSet<T>)GetExistingReference(node.ReferenceId, typeof(HashSet<T>));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            var result = new HashSet<T>();
+            DefineCollectionReference(node.ReferenceId, result, typeof(HashSet<T>));
+            var items = node.GetItemEnumerator();
+            while (items.MoveNext())
+                if (!result.Add(ReadItem(items.Current, converter)))
+                    throw new FormatException("Duplicate set value.");
+            return result;
+        }
+
+        public Queue<T> ReadQueue<T>(BuffConverter<T> converter)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (node.IsReference)
+                return (Queue<T>)GetExistingReference(node.ReferenceId, typeof(Queue<T>));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            var result = new Queue<T>(node.ItemCount);
+            DefineCollectionReference(node.ReferenceId, result, typeof(Queue<T>));
+            var items = node.GetItemEnumerator();
+            while (items.MoveNext())
+                result.Enqueue(ReadItem(items.Current, converter));
+            return result;
+        }
+
+        void IReferenceResolver.EnsureReferencesResolved() => EnsureReferencesResolved();
+
+        public Stack<T> ReadStack<T>(BuffConverter<T> converter)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (node.IsReference)
+                return (Stack<T>)GetExistingReference(node.ReferenceId, typeof(Stack<T>));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            var result = new Stack<T>(node.ItemCount);
+            DefineCollectionReference(node.ReferenceId, result, typeof(Stack<T>));
+            var values = ClassPool.GetList<T>(node.ItemCount);
+            try
             {
-                throw new FormatException(
-                    $"Invalid multi-dimensional array dimension '{node.Scalar}'.");
+                var items = node.GetItemEnumerator();
+                while (items.MoveNext())
+                    values.Add(ReadItem(items.Current, converter));
+                for (int i = values.Count - 1; i >= 0; i--)
+                    result.Push(values[i]);
+            }
+            finally
+            {
+                ClassPool.BackList(values);
             }
             return result;
         }
 
-        public HashSet<T> ReadHashSet<T>(Func<IBufferReader, T> read)
-        {
-            var node = RequireSequence();
-            if (node.Kind == StructuredNodeKind.Null) return null;
-            if (read == null) throw new ArgumentNullException(nameof(read));
-            var result = new HashSet<T>();
-            for (int i = 0; i < node.ItemCount; i++)
-                result.Add(ReadItem(node, i, read));
-            return result;
-        }
-
-        public Queue<T> ReadQueue<T>(Func<IBufferReader, T> read)
-        {
-            var node = RequireSequence();
-            if (node.Kind == StructuredNodeKind.Null) return null;
-            if (read == null) throw new ArgumentNullException(nameof(read));
-            var result = new Queue<T>(node.ItemCount);
-            for (int i = 0; i < node.ItemCount; i++)
-                result.Enqueue(ReadItem(node, i, read));
-            return result;
-        }
-
         public Dictionary<TKey, TValue> ReadDictionary<TKey, TValue>(
-            Func<IBufferReader, KeyValuePair<TKey, TValue>> read)
+            BuffConverter<KeyValuePair<TKey, TValue>> converter)
         {
             var node = RequireSequence();
             if (node.Kind == StructuredNodeKind.Null) return null;
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (node.IsReference)
+                return (Dictionary<TKey, TValue>)GetExistingReference(node.ReferenceId,
+                    typeof(Dictionary<TKey, TValue>));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             var result = new Dictionary<TKey, TValue>(node.ItemCount);
-            for (int i = 0; i < node.ItemCount; i++)
+            DefineCollectionReference(node.ReferenceId, result,
+                typeof(Dictionary<TKey, TValue>));
+            var items = node.GetItemEnumerator();
+            while (items.MoveNext())
             {
-                var item = ReadItem(node, i, read);
+                var item = ReadItem(items.Current, converter);
                 result.Add(item.Key, item.Value);
             }
             return result;
         }
 
         public ConcurrentDictionary<TKey, TValue> ReadConcurrentDictionary<TKey, TValue>(
-            Func<IBufferReader, KeyValuePair<TKey, TValue>> read)
+            BuffConverter<KeyValuePair<TKey, TValue>> converter)
         {
             var node = RequireSequence();
             if (node.Kind == StructuredNodeKind.Null) return null;
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (node.IsReference)
+                return (ConcurrentDictionary<TKey, TValue>)GetExistingReference(
+                    node.ReferenceId, typeof(ConcurrentDictionary<TKey, TValue>));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             var result = new ConcurrentDictionary<TKey, TValue>();
-            for (int i = 0; i < node.ItemCount; i++)
+            DefineCollectionReference(node.ReferenceId, result,
+                typeof(ConcurrentDictionary<TKey, TValue>));
+            var items = node.GetItemEnumerator();
+            while (items.MoveNext())
             {
-                var item = ReadItem(node, i, read);
+                var item = ReadItem(items.Current, converter);
                 if (!result.TryAdd(item.Key, item.Value))
                     throw new FormatException($"Duplicate dictionary key '{item.Key}'.");
             }
@@ -377,18 +494,18 @@ namespace ActionBuffer
         private StructuredNode RequireSequence()
         {
             var node = RequireCurrent();
-            if (node.Kind != StructuredNodeKind.Null)
+            if (node.Kind != StructuredNodeKind.Null && !node.IsReference)
                 RequireKind(node, StructuredNodeKind.Sequence);
             return node;
         }
 
-        private T ReadItem<T>(StructuredNode node, int index, Func<IBufferReader, T> read)
+        private T ReadItem<T>(StructuredNode item, BuffConverter<T> converter)
         {
             var previous = _current;
-            _current = node.GetItem(index);
+            _current = item;
             try
             {
-                return read(this);
+                return converter.ReadValue(this, typeof(T));
             }
             finally
             {
@@ -396,33 +513,56 @@ namespace ActionBuffer
             }
         }
 
-        public T? ReadNullable<T>(Func<IBufferReader, T> read) where T : struct
+        public T? ReadNullable<T>(BuffConverter<T> converter) where T : struct
         {
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             var node = RequireCurrent();
-            return node.Kind == StructuredNodeKind.Null ? (T?)null : read(this);
+            return node.Kind == StructuredNodeKind.Null
+                ? (T?)null
+                : converter.ReadValue(this, typeof(T));
+        }
+
+        internal void DeferCallbacks()
+        {
+            _deferCallbacks = true;
+        }
+
+        internal void CompleteCallbacks()
+        {
+            EnsureReferencesResolved();
+            try
+            {
+                InvokeAfterReadCallbacks();
+            }
+            finally
+            {
+                _afterReadCallbacks.Clear();
+                _deferCallbacks = false;
+            }
         }
 
         public KeyValuePair<TKey, TValue> ReadKeyValuePair<TKey, TValue>(
-            Func<IBufferReader, TKey> readKey, Func<IBufferReader, TValue> readValue)
+            BuffConverter<TKey> keyConverter, BuffConverter<TValue> valueConverter)
         {
-            if (readKey == null) throw new ArgumentNullException(nameof(readKey));
-            if (readValue == null) throw new ArgumentNullException(nameof(readValue));
+            if (keyConverter == null) throw new ArgumentNullException(nameof(keyConverter));
+            if (valueConverter == null) throw new ArgumentNullException(nameof(valueConverter));
             var node = RequireCurrent();
             if (node.Kind == StructuredNodeKind.Null) return default;
             RequireKind(node, StructuredNodeKind.Object);
 
             TKey key = default;
             TValue value = default;
-            for (int i = 0; i < node.FieldCount; i++)
+            var fields = node.GetFieldEnumerator();
+            while (fields.MoveNext())
             {
-                var field = node.GetField(i);
+                var field = fields.Current;
                 var previous = _current;
                 _current = field.Value;
                 try
                 {
-                    if (field.Name == "key") key = readKey(this);
-                    else if (field.Name == "value") value = readValue(this);
+                    if (field.Name == "key") key = keyConverter.ReadValue(this, typeof(TKey));
+                    else if (field.Name == "value")
+                        value = valueConverter.ReadValue(this, typeof(TValue));
                 }
                 finally
                 {
@@ -440,25 +580,142 @@ namespace ActionBuffer
             return node.Scalar;
         }
 
-        public bool ReadBool() => bool.Parse(ReadScalar());
-        public byte ReadByte() => byte.Parse(ReadScalar(), NumberStyles.Integer, CultureInfo.InvariantCulture);
+        public bool ReadBool()
+        {
+            var node = RequireCurrent();
+            RequireKind(node, StructuredNodeKind.Scalar);
+            GetScalarRange(node, out string source, out int start, out int length);
+            if (EqualsAsciiIgnoreCase(source, start, length, "true")) return true;
+            if (EqualsAsciiIgnoreCase(source, start, length, "false")) return false;
+            throw new FormatException("Expected a Boolean scalar.");
+        }
+
+        public byte ReadByte()
+        {
+            ulong value = ParseUnsignedScalar(RequireCurrent());
+            if (value > byte.MaxValue) throw new OverflowException();
+            return (byte)value;
+        }
 
         public char ReadChar()
         {
-            var value = ReadScalar();
-            if (value.Length != 1) throw new FormatException("Expected a single character.");
-            return value[0];
+            var node = RequireCurrent();
+            RequireKind(node, StructuredNodeKind.Scalar);
+            GetScalarRange(node, out string source, out int start, out int length);
+            if (length != 1) throw new FormatException("Expected a single character.");
+            return source[start];
         }
 
         public double ReadDouble() => double.Parse(ReadScalar(), NumberStyles.Float, CultureInfo.InvariantCulture);
         public float ReadFloat() => float.Parse(ReadScalar(), NumberStyles.Float, CultureInfo.InvariantCulture);
-        public short ReadInt16() => short.Parse(ReadScalar(), NumberStyles.Integer, CultureInfo.InvariantCulture);
-        public int ReadInt32() => int.Parse(ReadScalar(), NumberStyles.Integer, CultureInfo.InvariantCulture);
-        public long ReadInt64() => long.Parse(ReadScalar(), NumberStyles.Integer, CultureInfo.InvariantCulture);
-        public ushort ReadUInt16() => ushort.Parse(ReadScalar(), NumberStyles.Integer, CultureInfo.InvariantCulture);
-        public uint ReadUInt32() => uint.Parse(ReadScalar(), NumberStyles.Integer, CultureInfo.InvariantCulture);
-        public ulong ReadUInt64() => ulong.Parse(ReadScalar(), NumberStyles.Integer, CultureInfo.InvariantCulture);
+        public short ReadInt16()
+        {
+            long value = ParseSignedScalar(RequireCurrent());
+            if (value < short.MinValue || value > short.MaxValue) throw new OverflowException();
+            return (short)value;
+        }
+
+        public int ReadInt32()
+        {
+            long value = ParseSignedScalar(RequireCurrent());
+            if (value < int.MinValue || value > int.MaxValue) throw new OverflowException();
+            return (int)value;
+        }
+
+        public long ReadInt64() => ParseSignedScalar(RequireCurrent());
+
+        public ushort ReadUInt16()
+        {
+            ulong value = ParseUnsignedScalar(RequireCurrent());
+            if (value > ushort.MaxValue) throw new OverflowException();
+            return (ushort)value;
+        }
+
+        public uint ReadUInt32()
+        {
+            ulong value = ParseUnsignedScalar(RequireCurrent());
+            if (value > uint.MaxValue) throw new OverflowException();
+            return (uint)value;
+        }
+
+        public ulong ReadUInt64() => ParseUnsignedScalar(RequireCurrent());
         public string ReadUTF8() => ReadScalar(true);
         public Enum ReadEnum(Type type) => (Enum)Enum.Parse(type, ReadScalar());
+        T ITypedEnumReader.ReadEnumValue<T>()
+        {
+            if (Enum.TryParse(ReadScalar(), out T value)) return value;
+            throw new FormatException("Invalid enum scalar.");
+        }
+        public Guid ReadGuid() => Guid.ParseExact(ReadScalar(), "D");
+
+        private static long ParseSignedScalar(StructuredNode node)
+        {
+            RequireKind(node, StructuredNodeKind.Scalar);
+            GetScalarRange(node, out string source, out int start, out int length);
+            int end = start + length;
+            bool negative = false;
+            if (start < end && (source[start] == '-' || source[start] == '+'))
+                negative = source[start++] == '-';
+            if (start == end) throw new FormatException("Expected an integer scalar.");
+
+            ulong limit = negative ? 0x8000000000000000UL : long.MaxValue;
+            ulong result = 0;
+            for (int i = start; i < end; i++)
+            {
+                uint digit = (uint)(source[i] - '0');
+                if (digit > 9)
+                    throw new FormatException("Expected an integer scalar.");
+                if (result > (limit - digit) / 10)
+                    throw new OverflowException();
+                result = result * 10 + digit;
+            }
+            if (!negative) return (long)result;
+            return result == 0x8000000000000000UL
+                ? long.MinValue
+                : -(long)result;
+        }
+
+        internal static ulong ParseUnsignedScalar(StructuredNode node)
+        {
+            RequireKind(node, StructuredNodeKind.Scalar);
+            GetScalarRange(node, out string source, out int start, out int length);
+            int end = start + length;
+            if (start < end && source[start] == '+') start++;
+            if (start == end) throw new FormatException("Expected an unsigned integer scalar.");
+
+            ulong result = 0;
+            for (int i = start; i < end; i++)
+            {
+                uint digit = (uint)(source[i] - '0');
+                if (digit > 9)
+                    throw new FormatException("Expected an unsigned integer scalar.");
+                if (result > (ulong.MaxValue - digit) / 10)
+                    throw new OverflowException();
+                result = result * 10 + digit;
+            }
+            return result;
+        }
+
+        private static void GetScalarRange(StructuredNode node, out string source,
+            out int start, out int length)
+        {
+            if (node.TryGetScalarSlice(out source, out start, out length)) return;
+            source = node.Scalar ?? string.Empty;
+            start = 0;
+            length = source.Length;
+        }
+
+        private static bool EqualsAsciiIgnoreCase(string source, int start, int length,
+            string expected)
+        {
+            if (length != expected.Length) return false;
+            for (int i = 0; i < length; i++)
+            {
+                char value = source[start + i];
+                if (value >= 'A' && value <= 'Z') value = (char)(value + 32);
+                if (value != expected[i]) return false;
+            }
+            return true;
+        }
     }
 }

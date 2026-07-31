@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Text;
 
 namespace ActionBuffer
@@ -7,11 +6,25 @@ namespace ActionBuffer
     public sealed class YamlWriter : StructuredTextWriter
     {
         private readonly StringBuilder _builder = new StringBuilder();
+        private int[] _containerIndentDeltas = new int[16];
+        private int _containerDepth;
+        private int _indent;
+        private bool _pendingValue;
+
+        internal int Capacity => _builder.Capacity;
+
+        internal void TrimCapacity()
+        {
+            if (_builder.Capacity > BuffSettings.RetainedTextCapacity)
+            {
+                _builder.Clear();
+                _builder.Capacity = 1024;
+            }
+        }
 
         public string GetYaml()
         {
-            _builder.Clear();
-            Write(GetRoot(), _builder);
+            RequireResult();
             ValidateTextLength(_builder.Length, "YAML");
             return _builder.ToString();
         }
@@ -19,176 +32,359 @@ namespace ActionBuffer
         public override void Clear()
         {
             _builder.Clear();
-            if (_builder.Capacity > BufferSerializer.RetainedTextCapacity)
-                _builder.Capacity = 1024;
+            _containerDepth = 0;
+            _indent = 0;
+            _pendingValue = false;
             base.Clear();
         }
 
-        private static void Write(StructuredNode node, StringBuilder builder)
+        protected override void WriteNullValue()
         {
-            if (IsBlock(node))
-                WriteBlock(node, builder, 0);
-            else
+            WriteInline("null", false);
+        }
+
+        protected override void WriteScalarValue(string value, bool quoted)
+        {
+            if (quoted)
             {
-                WriteInline(node, builder);
-                builder.Append('\n');
+                BeginInlineValue();
+                AppendQuoted(value ?? string.Empty);
+                _builder.Append('\n');
+                EnsureLength();
+                return;
             }
-            EnsureLength(builder);
+            WriteInline(value, false);
         }
 
-        private static bool IsBlock(StructuredNode node)
+        protected override void WriteBooleanValue(bool value)
         {
-            if (node.Kind == StructuredNodeKind.Object)
-                return node.ReferenceId >= 0 || node.FieldCount > 0 || !string.IsNullOrEmpty(node.TypeName);
-            return node.Kind == StructuredNodeKind.Sequence && node.ItemCount > 0;
+            WriteInline(value ? "true" : "false", false);
         }
 
-        private static void WriteBlock(StructuredNode node, StringBuilder builder, int indent)
+        protected override void WriteCharacterValue(char value)
         {
-            if (node.Kind == StructuredNodeKind.Object)
+            BeginInlineValue();
+            EnsureAppend(value < 0x20 ? 8 : 4);
+            _builder.Append('"');
+            switch (value)
             {
-                if (node.IsReference)
-                {
-                    WriteScalarEntry("$ref", node.ReferenceId.ToString(CultureInfo.InvariantCulture),
-                        builder, indent);
-                    return;
-                }
-                if (node.ReferenceId >= 0)
-                    WriteScalarEntry("$id", node.ReferenceId.ToString(CultureInfo.InvariantCulture),
-                        builder, indent);
-                if (!string.IsNullOrEmpty(node.TypeName))
-                {
-                    WriteScalarEntry("$type", node.TypeName, builder, indent);
-                    WriteScalarEntry("$assembly", node.AssemblyName ?? string.Empty, builder, indent);
-                }
+                case '"': _builder.Append("\\\""); break;
+                case '\\': _builder.Append("\\\\"); break;
+                case '\0': _builder.Append("\\0"); break;
+                case '\a': _builder.Append("\\a"); break;
+                case '\b': _builder.Append("\\b"); break;
+                case '\t': _builder.Append("\\t"); break;
+                case '\n': _builder.Append("\\n"); break;
+                case '\v': _builder.Append("\\v"); break;
+                case '\f': _builder.Append("\\f"); break;
+                case '\r': _builder.Append("\\r"); break;
+                default:
+                    if (value < 0x20)
+                    {
+                        _builder.Append("\\u");
+                        AppendHex4(value);
+                    }
+                    else
+                    {
+                        _builder.Append(value);
+                    }
+                    break;
+            }
+            _builder.Append('"').Append('\n');
+            EnsureLength();
+        }
 
-                for (int i = 0; i < node.FieldCount; i++)
-                {
-                    var field = node.GetField(i);
-                    WriteEntry(StructuredNode.EncodeTextFieldName(field.Name), field.Value, builder, indent);
-                    EnsureLength(builder);
-                }
+        protected override void WriteSignedIntegerValue(long value)
+        {
+            BeginInlineValue();
+            ulong magnitude = value < 0
+                ? unchecked((ulong)(-(value + 1))) + 1
+                : (ulong)value;
+            EnsureAppend(DigitCount(magnitude) + (value < 0 ? 1 : 0) + 1);
+            TextIntegerWriter.Append(_builder, value);
+            _builder.Append('\n');
+        }
+
+        protected override void WriteUnsignedIntegerValue(ulong value)
+        {
+            BeginInlineValue();
+            EnsureAppend(DigitCount(value) + 1);
+            TextIntegerWriter.Append(_builder, value);
+            _builder.Append('\n');
+        }
+
+        protected override void BeginObjectValue(int referenceId, bool isReference,
+            string typeName, string assemblyName, int fieldCount)
+        {
+            if (!isReference && referenceId < 0 && typeName == null && fieldCount == 0)
+            {
+                WriteInline("{}", false);
+                PushContainer(0);
                 return;
             }
 
-            if (node.Kind != StructuredNodeKind.Sequence)
-                throw new InvalidOperationException($"Cannot write {node.Kind} as a YAML block.");
-
-            for (int i = 0; i < node.ItemCount; i++)
+            int delta = BeginBlockValue();
+            PushContainer(delta);
+            if (isReference)
             {
-                AppendIndent(builder, indent);
-                builder.Append('-');
-                var item = node.GetItem(i);
-                if (IsBlock(item))
+                WriteIntegerEntry("$ref", referenceId);
+                return;
+            }
+            if (referenceId >= 0)
+                WriteIntegerEntry("$id", referenceId);
+            if (typeName != null)
+            {
+                WriteQuotedEntry("$type", typeName);
+                WriteQuotedEntry("$assembly", assemblyName ?? string.Empty);
+            }
+        }
+
+        protected override void BeginObjectField(string name)
+        {
+            BeginEntry(StructuredNode.EncodeTextFieldName(name));
+        }
+
+        protected override void EndObjectField()
+        {
+            if (_pendingValue)
+                throw new InvalidOperationException("A YAML mapping value was not written.");
+        }
+
+        protected override void EndObjectValue()
+        {
+            PopContainer();
+        }
+
+        protected override void BeginSequenceValue(int referenceId, bool isReference,
+            int count)
+        {
+            if (isReference)
+            {
+                int referenceDelta = BeginBlockValue();
+                PushContainer(referenceDelta);
+                WriteIntegerEntry("$ref", referenceId);
+                return;
+            }
+            if (referenceId >= 0)
+            {
+                int wrapperDelta = BeginBlockValue();
+                WriteIntegerEntry("$id", referenceId);
+                AppendIndent();
+                AppendQuoted("$values");
+                if (count == 0)
                 {
-                    builder.Append('\n');
-                    WriteBlock(item, builder, indent + 2);
+                    _builder.Append(": []\n");
+                    EnsureLength();
+                    PushContainer(wrapperDelta);
+                    return;
                 }
-                else
-                {
-                    builder.Append(' ');
-                    WriteInline(item, builder);
-                    builder.Append('\n');
-                }
-                EnsureLength(builder);
+                _builder.Append(":\n");
+                _indent += 2;
+                PushContainer(wrapperDelta + 2);
+                EnsureLength();
+                return;
             }
-        }
-
-        private static void WriteEntry(string name, StructuredNode value, StringBuilder builder, int indent)
-        {
-            AppendIndent(builder, indent);
-            AppendQuoted(name, builder);
-            builder.Append(':');
-            if (IsBlock(value))
+            if (count == 0)
             {
-                builder.Append('\n');
-                WriteBlock(value, builder, indent + 2);
+                WriteInline("[]", false);
+                PushContainer(0);
+                return;
             }
-            else
+            PushContainer(BeginBlockValue());
+        }
+
+        protected override void BeginSequenceItem()
+        {
+            AppendIndent();
+            _builder.Append('-');
+            _pendingValue = true;
+            EnsureLength();
+        }
+
+        protected override void EndSequenceItem()
+        {
+            if (_pendingValue)
+                throw new InvalidOperationException("A YAML sequence value was not written.");
+        }
+
+        protected override void EndSequenceValue()
+        {
+            PopContainer();
+        }
+
+        private void BeginEntry(string name)
+        {
+            if (_pendingValue)
+                throw new InvalidOperationException("YAML entries cannot overlap.");
+            AppendIndent();
+            AppendQuoted(name);
+            _builder.Append(':');
+            _pendingValue = true;
+            EnsureLength();
+        }
+
+        private void WriteIntegerEntry(string name, int value)
+        {
+            BeginEntry(name);
+            _builder.Append(' ');
+            TextIntegerWriter.Append(_builder, value);
+            _builder.Append('\n');
+            _pendingValue = false;
+            EnsureLength();
+        }
+
+        private void WriteQuotedEntry(string name, string value)
+        {
+            BeginEntry(name);
+            _builder.Append(' ');
+            AppendQuoted(value);
+            _builder.Append('\n');
+            _pendingValue = false;
+            EnsureLength();
+        }
+
+        private void WriteInline(string value, bool quoted)
+        {
+            BeginInlineValue();
+            if (quoted) AppendQuoted(value);
+            else Append(value);
+            _builder.Append('\n');
+            EnsureLength();
+        }
+
+        private void BeginInlineValue()
+        {
+            if (_pendingValue)
             {
-                builder.Append(' ');
-                WriteInline(value, builder);
-                builder.Append('\n');
+                _builder.Append(' ');
+                _pendingValue = false;
             }
         }
 
-        private static void WriteScalarEntry(string name, string value, StringBuilder builder, int indent)
+        private int BeginBlockValue()
         {
-            AppendIndent(builder, indent);
-            AppendQuoted(name, builder);
-            builder.Append(": ");
-            AppendQuoted(value, builder);
-            builder.Append('\n');
+            if (!_pendingValue) return 0;
+            _builder.Append('\n');
+            _pendingValue = false;
+            _indent += 2;
+            EnsureLength();
+            return 2;
         }
 
-        private static void WriteInline(StructuredNode node, StringBuilder builder)
+        private void PushContainer(int indentDelta)
         {
-            switch (node.Kind)
+            if (_containerDepth == _containerIndentDeltas.Length)
+                Array.Resize(ref _containerIndentDeltas,
+                    checked(_containerIndentDeltas.Length * 2));
+            _containerIndentDeltas[_containerDepth++] = indentDelta;
+        }
+
+        private void PopContainer()
+        {
+            if (_containerDepth <= 0)
+                throw new InvalidOperationException("YAML container state is unbalanced.");
+            _indent -= _containerIndentDeltas[--_containerDepth];
+            if (_indent < 0)
+                throw new InvalidOperationException("YAML indentation state is unbalanced.");
+        }
+
+        private void AppendIndent()
+        {
+            _builder.Append(' ', _indent);
+        }
+
+        private void AppendQuoted(string value)
+        {
+            int outputLength = 2;
+            bool requiresEscaping = false;
+            for (int i = 0; i < value.Length; i++)
             {
-                case StructuredNodeKind.Null:
-                    builder.Append("null");
-                    break;
-                case StructuredNodeKind.Scalar:
-                    if (node.Quoted)
-                        AppendQuoted(node.Scalar ?? string.Empty, builder);
-                    else
-                        builder.Append(node.Scalar);
-                    EnsureLength(builder);
-                    break;
-                case StructuredNodeKind.Object:
-                    builder.Append("{}");
-                    break;
-                case StructuredNodeKind.Sequence:
-                    builder.Append("[]");
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException();
+                char c = value[i];
+                int characterLength = c == '"' || c == '\\' || c == '\0' || c == '\a' ||
+                                      c == '\b' || c == '\t' || c == '\n' || c == '\v' ||
+                                      c == '\f' || c == '\r'
+                    ? 2
+                    : c < 0x20 ? 6 : 1;
+                requiresEscaping |= characterLength != 1;
+                if (outputLength > int.MaxValue - characterLength)
+                    throw new FormatException("YAML string is too long.");
+                outputLength += characterLength;
             }
-        }
+            EnsureAppend(outputLength);
 
-        private static void AppendIndent(StringBuilder builder, int indent)
-        {
-            builder.Append(' ', indent);
-        }
-
-        private static void AppendQuoted(string value, StringBuilder builder)
-        {
-            builder.Append('"');
+            _builder.Append('"');
+            if (!requiresEscaping)
+            {
+                _builder.Append(value).Append('"');
+                return;
+            }
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
                 switch (c)
                 {
-                    case '"': builder.Append("\\\""); break;
-                    case '\\': builder.Append("\\\\"); break;
-                    case '\0': builder.Append("\\0"); break;
-                    case '\a': builder.Append("\\a"); break;
-                    case '\b': builder.Append("\\b"); break;
-                    case '\t': builder.Append("\\t"); break;
-                    case '\n': builder.Append("\\n"); break;
-                    case '\v': builder.Append("\\v"); break;
-                    case '\f': builder.Append("\\f"); break;
-                    case '\r': builder.Append("\\r"); break;
+                    case '"': _builder.Append("\\\""); break;
+                    case '\\': _builder.Append("\\\\"); break;
+                    case '\0': _builder.Append("\\0"); break;
+                    case '\a': _builder.Append("\\a"); break;
+                    case '\b': _builder.Append("\\b"); break;
+                    case '\t': _builder.Append("\\t"); break;
+                    case '\n': _builder.Append("\\n"); break;
+                    case '\v': _builder.Append("\\v"); break;
+                    case '\f': _builder.Append("\\f"); break;
+                    case '\r': _builder.Append("\\r"); break;
                     default:
                         if (c < 0x20)
                         {
-                            builder.Append("\\u");
-                            builder.Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+                            _builder.Append("\\u");
+                            AppendHex4(c);
                         }
                         else
                         {
-                            builder.Append(c);
+                            _builder.Append(c);
                         }
                         break;
                 }
-                EnsureLength(builder);
             }
-            builder.Append('"');
-            EnsureLength(builder);
+            _builder.Append('"');
         }
 
-        private static void EnsureLength(StringBuilder builder)
+        private void AppendHex4(int value)
         {
+            const string Hex = "0123456789ABCDEF";
+            _builder.Append(Hex[(value >> 12) & 15]);
+            _builder.Append(Hex[(value >> 8) & 15]);
+            _builder.Append(Hex[(value >> 4) & 15]);
+            _builder.Append(Hex[value & 15]);
+        }
+
+        private static int DigitCount(ulong value)
+        {
+            int count = 1;
+            while (value >= 10)
+            {
+                value /= 10;
+                count++;
+            }
+            return count;
+        }
+
+        private void Append(string value)
+        {
+            EnsureAppend(value.Length);
+            _builder.Append(value);
+        }
+
+        private void EnsureLength()
+        {
+            if (_builder.Length > MaxTextLength)
+                throw new FormatException($"YAML output length cannot exceed {MaxTextLength} characters.");
+        }
+
+        private void EnsureAppend(int count)
+        {
+            if (count > MaxTextLength - _builder.Length)
+                throw new FormatException($"YAML output length cannot exceed {MaxTextLength} characters.");
         }
     }
 }

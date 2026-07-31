@@ -1,14 +1,14 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 namespace ActionBuffer
 {
-    public class BufferWriter : IBufferWriter
+    public class BufferWriter : IBufferWriter, ITypedEnumWriter
     {
         private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
         private bool metasWritten;
-        private int _maxBinaryLength = BufferSerializerSettings.DefaultSetting.MaxBinaryLength;
-        private int _maxScalarLength = BufferSerializerSettings.DefaultSetting.MaxScalarLength;
+        private int _maxBinaryLength = BuffSettings.MaxBinaryLength;
+        private int _maxScalarLength = BuffSettings.MaxScalarLength;
 
         public bool CollectMeta => true;
 
@@ -45,8 +45,8 @@ namespace ActionBuffer
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
             Clear();
-            _maxBinaryLength = scan.Settings.MaxBinaryLength;
-            _maxScalarLength = scan.Settings.MaxScalarLength;
+            _maxBinaryLength = BuffSettings.MaxBinaryLength;
+            _maxScalarLength = BuffSettings.MaxScalarLength;
         }
 
         public int Capacity
@@ -58,8 +58,6 @@ namespace ActionBuffer
         {
             _index = 0;
             metasWritten = false;
-            if (_buffer.Length > BufferSerializer.RetainedBinaryCapacity)
-                _buffer = new byte[1024];
         }
         private void CheckWriterIndex(int length)
         {
@@ -89,6 +87,9 @@ namespace ActionBuffer
                 : Convert.ToUInt64(data);
             WriteUInt64(value);
         }
+
+        void ITypedEnumWriter.WriteEnumValue<T>(T value) =>
+            WriteUInt64(EnumValue<T>.ToUInt64(value));
 
         public void WriteByte(byte value)
         {
@@ -165,32 +166,65 @@ namespace ActionBuffer
             _index += 16;
         }
 
-        public void WriteIEnumerable<T>(BufferScan scan, IEnumerable<T> values,
-            Action<IBufferWriter, BufferScan, T> write)
+        public void WriteIEnumerable<T>(BufferScan scan, BuffConverter<T> converter)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            var cachedValues = scan.ReadEnumerable<T>();
-            if (cachedValues == null)
-            {
-                WriteUInt16(ushort.MaxValue);
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            var cachedValues = scan.ReadEnumerable<T>(out int referenceId,
+                out bool isReference);
+            if (!WriteCollectionHeader(scan, cachedValues?.Count ?? 0,
+                    cachedValues == null && !isReference,
+                    referenceId, isReference))
                 return;
-            }
 
-            if (cachedValues.Count >= ushort.MaxValue)
-                throw new FormatException($"Write array length cannot be greater than {ushort.MaxValue - 1} !");
-            WriteUInt16((ushort)cachedValues.Count);
             for (int i = 0; i < cachedValues.Count; i++)
-                write(this, scan, cachedValues[i]);
+                converter.WriteValue(this, scan, cachedValues[i]);
         }
 
-        public void WriteMultiDimensionalArray<T>(BufferScan scan, Array values, int rank,
-            Action<IBufferWriter, BufferScan, T> write)
+        internal void TrimCapacity()
+        {
+            if (_buffer.Length > BuffSettings.RetainedBinaryCapacity)
+                _buffer = new byte[1024];
+        }
+
+        private bool WriteCollectionHeader(BufferScan scan, int count, bool isNull,
+            int referenceId, bool isReference)
+        {
+            if (scan.SupportReferences)
+            {
+                WriteByte(isNull ? (byte)0 : isReference ? (byte)1 : (byte)2);
+                if (isNull) return false;
+                WriteInt32(referenceId);
+                if (isReference) return false;
+            }
+            else if (isNull)
+            {
+                WriteUInt16(ushort.MaxValue);
+                return false;
+            }
+            if (count >= ushort.MaxValue)
+                throw new FormatException($"Write array length cannot be greater than {ushort.MaxValue - 1} !");
+            WriteUInt16((ushort)count);
+            return true;
+        }
+
+        public void WriteMultiDimensionalArray<T>(BufferScan scan, int rank,
+            BuffConverter<T> converter)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            if (write == null) throw new ArgumentNullException(nameof(write));
-            var cachedValues = scan.ReadMultiDimensionalArray<T>(rank, out var shape);
-            if (cachedValues == null)
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            var cachedValues = scan.ReadMultiDimensionalArray<T>(rank, out var shape,
+                out int referenceId, out bool isReference);
+            if (scan.SupportReferences)
             {
+                if (!WriteCollectionHeader(scan, cachedValues?.Count ?? 0,
+                        cachedValues == null && !isReference,
+                        referenceId, isReference))
+                    return;
+            }
+            else if (cachedValues == null)
+            {
+                // The legacy multi-dimensional format uses the first dimension as its null marker.
                 WriteUInt16(ushort.MaxValue);
                 return;
             }
@@ -198,28 +232,27 @@ namespace ActionBuffer
             for (int dimension = 0; dimension < rank; dimension++)
                 WriteUInt16((ushort)shape.GetLength(dimension));
             for (int i = 0; i < cachedValues.Count; i++)
-                write(this, scan, cachedValues[i]);
+                converter.WriteValue(this, scan, cachedValues[i]);
         }
 
         public void WriteNullable<T>(BufferScan scan, T? value,
-            Action<IBufferWriter, BufferScan, T> write) where T : struct
+            BuffConverter<T> converter) where T : struct
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            if (write == null) throw new ArgumentNullException(nameof(write));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             WriteBool(value.HasValue);
             if (value.HasValue)
-                write(this, scan, value.Value);
+                converter.WriteValue(this, scan, value.Value);
         }
 
         public void WriteKeyValuePair<TKey, TValue>(BufferScan scan, KeyValuePair<TKey, TValue> value,
-            Action<IBufferWriter, BufferScan, TKey> writeKey,
-            Action<IBufferWriter, BufferScan, TValue> writeValue)
+            BuffConverter<TKey> keyConverter, BuffConverter<TValue> valueConverter)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            if (writeKey == null) throw new ArgumentNullException(nameof(writeKey));
-            if (writeValue == null) throw new ArgumentNullException(nameof(writeValue));
-            writeKey(this, scan, value.Key);
-            writeValue(this, scan, value.Value);
+            if (keyConverter == null) throw new ArgumentNullException(nameof(keyConverter));
+            if (valueConverter == null) throw new ArgumentNullException(nameof(valueConverter));
+            keyConverter.WriteValue(this, scan, value.Key);
+            valueConverter.WriteValue(this, scan, value.Value);
         }
         public void WriteUTF8(string value)
         {
@@ -278,16 +311,17 @@ namespace ActionBuffer
             WriteInt32(scan.GetMetaIndex(cached.Type.Assembly.FullName));
             var ObjStart = this._index;
             WriteInt32(0);
-            if (scan.Settings?.SupportReferences == true)
+            if (scan.SupportReferences)
                 WriteInt32(cached.ReferenceId);
             for (int i = 0; i < cached.FieldCount; i++)
             {
-                var cachedField = cached.GetField(i);
+                var cachedField = scan.ReadField(cached, i);
                 var FieldStart = this._index;
                 WriteInt32(0);
                 WriteInt32(scan.GetMetaIndex(cachedField.Field.name));
-                WriteInt32(scan.GetMetaIndex(TypeHelper.GetTypeName(cachedField.Field.FieldType)));
-                cachedField.Converter.Write(this, scan, cachedField.Value);
+                WriteInt32(scan.GetMetaIndex(
+                    BuffSerializer.GetSerializedTypeName(cachedField.Field.FieldType)));
+                cachedField.Write(this, scan);
                 var FieldEnd = this._index;
                 this._index = FieldStart;
                 WriteInt32(FieldEnd);

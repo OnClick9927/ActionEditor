@@ -289,6 +289,46 @@ namespace ActionBuffer.Tests
         public ReferenceNode Next;
     }
 
+    public sealed class SharedCollectionModel
+    {
+        public List<int> First;
+        public List<int> Second;
+        public int[] FirstArray;
+        public int[] SecondArray;
+    }
+
+    public sealed class CollectionCycleModel
+    {
+        public string Name;
+        public List<CollectionCycleModel> Items;
+    }
+
+    public sealed class ReservedFieldNameModel
+    {
+        [Buffer("$ActionBuffer.Reference.v1")]
+        public int LegacyReferenceMarker;
+        [Buffer("$ActionBuffer.Reference.v2")]
+        public int ReferenceMarker;
+        [Buffer("$id")]
+        public int Id;
+        [Buffer("$values")]
+        public string Values;
+    }
+
+    public sealed class CallbackCounterModel : IBufferObject
+    {
+        public static int AfterReadCount;
+        public int Value;
+        public void BeforeWriteBuffer() { }
+        public void AfterReadBuffer() => AfterReadCount++;
+    }
+
+    public sealed class TemporalModel
+    {
+        public DateTime DateTime;
+        public TimeSpan TimeSpan;
+    }
+
     public sealed class EmptyNode { }
 
     public sealed class NodeLimitModel

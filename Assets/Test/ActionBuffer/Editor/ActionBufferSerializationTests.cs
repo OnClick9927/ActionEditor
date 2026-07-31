@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using NUnit.Framework;
 
 namespace ActionBuffer.Tests
@@ -197,7 +198,7 @@ namespace ActionBuffer.Tests
         {
             var source = new ExternalDelegateModel();
             source.Configure(10);
-            var settings = new BufferSerializerSettings { SupportReferences = true };
+            var settings = new BuffSettings { SupportReferences = true };
 
             var result = RoundTrip(source, format, settings);
             result.Callback(7);
@@ -213,7 +214,7 @@ namespace ActionBuffer.Tests
         {
             var source = new DetachedDelegateTargetModel();
             source.Configure();
-            var settings = new BufferSerializerSettings { SupportReferences = true };
+            var settings = new BuffSettings { SupportReferences = true };
 
             var exception = Assert.Throws<InvalidOperationException>(
                 () => Write(source, format, settings));
@@ -294,7 +295,7 @@ namespace ActionBuffer.Tests
         [TestCaseSource(nameof(Formats))]
         public void ReferenceModePreservesSharedAndMutuallyReferencingObjects(string format)
         {
-            var settings = new BufferSerializerSettings { SupportReferences = true };
+            var settings = new BuffSettings { SupportReferences = true };
             var leaf = new SharedLeaf { Value = 5 };
             var shared = RoundTrip(new SharedReferenceModel { First = leaf, Second = leaf },
                 format, settings);
@@ -309,15 +310,122 @@ namespace ActionBuffer.Tests
             Assert.That(ReferenceEquals(result.Next.Next, result), Is.True);
         }
 
+        [TestCaseSource(nameof(Formats))]
+        public void ReferenceModePreservesCollectionsAndCollectionCycles(string format)
+        {
+            var settings = new BuffSettings { SupportReferences = true };
+            var list = new List<int> { 1, 2, 3 };
+            var array = new[] { 4, 5 };
+            var shared = RoundTrip(new SharedCollectionModel
+            {
+                First = list,
+                Second = list,
+                FirstArray = array,
+                SecondArray = array
+            }, format, settings);
+
+            Assert.That(ReferenceEquals(shared.First, shared.Second), Is.True);
+            Assert.That(ReferenceEquals(shared.FirstArray, shared.SecondArray), Is.True);
+
+            var cycle = new CollectionCycleModel { Name = "root" };
+            cycle.Items = new List<CollectionCycleModel> { cycle };
+            var cycleResult = RoundTrip(cycle, format, settings);
+            Assert.That(ReferenceEquals(cycleResult, cycleResult.Items[0]), Is.True);
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void ReservedMetadataFieldNamesRoundTrip(string format)
+        {
+            var source = new ReservedFieldNameModel
+            {
+                LegacyReferenceMarker = 1,
+                ReferenceMarker = 2,
+                Id = 3,
+                Values = "field value"
+            };
+            var result = RoundTrip(source, format,
+                new BuffSettings { SupportReferences = true });
+
+            Assert.That(result.LegacyReferenceMarker, Is.EqualTo(1));
+            Assert.That(result.ReferenceMarker, Is.EqualTo(2));
+            Assert.That(result.Id, Is.EqualTo(3));
+            Assert.That(result.Values, Is.EqualTo("field value"));
+        }
+
+        [Test]
+        public void ConverterRegistrationIsFrozenDuringWriteAndRead()
+        {
+            var writeSettings = new BuffSettings();
+            writeSettings.RegisterConverter(new OperationMutatingConverter(writeSettings));
+            Assert.Throws<InvalidOperationException>(() => BuffSerializer.ToJson(
+                new LateRegisteredValue { Value = 7 }, writeSettings));
+            Assert.DoesNotThrow(writeSettings.ClearConverters);
+
+            var readSettings = new BuffSettings();
+            readSettings.RegisterConverter(new OperationMutatingConverter(readSettings)
+            {
+                MutateOnRead = true
+            });
+            Assert.Throws<InvalidOperationException>(() =>
+                BuffSerializer.FromJson<LateRegisteredValue>("7", readSettings));
+            Assert.DoesNotThrow(readSettings.ClearConverters);
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void DateTimeAndTimeSpanDoNotUseRegisteredLongConverter(string format)
+        {
+            var settings = new BuffSettings();
+            settings.RegisterConverter(new OffsetLongConverter());
+            var source = new TemporalModel
+            {
+                DateTime = new DateTime(638700000000000000, DateTimeKind.Utc),
+                TimeSpan = TimeSpan.FromTicks(-123456789)
+            };
+
+            var result = RoundTrip(source, format, settings);
+            Assert.That(result.DateTime, Is.EqualTo(source.DateTime));
+            Assert.That(result.TimeSpan, Is.EqualTo(source.TimeSpan));
+        }
+
+        [Test]
+        public void BinaryCallbacksRunOnlyAfterThePayloadIsValidated()
+        {
+            CallbackCounterModel.AfterReadCount = 0;
+            byte[] valid = BuffSerializer.ToBytes(new CallbackCounterModel { Value = 9 });
+            var invalid = new byte[valid.Length + 1];
+            Buffer.BlockCopy(valid, 0, invalid, 0, valid.Length);
+            invalid[invalid.Length - 1] = 1;
+
+            Assert.Throws<FormatException>(() =>
+                BuffSerializer.FromBytes<CallbackCounterModel>(invalid));
+            Assert.That(CallbackCounterModel.AfterReadCount, Is.Zero);
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void RestrictedPolymorphicTypesMustBeRegistered(string format)
+        {
+            var settings = new BuffSettings { RestrictTypes = true };
+            Assert.Throws<FormatException>(() =>
+                RoundTrip(new PolymorphicModel(), format, settings));
+
+            settings.RegisterType<Dog>();
+            settings.RegisterType<Rectangle>();
+            settings.RegisterType<DerivedValue>();
+            var result = RoundTrip(new PolymorphicModel(), format, settings);
+            Assert.That(result.AbstractValue, Is.TypeOf<Dog>());
+            Assert.That(result.InterfaceValue, Is.TypeOf<Rectangle>());
+            Assert.That(result.BaseValue, Is.TypeOf<DerivedValue>());
+        }
+
         [Test]
         public void MissingFieldsResetConstructorValuesToTypeDefaults()
         {
             var source = new DefaultValueModel { Zero = 0, Null = null };
-            string json = BufferSerializer.ToJson(source);
+            string json = BuffSerializer.ToJson(source);
             Assert.That(json, Does.Not.Contain("\"Zero\""));
             Assert.That(json, Does.Not.Contain("\"Null\""));
 
-            var result = BufferSerializer.ToObject<DefaultValueModel>(json);
+            var result = BuffSerializer.FromJson<DefaultValueModel>(json);
             Assert.That(result.Zero, Is.Zero);
             Assert.That(result.Null, Is.Null);
         }
@@ -325,31 +433,77 @@ namespace ActionBuffer.Tests
         [Test]
         public void WriteSettingsControlFormattingFieldsLimitsAndConverters()
         {
-            var settings = new BufferSerializerSettings
+            int previousLimit = BuffSettings.MaxScalarLength;
+            var settings = new BuffSettings
             {
                 TypeInfo = false,
                 FullField = true,
-                PrettyPrint = true,
-                MaxScalarLength = 8
+                PrettyPrint = true
             };
-            settings.RegisterConverter(new SettingsScopedConverter());
-
-            string json = BufferSerializer.ToJson(new DefaultValueModel
+            try
             {
-                Zero = 0,
-                Null = null
-            }, settings);
-            Assert.That(json, Does.Not.Contain("$type"));
-            Assert.That(json, Does.Contain("\n"));
-            Assert.That(json, Does.Contain("\"Zero\""));
-            Assert.That(json, Does.Contain("\"Null\""));
+                BuffSettings.MaxScalarLength = 8;
+                settings.RegisterConverter(new SettingsScopedConverter());
 
-            Assert.That(BufferSerializer.ToJson(new SettingsScopedValue { Value = 7 }, settings),
-                Is.EqualTo("2007"));
-            Assert.Throws<FormatException>(() => BufferSerializer.ToJson(
-                new LongStringModel { Value = "123456789" }, settings));
-            Assert.That(BufferSerializerSettings.DefaultSetting.MaxScalarLength,
-                Is.GreaterThan(8));
+                string json = BuffSerializer.ToJson(new DefaultValueModel
+                {
+                    Zero = 0,
+                    Null = null
+                }, settings);
+                Assert.That(json, Does.Not.Contain("$type"));
+                Assert.That(json, Does.Contain("\n"));
+                Assert.That(json, Does.Contain("\"Zero\""));
+                Assert.That(json, Does.Contain("\"Null\""));
+
+                string converted = BuffSerializer.ToJson(
+                    new SettingsScopedValue { Value = 7 }, settings);
+                Assert.That(converted, Is.EqualTo("2007"));
+                Assert.That(BuffSerializer.FromJson<SettingsScopedValue>(converted, settings).Value,
+                    Is.EqualTo(7));
+                string defaultJson = BuffSerializer.ToJson(
+                    new SettingsScopedValue { Value = 7 });
+                Assert.That(defaultJson, Is.Not.EqualTo(converted));
+                Assert.That(BuffSerializer.FromJson<SettingsScopedValue>(defaultJson).Value,
+                    Is.EqualTo(7));
+                Assert.Throws<FormatException>(() => BuffSerializer.ToJson(
+                    new LongStringModel { Value = "123456789" }, settings));
+            }
+            finally
+            {
+                settings.RemoveConverter<SettingsScopedValue>();
+                BuffSettings.MaxScalarLength = previousLimit;
+            }
+        }
+
+        private sealed class OperationMutatingConverter : AtomicBuffConverter<LateRegisteredValue>
+        {
+            private readonly BuffSettings _settings;
+            internal bool MutateOnRead;
+
+            internal OperationMutatingConverter(BuffSettings settings) =>
+                _settings = settings;
+
+            protected override void OnScan(BufferScan scan, LateRegisteredValue value)
+            {
+                if (!MutateOnRead) _settings.ClearConverters();
+            }
+
+            protected override LateRegisteredValue OnRead(IBufferReader reader, Type type)
+            {
+                if (MutateOnRead) _settings.ClearConverters();
+                return new LateRegisteredValue { Value = reader.ReadInt32() };
+            }
+
+            protected override void OnWrite(IBufferWriter writer, BufferScan scan,
+                LateRegisteredValue value) => writer.WriteInt32(value.Value);
+        }
+
+        private sealed class OffsetLongConverter : AtomicBuffConverter<long>
+        {
+            protected override long OnRead(IBufferReader reader, Type type) =>
+                reader.ReadInt64() - 1;
+            protected override void OnWrite(IBufferWriter writer, BufferScan scan, long value) =>
+                writer.WriteInt64(value + 1);
         }
 
         [TestCaseSource(nameof(Formats))]
@@ -357,7 +511,7 @@ namespace ActionBuffer.Tests
         {
             var source = new SerializableEventModel();
             source.Configure();
-            var settings = new BufferSerializerSettings { SerializeEvents = false };
+            var settings = new BuffSettings { SerializeEvents = false };
 
             var result = RoundTrip(source, format, settings);
             result.Raise(9);
@@ -368,26 +522,26 @@ namespace ActionBuffer.Tests
         public void BinarySupportsStringsLargerThanUShort()
         {
             string text = new string('x', 70000);
-            var result = BufferSerializer.ToObject<LongStringModel>(
-                BufferSerializer.ToBytes(new LongStringModel { Value = text }));
+            var result = BuffSerializer.FromBytes<LongStringModel>(
+                BuffSerializer.ToBytes(new LongStringModel { Value = text }));
             Assert.That(result.Value, Is.EqualTo(text));
         }
 
         [Test]
         public void BinaryNodeLimitMatchesWriterNodeCounting()
         {
-            int previous = BufferSerializer.MaxNodeCount;
+            int previous = BuffSettings.MaxNodeCount;
             try
             {
-                BufferSerializer.MaxNodeCount = 7;
+                BuffSettings.MaxNodeCount = 7;
                 var source = new NodeLimitModel();
                 for (int i = 0; i < 5; i++) source.Nodes.Add(new EmptyNode());
-                var result = BufferSerializer.ToObject<NodeLimitModel>(BufferSerializer.ToBytes(source));
+                var result = BuffSerializer.FromBytes<NodeLimitModel>(BuffSerializer.ToBytes(source));
                 Assert.That(result.Nodes.Count, Is.EqualTo(5));
             }
             finally
             {
-                BufferSerializer.MaxNodeCount = previous;
+                BuffSettings.MaxNodeCount = previous;
             }
         }
 
@@ -401,13 +555,46 @@ namespace ActionBuffer.Tests
             RoundTrip(source, "Json");
 
             LateRegisteredConverter.WriteCount = 0;
-            BufferSerializer.RegisterConverter(new LateRegisteredConverter());
-            foreach (string format in Formats)
+            var settings = new BuffSettings();
+            settings.RegisterConverter(new LateRegisteredConverter());
+            try
             {
-                var result = RoundTrip(source, format);
-                Assert.That(result[0].Value, Is.EqualTo(27));
+                foreach (string format in Formats)
+                {
+                    var result = RoundTrip(source, format, settings);
+                    Assert.That(result[0].Value, Is.EqualTo(27));
+                }
+                Assert.That(LateRegisteredConverter.WriteCount, Is.EqualTo(Formats.Length));
             }
-            Assert.That(LateRegisteredConverter.WriteCount, Is.EqualTo(Formats.Length));
+            finally
+            {
+                settings.RemoveConverter<LateRegisteredValue>();
+            }
+        }
+
+        [Test]
+        public void ConcurrentSettingsScopedConvertersDoNotLeakBetweenOperations()
+        {
+            var settings = new BuffSettings();
+            settings.RegisterConverter(new SettingsScopedConverter());
+            var source = new SettingsScopedValue { Value = 31 };
+
+            Assert.DoesNotThrow(() => Parallel.For(0, 512, index =>
+            {
+                if ((index & 1) == 0)
+                {
+                    string json = BuffSerializer.ToJson(source, settings);
+                    if (json != "2031" ||
+                        BuffSerializer.FromJson<SettingsScopedValue>(json, settings).Value != 31)
+                        throw new InvalidOperationException("Settings converter round-trip mismatch.");
+                    return;
+                }
+
+                string defaultJson = BuffSerializer.ToJson(source);
+                if (defaultJson == "2031" ||
+                    BuffSerializer.FromJson<SettingsScopedValue>(defaultJson).Value != 31)
+                    throw new InvalidOperationException("Settings converter leaked to another write.");
+            }));
         }
 
         [Test]
@@ -419,27 +606,17 @@ namespace ActionBuffer.Tests
             };
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Value" };
 
-            Assert.Throws<NotSupportedException>(() => BufferSerializer.ToJson(dictionary));
-            Assert.Throws<NotSupportedException>(() => BufferSerializer.ToBytes(set));
+            Assert.Throws<NotSupportedException>(() => BuffSerializer.ToJson(dictionary));
+            Assert.Throws<NotSupportedException>(() => BuffSerializer.ToBytes(set));
         }
 
         [Test]
-        public void NullableRootsAndSpanRootsRoundTripInEveryFormat()
+        public void NullRootWritesRequireARuntimeType()
         {
-            Assert.That(BufferSerializer.ToObject<int?>(BufferSerializer.ToJson<int>((int?)null)), Is.Null);
-            Assert.That(BufferSerializer.FromYaml<int?>(BufferSerializer.ToYaml<int>((int?)null)), Is.Null);
-            Assert.That(BufferSerializer.FromXml<int?>(BufferSerializer.ToXml<int>((int?)null)), Is.Null);
-            Assert.That(BufferSerializer.ToObject<int?>(BufferSerializer.ToBytes<int>((int?)null)), Is.Null);
-
-            int[] values = { 2, 4, 6, 8 };
-            CollectionAssert.AreEqual(values,
-                BufferSerializer.ToSpan<int>(BufferSerializer.ToJson((ReadOnlySpan<int>)values)).ToArray());
-            CollectionAssert.AreEqual(values,
-                BufferSerializer.FromYamlSpan<int>(BufferSerializer.ToYaml((ReadOnlySpan<int>)values)).ToArray());
-            CollectionAssert.AreEqual(values,
-                BufferSerializer.FromXmlSpan<int>(BufferSerializer.ToXml((ReadOnlySpan<int>)values)).ToArray());
-            CollectionAssert.AreEqual(values,
-                BufferSerializer.ToSpan<int>(BufferSerializer.ToBytes((ReadOnlySpan<int>)values)).ToArray());
+            Assert.Throws<ArgumentNullException>(() => BuffSerializer.ToJson(null));
+            Assert.Throws<ArgumentNullException>(() => BuffSerializer.ToYaml(null));
+            Assert.Throws<ArgumentNullException>(() => BuffSerializer.ToXml(null));
+            Assert.Throws<ArgumentNullException>(() => BuffSerializer.ToBytes(null));
         }
 
         [TestCaseSource(nameof(Formats))]
@@ -474,31 +651,35 @@ namespace ActionBuffer.Tests
         }
 
         private static T RoundTrip<T>(T source, string format,
-            BufferSerializerSettings settings = null) =>
+            BuffSettings settings = null) =>
             (T)RoundTripObject(source, typeof(T), format, settings);
 
         private static object RoundTripObject(object source, Type type, string format,
-            BufferSerializerSettings settings = null)
+            BuffSettings settings = null)
         {
             switch (format)
             {
-                case "Json": return BufferSerializer.ToObject(BufferSerializer.ToJson(source, settings), type);
-                case "Yaml": return BufferSerializer.FromYaml(BufferSerializer.ToYaml(source, settings), type);
-                case "Xml": return BufferSerializer.FromXml(BufferSerializer.ToXml(source, settings), type);
-                case "Binary": return BufferSerializer.ToObject(BufferSerializer.ToBytes(source, settings), type);
+                case "Json": return BuffSerializer.FromJson(
+                    BuffSerializer.ToJson(source, settings), type, settings);
+                case "Yaml": return BuffSerializer.FromYaml(
+                    BuffSerializer.ToYaml(source, settings), type, settings);
+                case "Xml": return BuffSerializer.FromXml(
+                    BuffSerializer.ToXml(source, settings), type, settings);
+                case "Binary": return BuffSerializer.FromBytes(
+                    BuffSerializer.ToBytes(source, settings), type, settings);
                 default: throw new ArgumentOutOfRangeException(nameof(format));
             }
         }
 
         private static object Write(object source, string format,
-            BufferSerializerSettings settings = null)
+            BuffSettings settings = null)
         {
             switch (format)
             {
-                case "Json": return BufferSerializer.ToJson(source, settings);
-                case "Yaml": return BufferSerializer.ToYaml(source, settings);
-                case "Xml": return BufferSerializer.ToXml(source, settings);
-                case "Binary": return BufferSerializer.ToBytes(source, settings);
+                case "Json": return BuffSerializer.ToJson(source, settings);
+                case "Yaml": return BuffSerializer.ToYaml(source, settings);
+                case "Xml": return BuffSerializer.ToXml(source, settings);
+                case "Binary": return BuffSerializer.ToBytes(source, settings);
                 default: throw new ArgumentOutOfRangeException(nameof(format));
             }
         }

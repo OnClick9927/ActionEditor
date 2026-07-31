@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Text;
 
 namespace ActionBuffer
@@ -9,14 +8,25 @@ namespace ActionBuffer
         private string _json;
         private int _position;
         private int _nodeCount;
+        private int _maxDepth;
+        private int _maxNodeCount;
+        private int _maxCollectionCount;
+        private int _maxObjectFieldCount;
+        private int _maxScalarLength;
 
-        public void Init(string data)
+        public void Init(string data, BuffSettings settings = null)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
-            Clear();
-            if (data.Length > BufferSerializer.MaxTextLength)
+            Prepare(settings);
+            int maxTextLength = BuffSettings.MaxTextLength;
+            if (data.Length > maxTextLength)
                 throw new FormatException(
-                    $"JSON length cannot exceed {BufferSerializer.MaxTextLength} characters.");
+                    $"JSON length cannot exceed {maxTextLength} characters.");
+            _maxDepth = BuffSettings.MaxDepth;
+            _maxNodeCount = BuffSettings.MaxNodeCount;
+            _maxCollectionCount = BuffSettings.MaxCollectionCount;
+            _maxObjectFieldCount = BuffSettings.MaxObjectFieldCount;
+            _maxScalarLength = BuffSettings.MaxScalarLength;
             _json = data;
 
             StructuredNode root = default;
@@ -69,7 +79,7 @@ namespace ActionBuffer
 
         private StructuredNode ParseValue(int depth)
         {
-            int maxDepth = BufferSerializerSettings.DefaultSetting.MaxDepth;
+            int maxDepth = _maxDepth;
             if (depth >= maxDepth)
                 throw Error($"JSON depth cannot exceed {maxDepth}.");
             CountNode();
@@ -81,26 +91,28 @@ namespace ActionBuffer
             {
                 case '{': return ParseObject(depth);
                 case '[': return ParseSequence(depth);
-                case '"': return StructuredNode.RentScalar(ReadString(), true);
+                case '"': return RentScalar(ReadString(), true);
                 case 't':
                     ReadLiteral("true");
-                    return StructuredNode.RentScalar("true", false);
+                    return RentScalar("true", false);
                 case 'f':
                     ReadLiteral("false");
-                    return StructuredNode.RentScalar("false", false);
+                    return RentScalar("false", false);
                 case 'n':
                     ReadLiteral("null");
-                    return StructuredNode.Rent(StructuredNodeKind.Null);
+                    return RentNode(StructuredNodeKind.Null);
                 default:
-                    return StructuredNode.RentScalar(ReadNumber(), false);
+                    return ReadNumber();
             }
         }
 
         private StructuredNode ParseObject(int depth)
         {
             Expect('{');
-            var node = StructuredNode.Rent(StructuredNodeKind.Object);
-            var fieldNames = HashSetPool<string>.Get();
+            var node = RentNode(StructuredNodeKind.Object);
+            var fieldNames = ClassPool.GetHashSet<string>();
+            StructuredNode collectionValues = default;
+            bool hasCollectionValues = false;
             try
             {
                 SkipWhitespace();
@@ -109,9 +121,9 @@ namespace ActionBuffer
 
                 while (true)
                 {
-                    if (node.FieldCount >= BufferSerializer.MaxObjectFieldCount)
+                    if (node.FieldCount >= _maxObjectFieldCount)
                         throw Error(
-                            $"JSON object field count cannot exceed {BufferSerializer.MaxObjectFieldCount}.");
+                            $"JSON object field count cannot exceed {_maxObjectFieldCount}.");
                     string name = ReadString();
                     Expect(':');
                     var value = ParseValue(depth + 1);
@@ -122,7 +134,7 @@ namespace ActionBuffer
                             RequireReferenceScalar(name, value);
                             if (node.ReferenceId >= 0)
                                 throw Error("Duplicate object reference metadata.");
-                            node.ReferenceId = ParseReferenceId(name, value.Scalar);
+                            node.ReferenceId = ParseReferenceId(name, value);
                             node.IsReference = name == "$ref";
                         }
                         else if (name == "$type")
@@ -138,6 +150,14 @@ namespace ActionBuffer
                             if (node.AssemblyName != null)
                                 throw Error("Duplicate metadata '$assembly'.");
                             node.AssemblyName = value.Scalar;
+                        }
+                        else if (name == "$values")
+                        {
+                            if (hasCollectionValues || value.Kind != StructuredNodeKind.Sequence)
+                                throw Error("Metadata '$values' must contain one sequence.");
+                            collectionValues = value;
+                            value = default;
+                            hasCollectionValues = true;
                         }
                         else
                         {
@@ -156,6 +176,16 @@ namespace ActionBuffer
                     SkipWhitespace();
                     if (TryRead('}'))
                     {
+                        if (hasCollectionValues)
+                        {
+                            if (node.IsReference || node.ReferenceId < 0 ||
+                                node.TypeName != null || node.AssemblyName != null ||
+                                node.FieldCount != 0)
+                                throw Error("A collection wrapper must contain only '$id' and '$values'.");
+                            collectionValues.ReferenceId = node.ReferenceId;
+                            node = collectionValues;
+                            collectionValues = default;
+                        }
                         ValidateReferenceNode(node);
                         return node;
                     }
@@ -169,16 +199,26 @@ namespace ActionBuffer
             }
             finally
             {
-                HashSetPool<string>.Back(fieldNames);
+                StructuredNode.Release(ref collectionValues);
+                ClassPool.BackHashSet(fieldNames);
             }
         }
 
-        private int ParseReferenceId(string name, string value)
+        private int ParseReferenceId(string name, StructuredNode value)
         {
-            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int result) ||
-                result < 0)
+            ulong parsed;
+            try
+            {
+                parsed = ParseUnsignedScalar(value);
+            }
+            catch (Exception exception) when (exception is FormatException ||
+                                               exception is OverflowException)
+            {
                 throw Error($"Metadata '{name}' must be a non-negative integer.");
-            return result;
+            }
+            if (parsed > int.MaxValue)
+                throw Error($"Metadata '{name}' must be a non-negative integer.");
+            return (int)parsed;
         }
 
         private void ValidateReferenceNode(StructuredNode node)
@@ -191,7 +231,7 @@ namespace ActionBuffer
         private StructuredNode ParseSequence(int depth)
         {
             Expect('[');
-            var node = StructuredNode.Rent(StructuredNodeKind.Sequence);
+            var node = RentNode(StructuredNodeKind.Sequence);
             try
             {
                 SkipWhitespace();
@@ -200,9 +240,9 @@ namespace ActionBuffer
 
                 while (true)
                 {
-                    if (node.ItemCount >= BufferSerializer.MaxCollectionCount)
+                    if (node.ItemCount >= _maxCollectionCount)
                         throw Error(
-                            $"JSON sequence count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+                            $"JSON sequence count cannot exceed {_maxCollectionCount}.");
                     var value = ParseValue(depth + 1);
                     try
                     {
@@ -251,7 +291,7 @@ namespace ActionBuffer
             if (IsEnd)
                 throw Error("Unterminated JSON string.");
 
-            var builder = ClassPool<StringBuilder>.Get();
+            var builder = ClassPool.Get<StringBuilder>();
             builder.Clear();
             try
             {
@@ -293,7 +333,7 @@ namespace ActionBuffer
             finally
             {
                 builder.Clear();
-                ClassPool<StringBuilder>.Back(builder);
+                ClassPool.Back(builder);
             }
         }
 
@@ -316,7 +356,7 @@ namespace ActionBuffer
             return (char)value;
         }
 
-        private string ReadNumber()
+        private StructuredNode ReadNumber()
         {
             SkipWhitespace();
             int start = _position;
@@ -359,22 +399,23 @@ namespace ActionBuffer
 
             if (!IsEnd && !IsValueTerminator(Peek()))
                 throw Error("Invalid character after JSON number.");
-            EnsureScalarLength(_position - start);
-            return _json.Substring(start, _position - start);
+            int length = _position - start;
+            EnsureScalarLength(length);
+            return RentScalarSlice(_json, start, length, false);
         }
 
         private void CountNode()
         {
-            if (_nodeCount >= BufferSerializer.MaxNodeCount)
-                throw Error($"JSON node count cannot exceed {BufferSerializer.MaxNodeCount}.");
+            if (_nodeCount >= _maxNodeCount)
+                throw Error($"JSON node count cannot exceed {_maxNodeCount}.");
             _nodeCount++;
         }
 
         private void EnsureScalarLength(int length)
         {
-            if (length > BufferSerializer.MaxScalarLength)
+            if (length > _maxScalarLength)
                 throw Error(
-                    $"JSON scalar length cannot exceed {BufferSerializer.MaxScalarLength} characters.");
+                    $"JSON scalar length cannot exceed {_maxScalarLength} characters.");
         }
 
         private void ReadLiteral(string value)
