@@ -4,9 +4,9 @@ namespace ActionBuffer
 {
     public abstract class BuffConverter
     {
-        public abstract object Read(IBufferReader reader, Type type);
-        public abstract void Scan(BufferScan scan, object value);
-        public abstract void Write(IBufferWriter writer, BufferScan scan, object value);
+        internal abstract object Read(IBufferReader reader, Type type);
+        internal abstract void Scan(BufferScan scan, object value);
+        internal abstract void Write(IBufferWriter writer, BufferScan scan, object value);
         internal virtual bool UsesObjectLayout => false;
     }
 
@@ -27,9 +27,9 @@ namespace ActionBuffer
         internal void WriteValue(IBufferWriter writer, BufferScan scan, T value) =>
             OnWrite(writer, scan, value);
 
-        public sealed override object Read(IBufferReader reader, Type type) => ReadValue(reader, type);
-        public sealed override void Scan(BufferScan scan, object value) => ScanValue(scan, (T)value);
-        public sealed override void Write(IBufferWriter writer, BufferScan scan, object value) =>
+        internal sealed override object Read(IBufferReader reader, Type type) => ReadValue(reader, type);
+        internal sealed override void Scan(BufferScan scan, object value) => ScanValue(scan, (T)value);
+        internal sealed override void Write(IBufferWriter writer, BufferScan scan, object value) =>
             WriteValue(writer, scan, (T)value);
     }
 }

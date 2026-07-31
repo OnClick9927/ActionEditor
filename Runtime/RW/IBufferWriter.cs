@@ -7,12 +7,11 @@ namespace ActionBuffer
     public interface IBufferWriter
     {
         bool CollectMeta { get; }
-        bool FullField { get; }
-        void Init();
+        void Init(BufferScan scan);
         void WriteIEnumerable<T>(BufferScan scan, IEnumerable<T> values, Action<IBufferWriter, BufferScan, T> write);
-        void WriteArray2D<T>(BufferScan scan, T[,] values,
+        void WriteMultiDimensionalArray<T>(BufferScan scan, Array values, int rank,
             Action<IBufferWriter, BufferScan, T> write) =>
-            throw new NotSupportedException("This writer does not support two-dimensional arrays.");
+            throw new NotSupportedException("This writer does not support multi-dimensional arrays.");
         void WriteNullable<T>(BufferScan scan, T? value, Action<IBufferWriter, BufferScan, T> write) where T : struct;
         void WriteKeyValuePair<TKey, TValue>(BufferScan scan, KeyValuePair<TKey, TValue> value,
             Action<IBufferWriter, BufferScan, TKey> writeKey,

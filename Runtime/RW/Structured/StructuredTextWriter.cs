@@ -9,33 +9,34 @@ namespace ActionBuffer
         private StructuredNode _value;
         private bool _hasValue;
         private bool _typeInfo;
-        private bool _fullField;
+        private int _maxTextLength = BufferSerializerSettings.DefaultSetting.MaxTextLength;
 
         public bool CollectMeta => false;
-        public bool FullField => _fullField;
 
-        public bool typeInfo
+        public void Init(BufferScan scan)
         {
-            get { return _typeInfo; }
-            set { _typeInfo = value; }
-        }
-
-        public bool fullField
-        {
-            get { return _fullField; }
-            set { _fullField = value; }
-        }
-
-        public void Init()
-        {
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
             ResetValue();
+            var settings = scan.Settings;
+            _typeInfo = settings.TypeInfo;
+            _maxTextLength = settings.MaxTextLength;
+            OnInit(scan);
+        }
+
+        protected virtual void OnInit(BufferScan scan) { }
+
+        protected void ValidateTextLength(int length, string format)
+        {
+            if (length > _maxTextLength)
+                throw new FormatException(
+                    $"{format} output length cannot exceed {_maxTextLength} characters.");
         }
 
         public virtual void Clear()
         {
             ResetValue();
             _typeInfo = false;
-            _fullField = false;
+            _maxTextLength = BufferSerializerSettings.DefaultSetting.MaxTextLength;
         }
 
         internal StructuredNode GetRoot()
@@ -79,9 +80,15 @@ namespace ActionBuffer
                 SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
                 return;
             }
+            if (cached.IsReference)
+            {
+                SetValue(StructuredNode.RentReference(cached.ReferenceId));
+                return;
+            }
             var node = StructuredNode.Rent(StructuredNodeKind.Object);
             try
             {
+                node.ReferenceId = cached.ReferenceId;
                 if (!_typeInfo && cached.Type != typeof(T))
                     throw new InvalidOperationException(
                         $"Writing runtime type '{cached.Type}' through '{typeof(T)}' requires typeInfo=true.");
@@ -156,95 +163,63 @@ namespace ActionBuffer
             SetValue(node);
         }
 
-        public void WriteArray2D<T>(BufferScan scan, T[,] values,
+        public void WriteMultiDimensionalArray<T>(BufferScan scan, Array values, int rank,
             Action<IBufferWriter, BufferScan, T> write)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
             if (write == null) throw new ArgumentNullException(nameof(write));
-            var cachedValues = scan.ReadArray2D<T>(out int rows, out int columns);
+            var cachedValues = scan.ReadMultiDimensionalArray<T>(rank, out var shape);
             if (cachedValues == null)
             {
                 SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
                 return;
             }
-            if (rows == 0 && columns != 0)
-            {
-                WriteEmptyArrayDimensions(columns);
-                return;
-            }
 
-            var node = StructuredNode.Rent(StructuredNodeKind.Sequence);
-            int valueIndex = 0;
+            var node = StructuredNode.Rent(StructuredNodeKind.Object);
             try
             {
-                for (int row = 0; row < rows; row++)
+                var dimensions = StructuredNode.Rent(StructuredNodeKind.Sequence);
+                try
                 {
-                    var rowNode = StructuredNode.Rent(StructuredNodeKind.Sequence);
-                    try
+                    for (int dimension = 0; dimension < rank; dimension++)
                     {
-                        for (int column = 0; column < columns; column++)
+                        var lengthNode = StructuredNode.RentScalar(
+                            shape.GetLength(dimension).ToString(CultureInfo.InvariantCulture), false);
+                        try
                         {
-                            ResetValue();
-                            write(this, scan, cachedValues[valueIndex++]);
-                            var valueNode = TakeValue();
-                            try
-                            {
-                                rowNode.AddItem(valueNode);
-                                valueNode = default;
-                            }
-                            finally
-                            {
-                                StructuredNode.Release(ref valueNode);
-                            }
+                            dimensions.AddItem(lengthNode);
+                            lengthNode = default;
                         }
-                        node.AddItem(rowNode);
-                        rowNode = default;
+                        finally { StructuredNode.Release(ref lengthNode); }
                     }
-                    finally
-                    {
-                        StructuredNode.Release(ref rowNode);
-                    }
+                    node.AddField("dimensions", dimensions);
+                    dimensions = default;
                 }
+                finally { StructuredNode.Release(ref dimensions); }
+
+                var valueSequence = StructuredNode.Rent(StructuredNodeKind.Sequence);
+                try
+                {
+                    for (int index = 0; index < cachedValues.Count; index++)
+                    {
+                        ResetValue();
+                        write(this, scan, cachedValues[index]);
+                        var valueNode = TakeValue();
+                        try
+                        {
+                            valueSequence.AddItem(valueNode);
+                            valueNode = default;
+                        }
+                        finally { StructuredNode.Release(ref valueNode); }
+                    }
+                    node.AddField("values", valueSequence);
+                    valueSequence = default;
+                }
+                finally { StructuredNode.Release(ref valueSequence); }
             }
             catch
             {
                 ResetValue();
-                StructuredNode.Release(ref node);
-                throw;
-            }
-            SetValue(node);
-        }
-
-        private void WriteEmptyArrayDimensions(int columns)
-        {
-            var node = StructuredNode.Rent(StructuredNodeKind.Object);
-            try
-            {
-                var rowsNode = StructuredNode.RentScalar("0", false);
-                try
-                {
-                    node.AddField("$rows", rowsNode);
-                    rowsNode = default;
-                }
-                finally
-                {
-                    StructuredNode.Release(ref rowsNode);
-                }
-
-                var columnsNode = StructuredNode.RentScalar(
-                    columns.ToString(CultureInfo.InvariantCulture), false);
-                try
-                {
-                    node.AddField("$columns", columnsNode);
-                    columnsNode = default;
-                }
-                finally
-                {
-                    StructuredNode.Release(ref columnsNode);
-                }
-            }
-            catch
-            {
                 StructuredNode.Release(ref node);
                 throw;
             }

@@ -20,16 +20,18 @@ namespace ActionBuffer
                 private readonly FieldInfo field;
                 private readonly object defaultValue;
                 private BuffConverter converter;
-                private int converterVersion = -1;
+                private long converterVersion = -1;
                 public readonly Type DeclaringType;
+                public readonly bool IsEvent;
                 public object GetValue(object target) => field.GetValue(target);
                 public void SetValue(object target, object value) => field.SetValue(target, value);
                 internal void SetDefaultValue(object target) => field.SetValue(target, defaultValue);
-                internal BuffConverter GetConverter()
+                internal BuffConverter GetConverter(BufferSerializerSettings settings = null)
                 {
-                    if (converterVersion == BufferSerializer.ConverterVersion) return converter;
-                    converter = BufferSerializer.GetConverter(FieldType);
-                    converterVersion = BufferSerializer.ConverterVersion;
+                    long version = BufferSerializer.GetResolverVersion(settings);
+                    if (converterVersion == version) return converter;
+                    converter = BufferSerializer.GetConverter(FieldType, settings);
+                    converterVersion = version;
                     return converter;
                 }
                 public Field(FieldInfo field, string name)
@@ -38,6 +40,9 @@ namespace ActionBuffer
                     FieldType = field.FieldType;
                     this.field = field;
                     this.name = name;
+                    IsEvent = field.DeclaringType?.GetEvent(field.Name,
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+                        BindingFlags.DeclaredOnly) != null;
                     defaultValue = GetDefaultValue(FieldType);
                 }
             }

@@ -31,6 +31,8 @@ namespace ActionBuffer
         public bool Quoted { get; private set; }
         public string TypeName { get; set; }
         public string AssemblyName { get; set; }
+        public int ReferenceId { get; set; }
+        public bool IsReference { get; set; }
         private List<StructuredField> _fields;
         private List<StructuredNode> _items;
 
@@ -39,7 +41,7 @@ namespace ActionBuffer
 
         public static string EncodeTextFieldName(string name)
         {
-            if (name == "$type" || name == "$assembly" ||
+            if (name == "$type" || name == "$assembly" || name == "$id" || name == "$ref" ||
                 name.StartsWith(TextFieldEscapePrefix, StringComparison.Ordinal))
                 return TextFieldEscapePrefix + name;
             return name;
@@ -54,7 +56,16 @@ namespace ActionBuffer
 
         public static StructuredNode Rent(StructuredNodeKind kind)
         {
-            return new StructuredNode { Kind = kind };
+            return new StructuredNode { Kind = kind, ReferenceId = -1 };
+        }
+
+        public static StructuredNode RentReference(int referenceId)
+        {
+            if (referenceId < 0) throw new ArgumentOutOfRangeException(nameof(referenceId));
+            var node = Rent(StructuredNodeKind.Object);
+            node.ReferenceId = referenceId;
+            node.IsReference = true;
+            return node;
         }
 
         public static StructuredNode RentScalar(string value, bool quoted)

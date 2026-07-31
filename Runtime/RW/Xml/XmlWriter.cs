@@ -9,19 +9,19 @@ namespace ActionBuffer
         private readonly StringBuilder _builder = new StringBuilder();
         private bool _prettyPrint = true;
 
-        public bool prettyPrint
-        {
-            get { return _prettyPrint; }
-            set { _prettyPrint = value; }
-        }
-
         public string GetXml()
         {
             _builder.Clear();
             WriteNode(_builder, "ActionBuffer", null, GetRoot(), _prettyPrint, 0);
             if (_prettyPrint && _builder.Length > 0)
                 _builder.Length--;
+            ValidateTextLength(_builder.Length, "XML");
             return _builder.ToString();
+        }
+
+        protected override void OnInit(BufferScan scan)
+        {
+            _prettyPrint = scan.Settings.PrettyPrint;
         }
 
         public override void Clear()
@@ -42,12 +42,19 @@ namespace ActionBuffer
                 AppendAttribute(builder, "name", fieldName);
             AppendAttribute(builder, "kind", GetKindName(node.Kind));
 
-            if (node.Kind == StructuredNodeKind.Object && !string.IsNullOrEmpty(node.TypeName))
+            if (node.IsReference)
+                AppendAttribute(builder, "ref", node.ReferenceId.ToString());
+            else if (node.ReferenceId >= 0)
+                AppendAttribute(builder, "id", node.ReferenceId.ToString());
+
+            if (node.Kind == StructuredNodeKind.Object && !node.IsReference &&
+                !string.IsNullOrEmpty(node.TypeName))
             {
                 AppendAttribute(builder, "type", node.TypeName);
                 AppendAttribute(builder, "assembly", node.AssemblyName ?? string.Empty);
             }
-            bool hasChildren = node.Kind == StructuredNodeKind.Object && node.FieldCount > 0 ||
+            bool hasChildren = node.Kind == StructuredNodeKind.Object && !node.IsReference &&
+                               node.FieldCount > 0 ||
                                node.Kind == StructuredNodeKind.Sequence && node.ItemCount > 0;
             bool hasScalar = node.Kind == StructuredNodeKind.Scalar && !string.IsNullOrEmpty(node.Scalar);
             if (!hasChildren && !hasScalar)
@@ -148,9 +155,6 @@ namespace ActionBuffer
 
         private static void EnsureLength(StringBuilder builder)
         {
-            if (builder.Length > BufferSerializer.MaxTextLength)
-                throw new FormatException(
-                    $"XML output length cannot exceed {BufferSerializer.MaxTextLength} characters.");
         }
     }
 }

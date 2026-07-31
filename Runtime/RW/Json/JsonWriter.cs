@@ -9,17 +9,17 @@ namespace ActionBuffer
         private readonly StringBuilder _builder = new StringBuilder();
         private bool _prettyPrint;
 
-        public bool prettyPrint
-        {
-            get { return _prettyPrint; }
-            set { _prettyPrint = value; }
-        }
-
         public string GetJson()
         {
             _builder.Clear();
             Write(GetRoot(), _builder, _prettyPrint);
+            ValidateTextLength(_builder.Length, "JSON");
             return _builder.ToString();
+        }
+
+        protected override void OnInit(BufferScan scan)
+        {
+            _prettyPrint = scan.Settings.PrettyPrint;
         }
 
         public override void Clear()
@@ -64,7 +64,18 @@ namespace ActionBuffer
             builder.Append('{');
             int memberIndex = 0;
 
-            if (!string.IsNullOrEmpty(node.TypeName))
+            if (node.IsReference)
+            {
+                WritePropertyPrefix("$ref", memberIndex++, builder, prettyPrint, indent);
+                builder.Append(node.ReferenceId.ToString(CultureInfo.InvariantCulture));
+            }
+            else if (node.ReferenceId >= 0)
+            {
+                WritePropertyPrefix("$id", memberIndex++, builder, prettyPrint, indent);
+                builder.Append(node.ReferenceId.ToString(CultureInfo.InvariantCulture));
+            }
+
+            if (!node.IsReference && !string.IsNullOrEmpty(node.TypeName))
             {
                 WritePropertyPrefix("$type", memberIndex++, builder, prettyPrint, indent);
                 WriteString(node.TypeName, builder);
@@ -72,7 +83,7 @@ namespace ActionBuffer
                 WriteString(node.AssemblyName ?? string.Empty, builder);
             }
 
-            for (int i = 0; i < node.FieldCount; i++)
+            for (int i = 0; !node.IsReference && i < node.FieldCount; i++)
             {
                 var field = node.GetField(i);
                 WritePropertyPrefix(StructuredNode.EncodeTextFieldName(field.Name), memberIndex++, builder, prettyPrint, indent);
@@ -224,9 +235,6 @@ namespace ActionBuffer
 
         private static void EnsureLength(StringBuilder builder)
         {
-            if (builder.Length > BufferSerializer.MaxTextLength)
-                throw new FormatException(
-                    $"JSON output length cannot exceed {BufferSerializer.MaxTextLength} characters.");
         }
     }
 }

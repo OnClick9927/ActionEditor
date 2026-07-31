@@ -7,9 +7,10 @@ namespace ActionBuffer
     {
         private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
         private bool metasWritten;
+        private int _maxBinaryLength = BufferSerializerSettings.DefaultSetting.MaxBinaryLength;
+        private int _maxScalarLength = BufferSerializerSettings.DefaultSetting.MaxScalarLength;
 
         public bool CollectMeta => true;
-        public bool FullField => false;
 
         public byte[] GetValidBuffer()
         {
@@ -40,9 +41,12 @@ namespace ActionBuffer
             _buffer = new byte[capacity];
         }
 
-        public void Init()
+        public void Init(BufferScan scan)
         {
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
             Clear();
+            _maxBinaryLength = scan.Settings.MaxBinaryLength;
+            _maxScalarLength = scan.Settings.MaxScalarLength;
         }
 
         public int Capacity
@@ -60,9 +64,9 @@ namespace ActionBuffer
         private void CheckWriterIndex(int length)
         {
             var requiredLength = checked(_index + length);
-            if (requiredLength > BufferSerializer.MaxBinaryLength)
+            if (requiredLength > _maxBinaryLength)
                 throw new FormatException(
-                    $"Binary data length cannot exceed {BufferSerializer.MaxBinaryLength} bytes.");
+                    $"Binary data length cannot exceed {_maxBinaryLength} bytes.");
             if (requiredLength <= _buffer.Length) return;
 
             var newCapacity = Math.Max(_buffer.Length, 1);
@@ -179,20 +183,20 @@ namespace ActionBuffer
                 write(this, scan, cachedValues[i]);
         }
 
-        public void WriteArray2D<T>(BufferScan scan, T[,] values,
+        public void WriteMultiDimensionalArray<T>(BufferScan scan, Array values, int rank,
             Action<IBufferWriter, BufferScan, T> write)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
             if (write == null) throw new ArgumentNullException(nameof(write));
-            var cachedValues = scan.ReadArray2D<T>(out int rows, out int columns);
+            var cachedValues = scan.ReadMultiDimensionalArray<T>(rank, out var shape);
             if (cachedValues == null)
             {
                 WriteUInt16(ushort.MaxValue);
                 return;
             }
 
-            WriteUInt16((ushort)rows);
-            WriteUInt16((ushort)columns);
+            for (int dimension = 0; dimension < rank; dimension++)
+                WriteUInt16((ushort)shape.GetLength(dimension));
             for (int i = 0; i < cachedValues.Count; i++)
                 write(this, scan, cachedValues[i]);
         }
@@ -234,9 +238,9 @@ namespace ActionBuffer
             {
                 throw new FormatException("String contains an unpaired UTF-16 surrogate.", exception);
             }
-            if (count > BufferSerializer.MaxScalarLength)
+            if (count > _maxScalarLength)
                 throw new FormatException(
-                    $"UTF-8 byte count cannot exceed {BufferSerializer.MaxScalarLength}.");
+                    $"UTF-8 byte count cannot exceed {_maxScalarLength}.");
             WriteInt32(count);
             CheckWriterIndex(count);
             _index += Utf8.GetBytes(value, 0, value.Length, _buffer, _index);
@@ -264,10 +268,18 @@ namespace ActionBuffer
                 WriteInt32(-1);
                 return;
             }
+            if (cached.IsReference)
+            {
+                WriteInt32(-2);
+                WriteInt32(cached.ReferenceId);
+                return;
+            }
             WriteInt32(scan.GetMetaIndex(cached.Type.FullName));
             WriteInt32(scan.GetMetaIndex(cached.Type.Assembly.FullName));
             var ObjStart = this._index;
             WriteInt32(0);
+            if (scan.Settings?.SupportReferences == true)
+                WriteInt32(cached.ReferenceId);
             for (int i = 0; i < cached.FieldCount; i++)
             {
                 var cachedField = cached.GetField(i);

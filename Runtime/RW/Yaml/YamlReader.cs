@@ -74,8 +74,9 @@ namespace ActionBuffer
 
         private StructuredNode ParseBlock(int indent, int depth)
         {
-            if (depth >= BufferScan.MaxDepth)
-                throw Error(_lines[_lineIndex], $"YAML depth cannot exceed {BufferScan.MaxDepth}.");
+            int maxDepth = BufferSerializerSettings.DefaultSetting.MaxDepth;
+            if (depth >= maxDepth)
+                throw Error(_lines[_lineIndex], $"YAML depth cannot exceed {maxDepth}.");
             var line = _lines[_lineIndex];
             if (line.Indent != indent)
                 throw Error(line, $"Expected indentation {indent}, but found {line.Indent}.");
@@ -126,13 +127,20 @@ namespace ActionBuffer
                         value = ParseBlock(_lines[_lineIndex].Indent, depth + 1);
                     }
 
-                    if (key == "$type" || key == "$assembly")
+                    if (key == "$type" || key == "$assembly" || key == "$id" || key == "$ref")
                     {
                         try
                         {
                             if (value.Kind != StructuredNodeKind.Scalar)
                                 throw Error(line, $"Metadata '{key}' must be a scalar.");
-                            if (key == "$type")
+                            if (key == "$id" || key == "$ref")
+                            {
+                                if (node.ReferenceId >= 0)
+                                    throw Error(line, "Duplicate object reference metadata.");
+                                node.ReferenceId = ParseReferenceId(key, value.Scalar, line);
+                                node.IsReference = key == "$ref";
+                            }
+                            else if (key == "$type")
                             {
                                 if (node.TypeName != null) throw Error(line, "Duplicate metadata '$type'.");
                                 node.TypeName = value.Scalar;
@@ -165,6 +173,10 @@ namespace ActionBuffer
                         }
                     }
                 }
+                if (node.IsReference && (node.FieldCount != 0 || node.TypeName != null ||
+                                         node.AssemblyName != null))
+                    throw Error(_lines[Math.Max(0, _lineIndex - 1)],
+                        "A '$ref' mapping cannot contain fields or type metadata.");
                 return node;
             }
             catch
@@ -176,6 +188,14 @@ namespace ActionBuffer
             {
                 HashSetPool<string>.Back(fieldNames);
             }
+        }
+
+        private static int ParseReferenceId(string name, string value, Line line)
+        {
+            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int result) ||
+                result < 0)
+                throw Error(line, $"Metadata '{name}' must be a non-negative integer.");
+            return result;
         }
 
         private StructuredNode ParseSequence(int indent, int depth)

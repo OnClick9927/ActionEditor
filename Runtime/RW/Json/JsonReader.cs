@@ -69,8 +69,9 @@ namespace ActionBuffer
 
         private StructuredNode ParseValue(int depth)
         {
-            if (depth >= BufferScan.MaxDepth)
-                throw Error($"JSON depth cannot exceed {BufferScan.MaxDepth}.");
+            int maxDepth = BufferSerializerSettings.DefaultSetting.MaxDepth;
+            if (depth >= maxDepth)
+                throw Error($"JSON depth cannot exceed {maxDepth}.");
             CountNode();
             SkipWhitespace();
             if (IsEnd)
@@ -116,7 +117,15 @@ namespace ActionBuffer
                     var value = ParseValue(depth + 1);
                     try
                     {
-                        if (name == "$type")
+                        if (name == "$id" || name == "$ref")
+                        {
+                            RequireReferenceScalar(name, value);
+                            if (node.ReferenceId >= 0)
+                                throw Error("Duplicate object reference metadata.");
+                            node.ReferenceId = ParseReferenceId(name, value.Scalar);
+                            node.IsReference = name == "$ref";
+                        }
+                        else if (name == "$type")
                         {
                             RequireMetadataScalar(name, value);
                             if (node.TypeName != null)
@@ -146,7 +155,10 @@ namespace ActionBuffer
 
                     SkipWhitespace();
                     if (TryRead('}'))
+                    {
+                        ValidateReferenceNode(node);
                         return node;
+                    }
                     Expect(',');
                 }
             }
@@ -159,6 +171,21 @@ namespace ActionBuffer
             {
                 HashSetPool<string>.Back(fieldNames);
             }
+        }
+
+        private int ParseReferenceId(string name, string value)
+        {
+            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int result) ||
+                result < 0)
+                throw Error($"Metadata '{name}' must be a non-negative integer.");
+            return result;
+        }
+
+        private void ValidateReferenceNode(StructuredNode node)
+        {
+            if (node.IsReference && (node.FieldCount != 0 || node.TypeName != null ||
+                                     node.AssemblyName != null))
+                throw Error("A '$ref' object cannot contain fields or type metadata.");
         }
 
         private StructuredNode ParseSequence(int depth)
@@ -365,6 +392,13 @@ namespace ActionBuffer
         {
             if (value.Kind != StructuredNodeKind.Scalar || !value.Quoted)
                 throw new FormatException($"JSON metadata '{name}' must be a string.");
+        }
+
+        private static void RequireReferenceScalar(string name, StructuredNode value)
+        {
+            if (value.Kind != StructuredNodeKind.Scalar || value.Quoted)
+                throw new FormatException(
+                    $"JSON metadata '{name}' must be a non-negative integer.");
         }
 
         private void Expect(char expected)

@@ -5,25 +5,24 @@ namespace ActionBuffer
     class TimeSpanConverter : AtomicBuffConverter<TimeSpan>
     {
         private static BuffConverter<long> _converter;
-        private static int _converterVersion = -1;
-        private static BuffConverter<long> Converter
+        private static long _converterVersion = -1;
+        private static BuffConverter<long> GetConverter(BufferSerializerSettings settings)
         {
-            get
-            {
-                if (_converterVersion == BufferSerializer.ConverterVersion) return _converter;
-                _converter = BufferSerializer.GetConverter<long>();
-                _converterVersion = BufferSerializer.ConverterVersion;
-                return _converter;
-            }
+            long version = BufferSerializer.GetResolverVersion(settings);
+            if (_converterVersion == version) return _converter;
+            _converter = BufferSerializer.GetConverter<long>(settings);
+            _converterVersion = version;
+            return _converter;
         }
         protected override TimeSpan OnRead(IBufferReader reader, Type type)
         {
-            return TimeSpan.FromTicks(Converter.ReadValue(reader, typeof(long)));
+            return TimeSpan.FromTicks(GetConverter(BufferSerializerSettings.DefaultSetting)
+                .ReadValue(reader, typeof(long)));
         }
 
         protected override void OnWrite(IBufferWriter writer, BufferScan scan, TimeSpan value)
         {
-            Converter.WriteValue(writer, scan, value.Ticks);
+            GetConverter(scan.Settings).WriteValue(writer, scan, value.Ticks);
         }
     }
 }
