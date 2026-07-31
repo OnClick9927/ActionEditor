@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace ActionBuffer
@@ -16,6 +15,9 @@ namespace ActionBuffer
         public int TargetReferenceId;
         public string TargetType;
         public string TargetAssembly;
+        public string[] GenericArgumentTypes;
+        public string[] GenericArgumentAssemblies;
+        public object Target;
     }
 
     internal sealed class DelegateConverter<TDelegate> : BuffConverter<TDelegate>
@@ -24,6 +26,8 @@ namespace ActionBuffer
         private const byte NoTarget = 0;
         private const byte CurrentObjectTarget = 1;
         private const byte ObjectReferenceTarget = 2;
+        private const byte EmbeddedTarget = 3;
+        private const byte ClosedStaticNullTarget = 4;
         private static readonly int InvokeParameterCount =
             typeof(TDelegate).GetMethod("Invoke").GetParameters().Length;
         private readonly object _methodSync = new object();
@@ -43,18 +47,24 @@ namespace ActionBuffer
             private readonly Type _declaringType;
             private readonly string _name;
             private readonly string _signature;
+            private readonly string[] _genericTypes;
+            private readonly string[] _genericAssemblies;
 
-            internal MethodCacheKey(Type declaringType, string name, string signature)
+            internal MethodCacheKey(Type declaringType, DelegateMethodReference reference)
             {
                 _declaringType = declaringType;
-                _name = name;
-                _signature = signature;
+                _name = reference.MethodName;
+                _signature = reference.Signature;
+                _genericTypes = reference.GenericArgumentTypes;
+                _genericAssemblies = reference.GenericArgumentAssemblies;
             }
 
             public bool Equals(MethodCacheKey other) =>
                 _declaringType == other._declaringType &&
                 string.Equals(_name, other._name, StringComparison.Ordinal) &&
-                string.Equals(_signature, other._signature, StringComparison.Ordinal);
+                string.Equals(_signature, other._signature, StringComparison.Ordinal) &&
+                Equal(_genericTypes, other._genericTypes) &&
+                Equal(_genericAssemblies, other._genericAssemblies);
             public override bool Equals(object obj) => obj is MethodCacheKey other && Equals(other);
             public override int GetHashCode()
             {
@@ -62,8 +72,27 @@ namespace ActionBuffer
                 {
                     int hash = _declaringType.GetHashCode();
                     hash = hash * 397 ^ (_name?.GetHashCode() ?? 0);
-                    return hash * 397 ^ (_signature?.GetHashCode() ?? 0);
+                    hash = hash * 397 ^ (_signature?.GetHashCode() ?? 0);
+                    hash = AddHash(hash, _genericTypes);
+                    return AddHash(hash, _genericAssemblies);
                 }
+            }
+
+            private static bool Equal(string[] left, string[] right)
+            {
+                if (ReferenceEquals(left, right)) return true;
+                if (left == null || right == null || left.Length != right.Length) return false;
+                for (int i = 0; i < left.Length; i++)
+                    if (!string.Equals(left[i], right[i], StringComparison.Ordinal)) return false;
+                return true;
+            }
+
+            private static int AddHash(int hash, string[] values)
+            {
+                if (values == null) return hash * 397;
+                for (int i = 0; i < values.Length; i++)
+                    hash = hash * 397 ^ (values[i]?.GetHashCode() ?? 0);
+                return hash;
             }
         }
 
@@ -118,19 +147,22 @@ namespace ActionBuffer
         {
             var method = value.Method;
             var declaringType = method.DeclaringType;
-            if (declaringType == null || method.IsGenericMethod || declaringType.ContainsGenericParameters)
+            if (declaringType == null)
                 throw new NotSupportedException(
-                    $"Delegate method '{method}' is generic, dynamic, or has no concrete declaring type.");
+                    $"Dynamic delegate method '{method}' has no stable declaring type and " +
+                    "cannot be reconstructed after an application restart.");
+            if (method.ContainsGenericParameters || declaringType.ContainsGenericParameters)
+                throw new NotSupportedException(
+                    $"Delegate method '{method}' contains unbound generic parameters.");
             var descriptor = GetMethodDescriptor(method);
 
             byte binding;
             if (value.Target == null)
             {
                 if (method.IsStatic && descriptor.ParameterCount != InvokeParameterCount)
-                    throw new NotSupportedException(
-                        $"Delegate '{typeof(TDelegate)}' closes static method '{method}' over a null target, " +
-                        "which cannot be reconstructed safely.");
-                binding = NoTarget;
+                    binding = ClosedStaticNullTarget;
+                else
+                    binding = NoTarget;
             }
             else if (ReferenceEquals(value.Target, scan.CurrentObject))
             {
@@ -138,34 +170,41 @@ namespace ActionBuffer
             }
             else
             {
-                var targetType = value.Target.GetType();
-                if (targetType.IsDefined(typeof(CompilerGeneratedAttribute), false))
-                    throw new NotSupportedException(
-                        $"Delegate '{typeof(TDelegate)}' uses compiler-generated closure target '{targetType}'. " +
-                        "Closure delegates are not supported.");
-                if (!ConverterResolver.Get(targetType, scan.Settings).UsesObjectLayout)
-                    throw new NotSupportedException(
-                        $"Delegate target type '{targetType}' must use object-field serialization.");
-                binding = ObjectReferenceTarget;
+                binding = EmbeddedTarget;
             }
 
             var reference = descriptor.Reference;
             reference.Binding = binding;
             reference.TargetReferenceId = -1;
-            if (binding == ObjectReferenceTarget)
+            reference.TargetType = null;
+            reference.TargetAssembly = null;
+            reference.Target = null;
+            if (binding == EmbeddedTarget)
             {
-                var targetType = value.Target.GetType();
-                reference.TargetReferenceId = scan.RequireObjectReference(value.Target);
-                reference.TargetType = targetType.FullName;
-                reference.TargetAssembly = targetType.Assembly.FullName;
+                reference.Target = value.Target;
             }
             return reference;
+        }
+
+        private static bool IsDeclaredMethod(MethodInfo method, Type declaringType)
+        {
+            var expected = method.IsGenericMethod
+                ? method.GetGenericMethodDefinition()
+                : method;
+            var methods = declaringType.GetMethods(BindingFlags.Public |
+                BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance |
+                BindingFlags.DeclaredOnly);
+            for (int i = 0; i < methods.Length; i++)
+                if (methods[i].Equals(expected)) return true;
+            return false;
         }
 
         private Delegate CreateDelegate(IBufferReader reader, DelegateMethodReference reference)
         {
             if (reference.Binding != NoTarget && reference.Binding != CurrentObjectTarget &&
-                reference.Binding != ObjectReferenceTarget)
+                reference.Binding != ObjectReferenceTarget &&
+                reference.Binding != EmbeddedTarget &&
+                reference.Binding != ClosedStaticNullTarget)
                 throw new FormatException($"Unknown delegate binding kind '{reference.Binding}'.");
 
             var declaringType = TypeHelper.GetTypeByFullName(reference.DeclaringType, reference.AssemblyName);
@@ -199,10 +238,21 @@ namespace ActionBuffer
                     throw new FormatException("The reader does not support object references.");
                 target = context.GetOrCreateReference(reference.TargetReferenceId, targetType);
             }
+            else if (reference.Binding == EmbeddedTarget)
+            {
+                target = reference.Target;
+                if (target == null)
+                    throw new FormatException(
+                        $"Delegate method '{match}' requires an embedded target.");
+            }
 
-            var result = target == null
-                ? Delegate.CreateDelegate(typeof(TDelegate), match, false)
-                : Delegate.CreateDelegate(typeof(TDelegate), target, match, false);
+            Delegate result;
+            if (reference.Binding == ClosedStaticNullTarget)
+                result = Delegate.CreateDelegate(typeof(TDelegate), null, match, false);
+            else if (reference.Binding == NoTarget)
+                result = Delegate.CreateDelegate(typeof(TDelegate), match, false);
+            else
+                result = Delegate.CreateDelegate(typeof(TDelegate), target, match, false);
             if (result == null)
                 throw new FormatException(
                     $"Method '{match}' is not compatible with delegate type '{typeof(TDelegate)}'.");
@@ -211,7 +261,7 @@ namespace ActionBuffer
 
         private MethodInfo ResolveMethod(Type declaringType, DelegateMethodReference reference)
         {
-            var key = new MethodCacheKey(declaringType, reference.MethodName, reference.Signature);
+            var key = new MethodCacheKey(declaringType, reference);
             lock (_methodSync)
             {
                 if (_resolvedMethods.TryGetValue(key, out var cached)) return cached;
@@ -222,7 +272,10 @@ namespace ActionBuffer
                 for (int i = 0; i < methods.Length; i++)
                 {
                     var candidate = methods[i];
-                    if (candidate.Name != reference.MethodName || candidate.IsGenericMethod ||
+                    if (candidate.Name != reference.MethodName)
+                        continue;
+                    candidate = CloseGenericMethod(candidate, reference);
+                    if (candidate == null ||
                         GetMethodDescriptor(candidate).Reference.Signature != reference.Signature)
                         continue;
                     if (match != null)
@@ -236,12 +289,44 @@ namespace ActionBuffer
             }
         }
 
+        private static MethodInfo CloseGenericMethod(MethodInfo candidate,
+            DelegateMethodReference reference)
+        {
+            var typeNames = reference.GenericArgumentTypes;
+            var assemblyNames = reference.GenericArgumentAssemblies;
+            if (typeNames == null || typeNames.Length == 0)
+                return candidate.IsGenericMethod ? null : candidate;
+            if (!candidate.IsGenericMethodDefinition || assemblyNames == null ||
+                assemblyNames.Length != typeNames.Length ||
+                candidate.GetGenericArguments().Length != typeNames.Length)
+                return null;
+
+            var arguments = new Type[typeNames.Length];
+            for (int i = 0; i < arguments.Length; i++)
+            {
+                arguments[i] = TypeHelper.GetTypeByFullName(typeNames[i], assemblyNames[i]);
+                if (arguments[i] == null) return null;
+            }
+            try
+            {
+                return candidate.MakeGenericMethod(arguments);
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+        }
+
         private MethodDescriptor GetMethodDescriptor(MethodInfo method)
         {
             lock (_methodSync)
             {
                 if (_methodDescriptors.TryGetValue(method, out var cached)) return cached;
                 var declaringType = method.DeclaringType;
+                if (!IsDeclaredMethod(method, declaringType))
+                    throw new NotSupportedException(
+                        $"Dynamic delegate method '{method}' is not discoverable from its " +
+                        "declaring type and cannot be reconstructed after an application restart.");
                 var descriptor = new MethodDescriptor
                 {
                     ParameterCount = method.GetParameters().Length,
@@ -253,6 +338,18 @@ namespace ActionBuffer
                         Signature = GetMethodSignature(method)
                     }
                 };
+                if (method.IsGenericMethod)
+                {
+                    var arguments = method.GetGenericArguments();
+                    descriptor.Reference.GenericArgumentTypes = new string[arguments.Length];
+                    descriptor.Reference.GenericArgumentAssemblies = new string[arguments.Length];
+                    for (int i = 0; i < arguments.Length; i++)
+                    {
+                        descriptor.Reference.GenericArgumentTypes[i] = arguments[i].FullName;
+                        descriptor.Reference.GenericArgumentAssemblies[i] =
+                            arguments[i].Assembly.FullName;
+                    }
+                }
                 _methodDescriptors.Add(method, descriptor);
                 return descriptor;
             }

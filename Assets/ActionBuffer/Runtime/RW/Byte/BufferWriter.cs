@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 namespace ActionBuffer
 {
-    public class BufferWriter : IBufferWriter, ITypedEnumWriter
+    public class BufferWriter : IBufferWriter, ITypedEnumWriter, IPolymorphicWriter
     {
         private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
         private bool metasWritten;
@@ -170,6 +170,8 @@ namespace ActionBuffer
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
             if (converter == null) throw new ArgumentNullException(nameof(converter));
+            if (scan.SupportReferences && !metasWritten)
+                WriteMetas(scan);
             var cachedValues = scan.ReadEnumerable<T>(out int referenceId,
                 out bool isReference);
             if (!WriteCollectionHeader(scan, cachedValues?.Count ?? 0,
@@ -213,6 +215,8 @@ namespace ActionBuffer
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
             if (converter == null) throw new ArgumentNullException(nameof(converter));
+            if (scan.SupportReferences && !metasWritten)
+                WriteMetas(scan);
             var cachedValues = scan.ReadMultiDimensionalArray<T>(rank, out var shape,
                 out int referenceId, out bool isReference);
             if (scan.SupportReferences)
@@ -287,6 +291,17 @@ namespace ActionBuffer
             for (int i = 0; i < scan.MetaCount; i++)
                 WriteUTF8(scan.GetMeta(i));
             metasWritten = true;
+        }
+
+        void IPolymorphicWriter.WritePolymorphic(BufferScan scan)
+        {
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
+            var cached = scan.ReadPolymorphic();
+            if (!metasWritten)
+                WriteMetas(scan);
+            WriteInt32(scan.GetMetaIndex(cached.Type.FullName));
+            WriteInt32(scan.GetMetaIndex(cached.Type.Assembly.FullName));
+            cached.Converter.Write(this, scan, cached.Value);
         }
 
 

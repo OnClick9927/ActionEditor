@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -6,7 +7,8 @@ using System.Globalization;
 namespace ActionBuffer
 {
     public abstract class StructuredTextReader : IBufferReader, IObjectContextReader,
-        IBuffSerializerContext, ITypedEnumReader, IReferenceResolver
+        IBuffSerializerContext, ITypedEnumReader, IReferenceResolver, IPolymorphicReader,
+        ICollectionReader
     {
         private StructuredNode _root;
         private StructuredNode _current;
@@ -132,6 +134,46 @@ namespace ActionBuffer
                 _objectReadDepth--;
                 if (_objectReadDepth == 0 && !_deferCallbacks)
                     _afterReadCallbacks.Clear();
+            }
+        }
+
+        bool IPolymorphicReader.TryReadPolymorphic(Type declaredType, out object value)
+        {
+            if (declaredType == null) throw new ArgumentNullException(nameof(declaredType));
+            var node = RequireCurrent();
+            if (node.Kind != StructuredNodeKind.Object || node.IsReference ||
+                string.IsNullOrEmpty(node.TypeName))
+            {
+                value = null;
+                return false;
+            }
+
+            var actualType = ResolveType(declaredType, node);
+            var converter = ConverterResolver.Get(actualType, _settings);
+            if (converter.UsesObjectLayout)
+            {
+                value = null;
+                return false;
+            }
+            if (node.FieldCount != 1)
+                throw new FormatException(
+                    $"Polymorphic value '{actualType}' must contain exactly one value field.");
+            var fields = node.GetFieldEnumerator();
+            if (!fields.MoveNext() ||
+                fields.Current.Name != ObjectConverter<object>.PolymorphicValueField)
+                throw new FormatException(
+                    $"Polymorphic value '{actualType}' has an invalid value field.");
+
+            var previous = _current;
+            _current = fields.Current.Value;
+            try
+            {
+                value = converter.Read(this, actualType);
+                return true;
+            }
+            finally
+            {
+                _current = previous;
             }
         }
 
@@ -281,6 +323,86 @@ namespace ActionBuffer
             var items = node.GetItemEnumerator();
             while (items.MoveNext())
                 result.Add(ReadItem(items.Current, converter));
+            return result;
+        }
+
+        TCollection ICollectionReader.ReadCollection<TCollection, T>(
+            BuffConverter<T> converter, CollectionReadMode mode)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (node.IsReference)
+                return (TCollection)GetExistingReference(
+                    node.ReferenceId, typeof(TCollection));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            var result = CollectionFactory<TCollection>.Create(node.ItemCount);
+            DefineCollectionReference(node.ReferenceId, result, typeof(TCollection));
+            if (mode != CollectionReadMode.Stack)
+            {
+                var items = node.GetItemEnumerator();
+                while (items.MoveNext())
+                    CollectionPopulator<TCollection, T>.Add(
+                        result, ReadItem(items.Current, converter), mode);
+                return result;
+            }
+
+            var values = ClassPool.GetList<T>(node.ItemCount);
+            try
+            {
+                var items = node.GetItemEnumerator();
+                while (items.MoveNext())
+                    values.Add(ReadItem(items.Current, converter));
+                for (int i = values.Count - 1; i >= 0; i--)
+                    CollectionPopulator<TCollection, T>.Add(result, values[i], mode);
+            }
+            finally
+            {
+                ClassPool.BackList(values);
+            }
+            return result;
+        }
+
+        TCollection ICollectionReader.ReadArrayList<TCollection>(
+            BuffConverter<object> converter)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (node.IsReference)
+                return (TCollection)GetExistingReference(
+                    node.ReferenceId, typeof(TCollection));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            var result = CollectionFactory<TCollection>.Create(node.ItemCount);
+            DefineCollectionReference(node.ReferenceId, result, typeof(TCollection));
+            var items = node.GetItemEnumerator();
+            while (items.MoveNext()) result.Add(ReadItem(items.Current, converter));
+            return result;
+        }
+
+        TCollection ICollectionReader.ReadHashtable<TCollection>(
+            BuffConverter<KeyValuePair<object, object>> converter)
+        {
+            var node = RequireSequence();
+            if (node.Kind == StructuredNodeKind.Null) return null;
+            if (node.IsReference)
+                return (TCollection)GetExistingReference(
+                    node.ReferenceId, typeof(TCollection));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            var result = CollectionFactory<TCollection>.Create(node.ItemCount);
+            DefineCollectionReference(node.ReferenceId, result, typeof(TCollection));
+            var items = node.GetItemEnumerator();
+            while (items.MoveNext())
+            {
+                var item = ReadItem(items.Current, converter);
+                try
+                {
+                    result.Add(item.Key, item.Value);
+                }
+                catch (ArgumentException exception)
+                {
+                    throw new FormatException("Invalid or duplicate hashtable key.",
+                        exception);
+                }
+            }
             return result;
         }
 

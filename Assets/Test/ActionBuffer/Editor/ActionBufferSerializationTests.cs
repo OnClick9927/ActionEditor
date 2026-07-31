@@ -1,8 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Threading.Tasks;
 using NUnit.Framework;
 
@@ -82,6 +84,31 @@ namespace ActionBuffer.Tests
             CollectionAssert.AreEqual(new[] { 4, 5 }, result.Segment.ToArray());
             Assert.That(result.Pair.Key, Is.EqualTo("pair"));
             Assert.That(result.Pair.Value, Is.EqualTo(42));
+            CollectionAssert.AreEqual(new object[] { 1, "two", 3L }, result.ArrayList);
+            Assert.That(result.Hashtable["number"], Is.EqualTo(4));
+            Assert.That(result.Hashtable[5], Is.EqualTo("value"));
+            CollectionAssert.AreEqual(new[] { 14, 15 }, result.LinkedList);
+            Assert.That(result.SortedDictionary["a"], Is.EqualTo(1));
+            CollectionAssert.AreEqual(new[] { 16, 17, 18 }, result.SortedSet);
+            CollectionAssert.AreEqual(new[] { 19, 20 }, result.ObservableCollection);
+            Assert.That(result.CustomList, Is.TypeOf<CustomIntList>());
+            CollectionAssert.AreEqual(new[] { 21, 22 }, result.CustomList);
+            Assert.That(result.CustomDictionary, Is.TypeOf<CustomStringDictionary>());
+            Assert.That(result.CustomDictionary["custom"], Is.EqualTo(23));
+            Assert.That(result.CustomArrayList, Is.TypeOf<CustomArrayList>());
+            CollectionAssert.AreEqual(new object[] { "custom", 24 }, result.CustomArrayList);
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void CustomCollectionSubclassesPreserveCycles(string format)
+        {
+            var source = new CustomArrayList();
+            source.Add(source);
+            var result = RoundTrip(source, format,
+                new BuffSettings { SupportReferences = true });
+
+            Assert.That(result, Is.TypeOf<CustomArrayList>());
+            Assert.That(ReferenceEquals(result, result[0]), Is.True);
         }
 
         [TestCaseSource(nameof(Formats))]
@@ -102,6 +129,11 @@ namespace ActionBuffer.Tests
 
             var record = RoundTrip(new RecordModel(9, "record"), format);
             Assert.That(record, Is.EqualTo(new RecordModel(9, "record")));
+
+            var readonlyAndInit = RoundTrip(
+                new ReadonlyAndInitModel(10, "init"), format);
+            Assert.That(readonlyAndInit.ReadonlyNumber, Is.EqualTo(10));
+            Assert.That(readonlyAndInit.InitText, Is.EqualTo("init"));
         }
 
         [TestCaseSource(nameof(Formats))]
@@ -117,6 +149,28 @@ namespace ActionBuffer.Tests
             Assert.That(result.BaseValue, Is.TypeOf<DerivedValue>());
             Assert.That(result.BaseValue.BaseNumber, Is.EqualTo(12));
             Assert.That(((DerivedValue)result.BaseValue).DerivedText, Is.EqualTo("derived"));
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void PolymorphicAtomicStringCollectionAndCustomConvertersRoundTrip(
+            string format)
+        {
+            var settings = new BuffSettings();
+            settings.RegisterConverter(new CustomAtomicValueConverter());
+            var result = RoundTrip(new PolymorphicValueModel(), format, settings);
+
+            Assert.That(result.Atomic, Is.EqualTo(31));
+            Assert.That(result.Text, Is.EqualTo("polymorphic"));
+            Assert.That(result.Collection, Is.TypeOf<List<int>>());
+            CollectionAssert.AreEqual(new[] { 32, 33 }, (IEnumerable)result.Collection);
+            Assert.That(result.AtomicInterface, Is.EqualTo(34));
+            Assert.That(result.TextInterface, Is.EqualTo("interface text"));
+            Assert.That(result.CollectionInterface,
+                Is.TypeOf<System.Collections.ObjectModel.ObservableCollection<int>>());
+            CollectionAssert.AreEqual(new[] { 35, 36 }, result.CollectionInterface);
+            Assert.That(((CustomAtomicValue)result.CustomAtomic).Number, Is.EqualTo(37));
+            Assert.That(result.CustomAtomicBase.Number, Is.EqualTo(38));
+            Assert.That(result.CustomAtomicInterface.Number, Is.EqualTo(39));
         }
 
         [TestCaseSource(nameof(Formats))]
@@ -210,25 +264,57 @@ namespace ActionBuffer.Tests
         }
 
         [TestCaseSource(nameof(Formats))]
-        public void DelegatesBoundToObjectsOutsideTheRootGraphAreRejected(string format)
+        public void DelegatesBoundToObjectsOutsideTheRootGraphRoundTrip(string format)
         {
             var source = new DetachedDelegateTargetModel();
             source.Configure();
-            var settings = new BuffSettings { SupportReferences = true };
+            var result = RoundTrip(source, format);
+            result.Callback(7);
 
-            var exception = Assert.Throws<InvalidOperationException>(
-                () => Write(source, format, settings));
-            Assert.That(exception.Message, Does.Contain("not part of the serialized object graph"));
+            Assert.That(result.Callback.Target, Is.TypeOf<ExternalDelegateTarget>());
+            Assert.That(((ExternalDelegateTarget)result.Callback.Target).Value, Is.EqualTo(7));
         }
 
         [TestCaseSource(nameof(Formats))]
-        public void DelegateClosuresAreRejected(string format)
+        public void DelegateClosuresRoundTrip(string format)
         {
             var source = new SerializableDelegateModel();
             source.ConfigureClosure();
+            var settings = new BuffSettings { SupportReferences = true };
+            var result = RoundTrip(source, format, settings);
+            result.Callback(5);
 
-            var exception = Assert.Throws<NotSupportedException>(() => Write(source, format));
-            Assert.That(exception.Message, Does.Contain("Closure delegates are not supported"));
+            Assert.That(result.Value, Is.EqualTo(6));
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void GenericMethodsAndValueTypeDelegateTargetsRoundTrip(string format)
+        {
+            var source = new AdvancedDelegateModel();
+            source.Configure();
+            AdvancedDelegateModel.GenericValue = 0;
+
+            var result = RoundTrip(source, format);
+            result.GenericCallback(41);
+
+            Assert.That(AdvancedDelegateModel.GenericValue, Is.EqualTo(41));
+            Assert.That(result.ValueTargetCallback(2), Is.EqualTo(42));
+            Assert.That(result.ValueTargetCallback.Target, Is.TypeOf<ValueDelegateTarget>());
+            Assert.That(result.ClosedNullCallback(42), Is.EqualTo(43));
+        }
+
+        [Test]
+        public void DynamicMethodsAreRejectedWithAStableMetadataError()
+        {
+            var method = new DynamicMethod("DynamicValue", typeof(int), Type.EmptyTypes);
+            var il = method.GetILGenerator();
+            il.Emit(OpCodes.Ldc_I4_7);
+            il.Emit(OpCodes.Ret);
+            var callback = (Func<int>)method.CreateDelegate(typeof(Func<int>));
+
+            var exception = Assert.Throws<NotSupportedException>(
+                () => BuffSerializer.ToBytes(callback));
+            Assert.That(exception.Message, Does.Contain("cannot be reconstructed"));
         }
 
         [TestCaseSource(nameof(Formats))]
@@ -308,6 +394,16 @@ namespace ActionBuffer.Tests
             var result = RoundTrip(first, format, settings);
             Assert.That(result.Next.Name, Is.EqualTo("second"));
             Assert.That(ReferenceEquals(result.Next.Next, result), Is.True);
+        }
+
+        private sealed class CustomAtomicValueConverter :
+            AtomicBuffConverter<CustomAtomicValue>
+        {
+            protected override CustomAtomicValue OnRead(IBufferReader reader, Type type) =>
+                new CustomAtomicValue(reader.ReadInt32());
+
+            protected override void OnWrite(IBufferWriter writer, BufferScan scan,
+                CustomAtomicValue value) => writer.WriteInt32(value.Number);
         }
 
         [TestCaseSource(nameof(Formats))]
@@ -605,9 +701,23 @@ namespace ActionBuffer.Tests
                 { "Key", 1 }
             };
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Value" };
+            var sortedDictionary = new SortedDictionary<string, int>(
+                StringComparer.OrdinalIgnoreCase) { { "Key", 1 } };
+            var sortedSet = new SortedSet<string>(StringComparer.OrdinalIgnoreCase) { "Value" };
+            var hashtable = new Hashtable(StringComparer.OrdinalIgnoreCase)
+            {
+                { "Key", 1 }
+            };
 
             Assert.Throws<NotSupportedException>(() => BuffSerializer.ToJson(dictionary));
             Assert.Throws<NotSupportedException>(() => BuffSerializer.ToBytes(set));
+            Assert.Throws<NotSupportedException>(() => BuffSerializer.ToJson(sortedDictionary));
+            Assert.Throws<NotSupportedException>(() => BuffSerializer.ToBytes(sortedSet));
+            Assert.Throws<NotSupportedException>(() => BuffSerializer.ToJson(hashtable));
+
+            var settings = new BuffSettings { DeterministicCollectionOrder = true };
+            Assert.Throws<NotSupportedException>(() => BuffSerializer.ToBytes(
+                new HashSet<EmptyNode> { new EmptyNode() }, settings));
         }
 
         [Test]

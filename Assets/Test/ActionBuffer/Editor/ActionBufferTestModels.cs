@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace System.Runtime.CompilerServices
 {
@@ -74,7 +76,29 @@ namespace ActionBuffer.Tests
         public Stack<int> Stack = new Stack<int>(new[] { 1, 2, 3 });
         public ArraySegment<int> Segment = new ArraySegment<int>(new[] { 0, 4, 5, 0 }, 1, 2);
         public KeyValuePair<string, int> Pair = new KeyValuePair<string, int>("pair", 42);
+        public ArrayList ArrayList = new ArrayList { 1, "two", 3L };
+        public Hashtable Hashtable = new Hashtable
+        {
+            { "number", 4 }, { 5, "value" }
+        };
+        public LinkedList<int> LinkedList = new LinkedList<int>(new[] { 14, 15 });
+        public SortedDictionary<string, int> SortedDictionary =
+            new SortedDictionary<string, int>
+            {
+                { "a", 1 }, { "b", 2 }
+            };
+        public SortedSet<int> SortedSet = new SortedSet<int> { 17, 16, 18 };
+        public ObservableCollection<int> ObservableCollection =
+            new ObservableCollection<int> { 19, 20 };
+        public CustomIntList CustomList = new CustomIntList { 21, 22 };
+        public CustomStringDictionary CustomDictionary =
+            new CustomStringDictionary { { "custom", 23 } };
+        public CustomArrayList CustomArrayList = new CustomArrayList { "custom", 24 };
     }
+
+    public sealed class CustomIntList : List<int> { }
+    public sealed class CustomStringDictionary : Dictionary<string, int> { }
+    public sealed class CustomArrayList : ArrayList { }
 
     public abstract class Animal
     {
@@ -113,6 +137,35 @@ namespace ActionBuffer.Tests
         public Animal AbstractValue = new Dog { Name = "dog", Age = 6 };
         public IShape InterfaceValue = new Rectangle { Width = 4, Height = 5 };
         public BaseValue BaseValue = new DerivedValue { BaseNumber = 12, DerivedText = "derived" };
+    }
+
+    public interface ICustomAtomic
+    {
+        int Number { get; }
+    }
+
+    public abstract class CustomAtomicBase
+    {
+        public abstract int Number { get; }
+    }
+
+    public sealed class CustomAtomicValue : CustomAtomicBase, ICustomAtomic
+    {
+        public override int Number { get; }
+        public CustomAtomicValue(int number) => Number = number;
+    }
+
+    public sealed class PolymorphicValueModel
+    {
+        public object Atomic = 31;
+        public object Text = "polymorphic";
+        public object Collection = new List<int> { 32, 33 };
+        public IComparable AtomicInterface = 34;
+        public IComparable TextInterface = "interface text";
+        public IEnumerable CollectionInterface = new ObservableCollection<int> { 35, 36 };
+        public object CustomAtomic = new CustomAtomicValue(37);
+        public CustomAtomicBase CustomAtomicBase = new CustomAtomicValue(38);
+        public ICustomAtomic CustomAtomicInterface = new CustomAtomicValue(39);
     }
 
     public sealed class NullableAndTupleModel
@@ -232,6 +285,49 @@ namespace ActionBuffer.Tests
         public void Configure()
         {
             Callback = new ExternalDelegateTarget().CreateCallback();
+        }
+    }
+
+    public struct ValueDelegateTarget
+    {
+        public int Offset;
+        public int Add(int value) => value + Offset;
+    }
+
+    public sealed class AdvancedDelegateModel
+    {
+        public static int GenericValue;
+        [Buffer] public Action<int> GenericCallback;
+        [Buffer] public Func<int, int> ValueTargetCallback;
+        [Buffer] public Func<int, int> ClosedNullCallback;
+
+        public void Configure()
+        {
+            GenericCallback = AssignGeneric<int>;
+            var target = new ValueDelegateTarget { Offset = 40 };
+            ValueTargetCallback = target.Add;
+            var method = typeof(AdvancedDelegateModel).GetMethod(nameof(AddClosedNull),
+                System.Reflection.BindingFlags.Static |
+                System.Reflection.BindingFlags.NonPublic);
+            ClosedNullCallback = (Func<int, int>)Delegate.CreateDelegate(
+                typeof(Func<int, int>), null, method);
+        }
+
+        private static void AssignGeneric<T>(T value) =>
+            GenericValue = Convert.ToInt32(value);
+        private static int AddClosedNull(string prefix, int value) =>
+            prefix == null ? value + 1 : value;
+    }
+
+    public sealed class ReadonlyAndInitModel
+    {
+        public readonly int ReadonlyNumber;
+        public string InitText { get; init; }
+
+        public ReadonlyAndInitModel(int number, string text)
+        {
+            ReadonlyNumber = number;
+            InitText = text;
         }
     }
 

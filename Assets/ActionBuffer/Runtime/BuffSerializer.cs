@@ -41,7 +41,6 @@ namespace ActionBuffer
                 try
                 {
                     converter.Scan(scan, obj);
-                    scan.ValidateReferences();
                     scan.ResetRead();
                     writer.Init(scan);
                     converter.Write(writer, scan, obj);

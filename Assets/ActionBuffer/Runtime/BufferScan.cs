@@ -236,31 +236,65 @@ namespace ActionBuffer
                                     $"Collection count cannot exceed {maxCollectionCount}.");
                         }
                     }
-                    if (comparer != null)
-                    {
-                        try
-                        {
-                            values.Sort(comparer);
-                            for (int i = 1; i < values.Count; i++)
-                            {
-                                if (comparer.Compare(values[i - 1], values[i]) == 0 &&
-                                    !EqualityComparer<T>.Default.Equals(values[i - 1], values[i]))
-                                    throw new NotSupportedException(
-                                        $"Collection element type '{typeof(T)}' does not have a unique deterministic order.");
-                            }
-                        }
-                        catch (InvalidOperationException exception)
-                        {
-                            throw new NotSupportedException(
-                                $"Collection element type '{typeof(T)}' cannot be ordered deterministically.", exception);
-                        }
-                    }
+                    Sort(values, comparer);
                     return cached;
                 }
                 catch
                 {
                     cached.Release();
                     throw;
+                }
+            }
+
+            internal static CachedEnumerable CaptureOwned<T>(List<T> values,
+                IComparer<T> comparer, int maxCollectionCount)
+            {
+                if (values == null) throw new ArgumentNullException(nameof(values));
+                if (values.Count > maxCollectionCount)
+                    throw new FormatException(
+                        $"Collection count cannot exceed {maxCollectionCount}.");
+                var holder = ClassPool.Get<CachedEnumerableValues<T>>();
+                holder.Values = values;
+                var cached = new CachedEnumerable
+                {
+                    _elementType = typeof(T),
+                    _rank = 1,
+                    _referenceId = -1,
+                    _values = holder
+                };
+                try
+                {
+                    Sort(values, comparer);
+                    return cached;
+                }
+                catch
+                {
+                    holder.Values = null;
+                    cached._values = null;
+                    ClassPool.Back(holder);
+                    throw;
+                }
+            }
+
+            private static void Sort<T>(List<T> values, IComparer<T> comparer)
+            {
+                if (comparer == null) return;
+                try
+                {
+                    values.Sort(comparer);
+                    for (int i = 1; i < values.Count; i++)
+                    {
+                        if (comparer.Compare(values[i - 1], values[i]) == 0 &&
+                            !EqualityComparer<T>.Default.Equals(values[i - 1], values[i]))
+                            throw new NotSupportedException(
+                                $"Collection element type '{typeof(T)}' does not have a unique deterministic order.");
+                    }
+                }
+                catch (InvalidOperationException exception)
+                {
+                    throw new NotSupportedException(
+                        $"Collection element type '{typeof(T)}' cannot be ordered deterministically.",
+                        exception);
                 }
             }
 
@@ -394,6 +428,20 @@ namespace ActionBuffer
             }
         }
 
+        internal readonly struct CachedPolymorphic
+        {
+            internal object Value { get; }
+            internal Type Type { get; }
+            internal BuffConverter Converter { get; }
+
+            internal CachedPolymorphic(object value, Type type, BuffConverter converter)
+            {
+                Value = value;
+                Type = type;
+                Converter = converter;
+            }
+        }
+
         private interface ICachedEnumerableValues
         {
             void Release();
@@ -416,12 +464,12 @@ namespace ActionBuffer
         {
             public int Id;
             public bool Defined;
-            public bool RequiredByDelegate;
         }
 
         private readonly List<CachedObject> _objects = new();
         private readonly List<CachedField> _fields = new();
         private readonly List<CachedEnumerable> _enumerables = new();
+        private readonly List<CachedPolymorphic> _polymorphicValues = new();
         private readonly Dictionary<Type, IFieldValueCache> _fieldValueCaches = new();
         private readonly BoxedFieldValueCache _boxedFieldValues = new BoxedFieldValueCache();
         private Dictionary<string, int> _metaMap = new();
@@ -431,6 +479,7 @@ namespace ActionBuffer
             new Dictionary<object, ReferenceEntry>(ReferenceComparer.Instance);
         private int _objectIndex;
         private int _enumerableIndex;
+        private int _polymorphicIndex;
         private int _scanDepth;
         private int _nodeCount;
         private bool _collectMeta;
@@ -597,18 +646,33 @@ namespace ActionBuffer
         public void ScanEnumerable<T>(IEnumerable<T> values, BuffConverter<T> converter,
             IComparer<T> comparer = null, bool trackReference = true)
         {
+            ScanEnumerable(values, converter, comparer, trackReference, values);
+        }
+
+        internal void ScanEnumerable<T>(IEnumerable<T> values, BuffConverter<T> converter,
+            IComparer<T> comparer, bool trackReference, object referenceIdentity,
+            bool takeListOwnership = false)
+        {
             EnterNode();
             bool tracked = false;
+            bool ownershipTransferred = false;
             try
             {
+                object referenceValue = referenceIdentity ?? values;
                 int referenceId = -1;
                 bool isReference = false;
-                if (trackReference && values != null && !values.GetType().IsValueType &&
+                if (trackReference && referenceValue != null &&
+                    !referenceValue.GetType().IsValueType &&
                     SupportReferences)
                 {
-                    isReference = TryDefineReference(values, out referenceId);
+                    isReference = TryDefineReference(referenceValue, out referenceId);
                     if (isReference)
                     {
+                        if (takeListOwnership && values is List<T> ownedReferenceValues)
+                        {
+                            ClassPool.BackList(ownedReferenceValues);
+                            ownershipTransferred = true;
+                        }
                         var referenceCache = CachedEnumerable.Capture<T>(null, null,
                             MaxCollectionCount);
                         referenceCache.SetReference(referenceId, true);
@@ -617,15 +681,18 @@ namespace ActionBuffer
                     }
                 }
 
-                if (values != null && !values.GetType().IsValueType)
+                if (referenceValue != null && !referenceValue.GetType().IsValueType)
                 {
-                    if (!_activeReferences.Add(values))
-                        throw new InvalidOperationException($"Circular reference detected for collection type '{values.GetType()}'.");
+                    if (!_activeReferences.Add(referenceValue))
+                        throw new InvalidOperationException($"Circular reference detected for collection type '{referenceValue.GetType()}'.");
                     tracked = true;
                 }
 
-                var cached = CachedEnumerable.Capture(values, comparer,
-                    MaxCollectionCount);
+                var cached = takeListOwnership
+                    ? CachedEnumerable.CaptureOwned((List<T>)values, comparer,
+                        MaxCollectionCount)
+                    : CachedEnumerable.Capture(values, comparer, MaxCollectionCount);
+                ownershipTransferred = takeListOwnership;
                 cached.SetReference(referenceId, false);
                 try
                 {
@@ -644,7 +711,9 @@ namespace ActionBuffer
             }
             finally
             {
-                if (tracked) _activeReferences.Remove(values);
+                if (tracked) _activeReferences.Remove(referenceIdentity ?? values);
+                if (takeListOwnership && !ownershipTransferred && values is List<T> ownedValues)
+                    ClassPool.BackList(ownedValues);
                 ExitNode();
             }
         }
@@ -722,29 +791,21 @@ namespace ActionBuffer
             _nodeCount++;
         }
 
-        internal int RequireObjectReference(object value)
+        internal void ScanPolymorphic(object value, Type declaredType,
+            BuffConverter converter)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
-            if (!SupportReferences)
-                throw new InvalidOperationException(
-                    "Delegates bound to another object require SupportReferences=true.");
-            if (value.GetType().IsValueType)
-                throw new NotSupportedException("Delegate targets must be reference types.");
+            if (declaredType == null) throw new ArgumentNullException(nameof(declaredType));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            var actualType = value.GetType();
+            if (!declaredType.IsAssignableFrom(actualType))
+                throw new NotSupportedException(
+                    $"'{actualType}' is not assignable to '{declaredType}'.");
 
-            if (_references.TryGetValue(value, out var reference))
-            {
-                reference.RequiredByDelegate = true;
-                _references[value] = reference;
-                return reference.Id;
-            }
-
-            int referenceId = _references.Count;
-            _references.Add(value, new ReferenceEntry
-            {
-                Id = referenceId,
-                RequiredByDelegate = true
-            });
-            return referenceId;
+            _polymorphicValues.Add(new CachedPolymorphic(value, actualType, converter));
+            AddMeta(actualType.FullName);
+            AddMeta(actualType.Assembly.FullName);
+            converter.Scan(this, value);
         }
 
         private bool TryDefineReference(object value, out int referenceId)
@@ -765,18 +826,6 @@ namespace ActionBuffer
                 Defined = true
             });
             return false;
-        }
-
-        internal void ValidateReferences()
-        {
-            if (!SupportReferences) return;
-            foreach (var item in _references)
-            {
-                var reference = item.Value;
-                if (reference.RequiredByDelegate && !reference.Defined)
-                    throw new InvalidOperationException(
-                        $"Delegate target '{item.Key.GetType()}' is not part of the serialized object graph.");
-            }
         }
 
         private void ExitNode()
@@ -804,6 +853,14 @@ namespace ActionBuffer
             if (_objectIndex >= _objects.Count)
                 throw new InvalidOperationException("The object scan cache is out of sync.");
             return _objects[_objectIndex++];
+        }
+
+        internal CachedPolymorphic ReadPolymorphic()
+        {
+            if (_polymorphicIndex >= _polymorphicValues.Count)
+                throw new InvalidOperationException(
+                    "The polymorphic scan cache is out of sync.");
+            return _polymorphicValues[_polymorphicIndex++];
         }
 
         internal CachedField ReadField(CachedObject cached, int index)
@@ -853,12 +910,14 @@ namespace ActionBuffer
         {
             _objectIndex = 0;
             _enumerableIndex = 0;
+            _polymorphicIndex = 0;
         }
 
         private void Clear()
         {
             _objects.Clear();
             _fields.Clear();
+            _polymorphicValues.Clear();
             foreach (var values in _fieldValueCaches.Values)
                 values.Clear();
             if (_fieldValueCaches.Count > BuffSettings.PoolLimit * 4)
@@ -880,6 +939,7 @@ namespace ActionBuffer
             TrimList(_objects);
             TrimList(_fields);
             TrimList(_enumerables);
+            TrimList(_polymorphicValues);
             TrimList(_metas);
             if (_activeReferences.Count > BuffSettings.RetainedListCapacity)
                 _activeReferences = new HashSet<object>(ReferenceComparer.Instance);

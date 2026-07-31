@@ -297,6 +297,8 @@ namespace ActionBuffer
                     result.AddField(declaredFields[i]);
                 if (usePropertyBackingFields)
                     AddPropertyBackingFields(result, type, declaredFields);
+                else
+                    AddInitPropertyBackingFields(result, type, declaredFields);
                 result._fields.Sort((left, right) =>
                     string.CompareOrdinal(left.name, right.name));
                 return result;
@@ -347,6 +349,37 @@ namespace ActionBuffer
                     if (backingField != null)
                         typeFields.AddField(backingField, property.Name);
                 }
+            }
+
+            private static void AddInitPropertyBackingFields(TypeFields typeFields, Type type,
+                FieldInfo[] fields)
+            {
+                var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance |
+                    BindingFlags.DeclaredOnly);
+                for (int i = 0; i < properties.Length; i++)
+                {
+                    var property = properties[i];
+                    if (!IsInitProperty(property) || !property.CanRead ||
+                        property.GetIndexParameters().Length != 0 ||
+                        typeof(Delegate).IsAssignableFrom(property.PropertyType) ||
+                        typeFields._fieldsByName.ContainsKey(property.Name))
+                        continue;
+                    var backingField = FindPropertyBackingField(fields, property);
+                    if (backingField != null)
+                        typeFields.AddField(backingField, property.Name);
+                }
+            }
+
+            private static bool IsInitProperty(PropertyInfo property)
+            {
+                var setter = property.SetMethod;
+                if (setter == null) return false;
+                var modifiers = setter.ReturnParameter.GetRequiredCustomModifiers();
+                for (int i = 0; i < modifiers.Length; i++)
+                    if (modifiers[i].FullName ==
+                        "System.Runtime.CompilerServices.IsExternalInit")
+                        return true;
+                return false;
             }
 
             private static FieldInfo FindPropertyBackingField(FieldInfo[] fields,
