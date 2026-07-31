@@ -8,14 +8,47 @@ using UnityEngine.UIElements;
 
 namespace ActionEditor.Nodes.BT
 {
-    public class BTTreeView<T> : Nodes.NodeGraphView<T> where T : BTTree
+    interface IBTTreeHierarchy
+    {
+        void RefreshNodeTree();
+    }
+
+    public class BTTreeView<T> : Nodes.NodeGraphView<T>, IGraphInspectorOverride,
+        IBTTreeHierarchy where T : BTTree
     {
         protected BTTree runningTree { get; private set; }
+
+        private sealed class NodeTreeEntry
+        {
+            public readonly GraphNode GraphNode;
+            public readonly NodeData Data;
+            public readonly string SourcePath;
+
+            public NodeTreeEntry(GraphNode graphNode, NodeData data, string sourcePath)
+            {
+                GraphNode = graphNode;
+                Data = data;
+                SourcePath = sourcePath;
+            }
+        }
+
+        private sealed class LoadedSubTree
+        {
+            public readonly NodeData Root;
+            public readonly Dictionary<NodeData, List<NodeData>> Children;
+
+            public LoadedSubTree(NodeData root, Dictionary<NodeData, List<NodeData>> children)
+            {
+                Root = root;
+                Children = children;
+            }
+        }
 
         private sealed class TreeNodeRow : VisualElement
         {
             public readonly Image Icon;
             public readonly Label Label;
+            public readonly Image SourceIcon;
 
             public TreeNodeRow()
             {
@@ -34,23 +67,37 @@ namespace ActionEditor.Nodes.BT
                 Label.style.flexGrow = 1;
                 Label.style.unityTextAlign = TextAnchor.MiddleLeft;
                 Add(Label);
+
+                SourceIcon = new Image();
+                SourceIcon.style.width = 14;
+                SourceIcon.style.height = 14;
+                SourceIcon.style.marginRight = 3;
+                SourceIcon.style.flexShrink = 0;
+                Add(SourceIcon);
             }
         }
 
         private static bool _showNodeTree;
+        private static Texture _subTreeSourceIcon;
         private readonly Dictionary<GraphNode, List<GraphNode>> _treeChildren =
             new Dictionary<GraphNode, List<GraphNode>>();
         private readonly Dictionary<GraphNode, int> _treeItemIds =
             new Dictionary<GraphNode, int>();
         private readonly HashSet<GraphNode> _reachableNodes = new HashSet<GraphNode>();
-        private readonly List<TreeViewItemData<GraphNode>> _treeRoots =
-            new List<TreeViewItemData<GraphNode>>(1);
+        private readonly Dictionary<string, LoadedSubTree> _loadedSubTrees =
+            new Dictionary<string, LoadedSubTree>();
+        private readonly HashSet<string> _subTreeAssetStack = new HashSet<string>();
+        private readonly List<TreeViewItemData<NodeTreeEntry>> _treeRoots =
+            new List<TreeViewItemData<NodeTreeEntry>>(1);
         private VisualElement _treePanel;
         private TreeView _nodeTree;
+        private NodeData _subTreeInspectorNode;
+        private Vector2 _subTreeInspectorScroll;
         private bool _treeDirty = true;
         private bool _treeRefreshScheduled;
         private bool _syncingTreeSelection;
         private int _nextTreeItemId;
+        private int _subTreePathHash;
 
         private static int _Runing_BlackBoard = -1;
         private static float _height = -1;
@@ -213,11 +260,25 @@ namespace ActionEditor.Nodes.BT
         }
 
 
+        public override void Update()
+        {
+            if (_showNodeTree && !_treeDirty && CalculateSubTreePathHash() != _subTreePathHash)
+                ScheduleNodeTreeRefresh();
+            if (_subTreeInspectorNode != null && selection.Count > 0)
+            {
+                _subTreeInspectorNode = null;
+                GraphWindowBridge.Repaint();
+            }
+            base.Update();
+        }
+
         public override void Load(GraphAsset data)
         {
             base.Load(data);
             CreateNodeTree();
             graphViewChanged += OnGraphViewChanged;
+            EditorApplication.projectChanged += OnProjectChanged;
+            RegisterCallback<DetachFromPanelEvent>(OnDetachedFromPanel);
             SetNodeTreeVisible(_showNodeTree);
             BTTree_onInstanceChanged(BTTree.instance);
             BTTree.onInstanceChanged -= BTTree_onInstanceChanged;
@@ -262,6 +323,7 @@ namespace ActionEditor.Nodes.BT
         }
         public override void OnSelectNode(GraphNode obj)
         {
+            _subTreeInspectorNode = null;
             if (_nodeTree == null || _syncingTreeSelection) return;
 
             _syncingTreeSelection = true;
@@ -270,6 +332,23 @@ namespace ActionEditor.Nodes.BT
             else
                 _nodeTree.ClearSelection();
             _syncingTreeSelection = false;
+            GraphWindowBridge.Repaint();
+        }
+
+        private void OnProjectChanged()
+        {
+            ScheduleNodeTreeRefresh();
+        }
+
+        private void OnDetachedFromPanel(DetachFromPanelEvent evt)
+        {
+            EditorApplication.projectChanged -= OnProjectChanged;
+            BTTree.onInstanceChanged -= BTTree_onInstanceChanged;
+        }
+
+        void IBTTreeHierarchy.RefreshNodeTree()
+        {
+            ScheduleNodeTreeRefresh();
         }
 
         private void CreateNodeTree()
@@ -299,10 +378,17 @@ namespace ActionEditor.Nodes.BT
         private void BindTreeItem(VisualElement element, int index)
         {
             var row = (TreeNodeRow)element;
-            var node = _nodeTree.GetItemDataForIndex<GraphNode>(index);
-            row.Label.text = node.NodeName;
-            row.Icon.image = node.Data.GetIcon();
-            row.tooltip = node.GUID;
+            var entry = _nodeTree.GetItemDataForIndex<NodeTreeEntry>(index);
+            row.Label.text = entry.GraphNode == null
+                ? EditorEX.GetTypeName(entry.Data.GetType())
+                : entry.GraphNode.NodeName;
+            row.Icon.image = entry.Data.GetIcon();
+            bool fromSubTree = !string.IsNullOrEmpty(entry.SourcePath);
+            if (fromSubTree && _subTreeSourceIcon == null)
+                _subTreeSourceIcon = EditorGUIUtility.TrIconContent("d_TextAsset Icon").image;
+            row.SourceIcon.image = fromSubTree ? _subTreeSourceIcon : null;
+            row.SourceIcon.style.display = fromSubTree ? DisplayStyle.Flex : DisplayStyle.None;
+            row.tooltip = fromSubTree ? entry.SourcePath : entry.Data.guid;
         }
 
         private void SetNodeTreeVisible(bool visible)
@@ -338,6 +424,10 @@ namespace ActionEditor.Nodes.BT
             _treeChildren.Clear();
             _treeItemIds.Clear();
             _reachableNodes.Clear();
+            _loadedSubTrees.Clear();
+            _subTreeAssetStack.Clear();
+            if (!string.IsNullOrEmpty(App.assetPath))
+                _subTreeAssetStack.Add(App.assetPath);
             _nextTreeItemId = 1;
 
             GraphNode root = null;
@@ -373,7 +463,7 @@ namespace ActionEditor.Nodes.BT
             if (root != null)
             {
                 _reachableNodes.Add(root);
-                _treeRoots.Add(CreateTreeItem(root));
+                _treeRoots.Add(CreateGraphTreeItem(root));
             }
 
             _syncingTreeSelection = true;
@@ -392,24 +482,137 @@ namespace ActionEditor.Nodes.BT
             if (selected != null && _treeItemIds.TryGetValue(selected, out int id))
                 _nodeTree.SetSelectionById(id);
             _syncingTreeSelection = false;
+            _subTreePathHash = CalculateSubTreePathHash();
         }
 
-        private TreeViewItemData<GraphNode> CreateTreeItem(GraphNode node)
+        private int CalculateSubTreePathHash()
+        {
+            int hash = 0;
+            foreach (var pair in _treeItemIds)
+            {
+                if (!(pair.Key.Data is BTSubTree subTree)) continue;
+                int itemHash = pair.Key.GUID.GetHashCode();
+                itemHash = itemHash * 397 ^ (subTree.path == null ? 0 : subTree.path.GetHashCode());
+                hash ^= itemHash;
+            }
+            return hash;
+        }
+
+        private TreeViewItemData<NodeTreeEntry> CreateGraphTreeItem(GraphNode node)
         {
             int id = _nextTreeItemId++;
             _treeItemIds.Add(node, id);
-            List<TreeViewItemData<GraphNode>> items = null;
+            List<TreeViewItemData<NodeTreeEntry>> items = null;
             if (_treeChildren.TryGetValue(node, out var children))
             {
                 for (int i = 0; i < children.Count; i++)
                 {
                     var child = children[i];
                     if (!_reachableNodes.Add(child)) continue;
-                    if (items == null) items = new List<TreeViewItemData<GraphNode>>();
-                    items.Add(CreateTreeItem(child));
+                    if (items == null) items = new List<TreeViewItemData<NodeTreeEntry>>();
+                    items.Add(CreateGraphTreeItem(child));
                 }
             }
-            return new TreeViewItemData<GraphNode>(id, node, items);
+            if (node.Data is BTSubTree subTree)
+                AddSubTreeRootChildren(subTree.path, ref items);
+
+            var entry = new NodeTreeEntry(node, node.Data, null);
+            return new TreeViewItemData<NodeTreeEntry>(id, entry, items);
+        }
+
+        private void AddSubTreeRootChildren(string path,
+            ref List<TreeViewItemData<NodeTreeEntry>> items)
+        {
+            if (string.IsNullOrEmpty(path) || !_subTreeAssetStack.Add(path)) return;
+            try
+            {
+                var loaded = LoadSubTree(path);
+                if (loaded?.Root == null ||
+                    !loaded.Children.TryGetValue(loaded.Root, out var children)) return;
+
+                var reachable = new HashSet<NodeData> { loaded.Root };
+                for (int i = 0; i < children.Count; i++)
+                {
+                    var child = children[i];
+                    if (!reachable.Add(child)) continue;
+                    if (items == null) items = new List<TreeViewItemData<NodeTreeEntry>>();
+                    items.Add(CreateSubTreeItem(child, path, loaded, reachable));
+                }
+            }
+            finally
+            {
+                _subTreeAssetStack.Remove(path);
+            }
+        }
+
+        private TreeViewItemData<NodeTreeEntry> CreateSubTreeItem(NodeData node, string path,
+            LoadedSubTree loaded, HashSet<NodeData> reachable)
+        {
+            List<TreeViewItemData<NodeTreeEntry>> items = null;
+            if (loaded.Children.TryGetValue(node, out var children))
+            {
+                for (int i = 0; i < children.Count; i++)
+                {
+                    var child = children[i];
+                    if (!reachable.Add(child)) continue;
+                    if (items == null) items = new List<TreeViewItemData<NodeTreeEntry>>();
+                    items.Add(CreateSubTreeItem(child, path, loaded, reachable));
+                }
+            }
+            if (node is BTSubTree subTree)
+                AddSubTreeRootChildren(subTree.path, ref items);
+
+            int id = _nextTreeItemId++;
+            var entry = new NodeTreeEntry(null, node, path);
+            return new TreeViewItemData<NodeTreeEntry>(id, entry, items);
+        }
+
+        private LoadedSubTree LoadSubTree(string path)
+        {
+            if (_loadedSubTrees.TryGetValue(path, out var cached)) return cached;
+
+            LoadedSubTree loaded = null;
+            try
+            {
+                var text = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+                var tree = text == null ? null : BTTree.FromBytes(typeof(BTTree), text.bytes) as BTTree;
+                if (tree != null && tree.IsSubTree && tree.GetType() == graph.GetType())
+                {
+                    var nodesByGuid = new Dictionary<string, NodeData>();
+                    NodeData root = null;
+                    for (int i = 0; i < tree.nodes.Count; i++)
+                    {
+                        var node = tree.nodes[i];
+                        if (node == null) continue;
+                        nodesByGuid[node.guid] = node;
+                        if (node is BTRoot) root = node;
+                    }
+
+                    var children = new Dictionary<NodeData, List<NodeData>>();
+                    for (int i = 0; i < tree.connections.Count; i++)
+                    {
+                        var connection = tree.connections[i];
+                        if (connection == null ||
+                            !nodesByGuid.TryGetValue(connection.outNodeGuid, out var parent) ||
+                            !nodesByGuid.TryGetValue(connection.InNodeGuid, out var child)) continue;
+
+                        if (!children.TryGetValue(parent, out var list))
+                        {
+                            list = new List<NodeData>();
+                            children.Add(parent, list);
+                        }
+                        if (!list.Contains(child)) list.Add(child);
+                    }
+                    loaded = new LoadedSubTree(root, children);
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+            }
+
+            _loadedSubTrees.Add(path, loaded);
+            return loaded;
         }
 
         private static int CompareTreeNodes(GraphNode a, GraphNode b)
@@ -423,9 +626,9 @@ namespace ActionEditor.Nodes.BT
             if (_syncingTreeSelection) return;
             foreach (var item in items)
             {
-                if (item is GraphNode node)
+                if (item is NodeTreeEntry entry)
                 {
-                    SelectTreeNode(node);
+                    SelectTreeNode(entry);
                     return;
                 }
             }
@@ -435,20 +638,48 @@ namespace ActionEditor.Nodes.BT
         {
             foreach (var item in items)
             {
-                if (!(item is GraphNode node)) continue;
-                SelectTreeNode(node);
-                FrameSelection();
+                if (!(item is NodeTreeEntry entry)) continue;
+                SelectTreeNode(entry);
+                if (entry.GraphNode != null) FocusGraphNode(entry.GraphNode);
                 return;
             }
         }
 
-        private void SelectTreeNode(GraphNode node)
+        private void SelectTreeNode(NodeTreeEntry entry)
         {
             _syncingTreeSelection = true;
             ClearSelection();
-            AddToSelection(node);
+            _subTreeInspectorNode = entry.GraphNode == null ? entry.Data : null;
+            if (entry.GraphNode != null) AddToSelection(entry.GraphNode);
             _syncingTreeSelection = false;
             GraphWindowBridge.Repaint();
+        }
+
+        private void FocusGraphNode(GraphNode node)
+        {
+            var scale = viewTransform.scale;
+            var nodeCenter = node.GetPosition().center;
+            var scaledCenter = Vector2.Scale(nodeCenter, new Vector2(scale.x, scale.y));
+            var position = contentRect.center - scaledCenter;
+            UpdateViewTransform(position, scale);
+        }
+
+        public bool DrawInspectorOverride()
+        {
+            if (_subTreeInspectorNode == null) return false;
+
+            GUILayout.Space(2);
+            var type = _subTreeInspectorNode.GetType();
+            EditorEX.DrawPingScript(type);
+            EditorGUILayout.LabelField(EditorEX.GetTypeName(type), EditorStyles.boldLabel,
+                GUILayout.Height(30));
+            using (new EditorGUI.DisabledScope(true))
+            {
+                _subTreeInspectorScroll = GUILayout.BeginScrollView(_subTreeInspectorScroll);
+                EditorEX.CreateEditor(_subTreeInspectorNode).OnInspectorGUI();
+                GUILayout.EndScrollView();
+            }
+            return true;
         }
 
         protected override void AfterCreateNode(GraphElement element)
