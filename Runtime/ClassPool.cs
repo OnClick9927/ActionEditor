@@ -3,72 +3,94 @@ using System.Text;
 
 namespace ActionBuffer
 {
-    class ClassPool<T> where T : class, new()
+    internal static class ClassPool
     {
-        private static Stack<T> _pool;
-
-        public static T Get()
+        private static class Cache<T> where T : class
         {
-            if (_pool != null && _pool.Count > 0)
-                return _pool.Pop();
-            return new T();
+            internal static readonly object SyncRoot = new object();
+            internal static readonly Stack<T> Items = new Stack<T>();
         }
 
-        public static void Back(T value)
+        internal static T Get<T>() where T : class, new()
+        {
+            lock (Cache<T>.SyncRoot)
+            {
+                return Cache<T>.Items.Count == 0 ? new T() : Cache<T>.Items.Pop();
+            }
+        }
+
+        internal static void Back<T>(T value) where T : class
         {
             if (value == null) return;
-            if (value is StringBuilder builder && builder.Capacity > BufferSerializer.RetainedTextCapacity)
-                builder.Capacity = 1024;
-            if (_pool == null)
-                _pool = new Stack<T>();
-            if (_pool.Count >= BufferSerializer.PoolLimit) return;
-            _pool.Push(value);
+            Trim(value);
+            lock (Cache<T>.SyncRoot)
+            {
+                if (Cache<T>.Items.Count < BuffSettings.PoolLimit)
+                    Cache<T>.Items.Push(value);
+            }
         }
-    }
 
-    internal static class ListPool<T>
-    {
-        private static Stack<List<T>> _pool;
-
-        internal static List<T> Get(int capacity = 0)
+        internal static List<T> GetList<T>(int capacity = 0)
         {
-            var result = _pool != null && _pool.Count > 0 ? _pool.Pop() : new List<T>(capacity);
+            var result = Get<List<T>>();
             result.Clear();
             if (capacity > result.Capacity) result.Capacity = capacity;
             return result;
         }
 
-        internal static void Back(List<T> value)
+        internal static void BackList<T>(List<T> value)
         {
             if (value == null) return;
             value.Clear();
-            if (value.Capacity > BufferSerializer.RetainedListCapacity) return;
-            if (_pool == null) _pool = new Stack<List<T>>();
-            if (_pool.Count >= BufferSerializer.PoolLimit) return;
-            _pool.Push(value);
+            if (value.Capacity > BuffSettings.RetainedListCapacity)
+                value.Capacity = 0;
+            Back(value);
         }
-    }
 
-    internal static class HashSetPool<T>
-    {
-        private static Stack<HashSet<T>> _pool;
-
-        internal static HashSet<T> Get()
+        internal static HashSet<T> GetHashSet<T>()
         {
-            var result = _pool != null && _pool.Count > 0 ? _pool.Pop() : new HashSet<T>();
+            var result = Get<HashSet<T>>();
             result.Clear();
             return result;
         }
 
-        internal static void Back(HashSet<T> value)
+        internal static void BackHashSet<T>(HashSet<T> value)
         {
             if (value == null) return;
-            int count = value.Count;
+            bool isLarge = value.Count > BuffSettings.RetainedListCapacity;
             value.Clear();
-            if (count > BufferSerializer.RetainedListCapacity) return;
-            if (_pool == null) _pool = new Stack<HashSet<T>>();
-            if (_pool.Count >= BufferSerializer.PoolLimit) return;
-            _pool.Push(value);
+            if (isLarge) value.TrimExcess();
+            Back(value);
+        }
+
+        private static void Trim<T>(T value) where T : class
+        {
+            if (value is StringBuilder builder)
+            {
+                if (builder.Capacity > BuffSettings.RetainedTextCapacity)
+                {
+                    builder.Clear();
+                    builder.Capacity = 1024;
+                }
+                return;
+            }
+            if (value is BufferWriter binaryWriter)
+            {
+                binaryWriter.TrimCapacity();
+                return;
+            }
+            if (value is JsonWriter jsonWriter)
+            {
+                jsonWriter.TrimCapacity();
+                return;
+            }
+            if (value is YamlWriter yamlWriter)
+            {
+                yamlWriter.TrimCapacity();
+                return;
+            }
+            if (value is XmlWriter xmlWriter)
+                xmlWriter.TrimCapacity();
         }
     }
 }

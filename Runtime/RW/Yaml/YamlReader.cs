@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
 
 namespace ActionBuffer
@@ -11,20 +10,34 @@ namespace ActionBuffer
         {
             public int Number;
             public int Indent;
-            public string Content;
+            public int Start;
+            public int Length;
         }
 
         private readonly List<Line> _lines = new List<Line>();
+        private string _yaml;
         private int _lineIndex;
         private int _nodeCount;
+        private int _maxDepth;
+        private int _maxNodeCount;
+        private int _maxCollectionCount;
+        private int _maxObjectFieldCount;
+        private int _maxScalarLength;
 
-        public void Init(string data)
+        public void Init(string data, BuffSettings settings = null)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
-            Clear();
-            if (data.Length > BufferSerializer.MaxTextLength)
+            Prepare(settings);
+            int maxTextLength = BuffSettings.MaxTextLength;
+            if (data.Length > maxTextLength)
                 throw new FormatException(
-                    $"YAML length cannot exceed {BufferSerializer.MaxTextLength} characters.");
+                    $"YAML length cannot exceed {maxTextLength} characters.");
+            _maxDepth = BuffSettings.MaxDepth;
+            _maxNodeCount = BuffSettings.MaxNodeCount;
+            _maxCollectionCount = BuffSettings.MaxCollectionCount;
+            _maxObjectFieldCount = BuffSettings.MaxObjectFieldCount;
+            _maxScalarLength = BuffSettings.MaxScalarLength;
+            _yaml = data;
 
             StructuredNode root = default;
             try
@@ -50,10 +63,11 @@ namespace ActionBuffer
         private void ResetParser()
         {
             _lines.Clear();
-            if (_lines.Capacity > BufferSerializer.RetainedListCapacity)
+            if (_lines.Capacity > BuffSettings.RetainedListCapacity)
                 _lines.Capacity = 0;
             _lineIndex = 0;
             _nodeCount = 0;
+            _yaml = null;
         }
 
         private StructuredNode ParseDocument()
@@ -74,27 +88,29 @@ namespace ActionBuffer
 
         private StructuredNode ParseBlock(int indent, int depth)
         {
-            int maxDepth = BufferSerializerSettings.DefaultSetting.MaxDepth;
+            int maxDepth = _maxDepth;
             if (depth >= maxDepth)
                 throw Error(_lines[_lineIndex], $"YAML depth cannot exceed {maxDepth}.");
             var line = _lines[_lineIndex];
             if (line.Indent != indent)
                 throw Error(line, $"Expected indentation {indent}, but found {line.Indent}.");
 
-            if (IsSequenceLine(line.Content))
+            if (IsSequenceLine(line))
                 return ParseSequence(indent, depth);
-            if (FindMappingColon(line.Content) >= 0)
+            if (FindMappingColon(line) >= 0)
                 return ParseObject(indent, depth);
 
             _lineIndex++;
-            return ParseInline(line.Content, line);
+            return ParseInline(line.Start, line.Length, line);
         }
 
         private StructuredNode ParseObject(int indent, int depth)
         {
             CountNode(_lines[_lineIndex]);
-            var node = StructuredNode.Rent(StructuredNodeKind.Object);
-            var fieldNames = HashSetPool<string>.Get();
+            var node = RentNode(StructuredNodeKind.Object);
+            var fieldNames = ClassPool.GetHashSet<string>();
+            StructuredNode collectionValues = default;
+            bool hasCollectionValues = false;
             int memberCount = 0;
             try
             {
@@ -104,21 +120,26 @@ namespace ActionBuffer
                     if (line.Indent < indent) break;
                     if (line.Indent > indent)
                         throw Error(line, "Unexpected indentation in mapping.");
-                    if (IsSequenceLine(line.Content)) break;
+                    if (IsSequenceLine(line)) break;
 
-                    int colon = FindMappingColon(line.Content);
+                    int colon = FindMappingColon(line);
                     if (colon < 0) break;
-                    if (++memberCount > BufferSerializer.MaxObjectFieldCount)
+                    if (++memberCount > _maxObjectFieldCount)
                         throw Error(line,
-                            $"YAML object field count cannot exceed {BufferSerializer.MaxObjectFieldCount}.");
-                    string key = ParseKey(line.Content.Substring(0, colon).Trim(), line);
-                    string remainder = line.Content.Substring(colon + 1).Trim();
+                            $"YAML object field count cannot exceed {_maxObjectFieldCount}.");
+                    int keyStart = line.Start;
+                    int keyLength = colon - keyStart;
+                    TrimRange(_yaml, ref keyStart, ref keyLength);
+                    string key = ParseKey(keyStart, keyLength, line);
+                    int remainderStart = colon + 1;
+                    int remainderLength = line.Start + line.Length - remainderStart;
+                    TrimRange(_yaml, ref remainderStart, ref remainderLength);
                     _lineIndex++;
 
                     StructuredNode value;
-                    if (remainder.Length > 0)
+                    if (remainderLength > 0)
                     {
-                        value = ParseInline(remainder, line);
+                        value = ParseInline(remainderStart, remainderLength, line);
                     }
                     else
                     {
@@ -127,17 +148,27 @@ namespace ActionBuffer
                         value = ParseBlock(_lines[_lineIndex].Indent, depth + 1);
                     }
 
-                    if (key == "$type" || key == "$assembly" || key == "$id" || key == "$ref")
+                    if (key == "$type" || key == "$assembly" || key == "$id" || key == "$ref" ||
+                        key == "$values")
                     {
                         try
                         {
-                            if (value.Kind != StructuredNodeKind.Scalar)
+                            if (key != "$values" && value.Kind != StructuredNodeKind.Scalar)
                                 throw Error(line, $"Metadata '{key}' must be a scalar.");
-                            if (key == "$id" || key == "$ref")
+                            if (key == "$values")
+                            {
+                                if (hasCollectionValues || value.Kind != StructuredNodeKind.Sequence)
+                                    throw Error(line,
+                                        "Metadata '$values' must contain one sequence.");
+                                collectionValues = value;
+                                value = default;
+                                hasCollectionValues = true;
+                            }
+                            else if (key == "$id" || key == "$ref")
                             {
                                 if (node.ReferenceId >= 0)
                                     throw Error(line, "Duplicate object reference metadata.");
-                                node.ReferenceId = ParseReferenceId(key, value.Scalar, line);
+                                node.ReferenceId = ParseReferenceId(key, value, line);
                                 node.IsReference = key == "$ref";
                             }
                             else if (key == "$type")
@@ -173,6 +204,16 @@ namespace ActionBuffer
                         }
                     }
                 }
+                if (hasCollectionValues)
+                {
+                    if (node.IsReference || node.ReferenceId < 0 || node.TypeName != null ||
+                        node.AssemblyName != null || node.FieldCount != 0)
+                        throw Error(_lines[Math.Max(0, _lineIndex - 1)],
+                            "A collection wrapper must contain only '$id' and '$values'.");
+                    collectionValues.ReferenceId = node.ReferenceId;
+                    node = collectionValues;
+                    collectionValues = default;
+                }
                 if (node.IsReference && (node.FieldCount != 0 || node.TypeName != null ||
                                          node.AssemblyName != null))
                     throw Error(_lines[Math.Max(0, _lineIndex - 1)],
@@ -186,22 +227,32 @@ namespace ActionBuffer
             }
             finally
             {
-                HashSetPool<string>.Back(fieldNames);
+                StructuredNode.Release(ref collectionValues);
+                ClassPool.BackHashSet(fieldNames);
             }
         }
 
-        private static int ParseReferenceId(string name, string value, Line line)
+        private static int ParseReferenceId(string name, StructuredNode value, Line line)
         {
-            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int result) ||
-                result < 0)
+            ulong parsed;
+            try
+            {
+                parsed = ParseUnsignedScalar(value);
+            }
+            catch (Exception exception) when (exception is FormatException ||
+                                               exception is OverflowException)
+            {
                 throw Error(line, $"Metadata '{name}' must be a non-negative integer.");
-            return result;
+            }
+            if (parsed > int.MaxValue)
+                throw Error(line, $"Metadata '{name}' must be a non-negative integer.");
+            return (int)parsed;
         }
 
         private StructuredNode ParseSequence(int indent, int depth)
         {
             CountNode(_lines[_lineIndex]);
-            var node = StructuredNode.Rent(StructuredNodeKind.Sequence);
+            var node = RentNode(StructuredNodeKind.Sequence);
             try
             {
                 while (_lineIndex < _lines.Count)
@@ -210,22 +261,22 @@ namespace ActionBuffer
                     if (line.Indent < indent) break;
                     if (line.Indent > indent)
                         throw Error(line, "Unexpected indentation in sequence.");
-                    if (!IsSequenceLine(line.Content)) break;
-                    if (node.ItemCount >= BufferSerializer.MaxCollectionCount)
+                    if (!IsSequenceLine(line)) break;
+                    if (node.ItemCount >= _maxCollectionCount)
                         throw Error(line,
-                            $"YAML sequence count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+                            $"YAML sequence count cannot exceed {_maxCollectionCount}.");
 
-                    string remainder = line.Content.Length == 1
-                        ? string.Empty
-                        : line.Content.Substring(2).Trim();
+                    int remainderStart = line.Start + 1;
+                    int remainderLength = line.Length - 1;
+                    TrimRange(_yaml, ref remainderStart, ref remainderLength);
                     _lineIndex++;
 
                     StructuredNode value;
-                    if (remainder.Length > 0)
+                    if (remainderLength > 0)
                     {
-                        if (FindMappingColon(remainder) >= 0)
+                        if (FindMappingColon(_yaml, remainderStart, remainderLength) >= 0)
                             throw Error(line, "Inline mapping sequence items are not supported; place the mapping on the next indented line.");
-                        value = ParseInline(remainder, line);
+                        value = ParseInline(remainderStart, remainderLength, line);
                     }
                     else
                     {
@@ -253,50 +304,54 @@ namespace ActionBuffer
             }
         }
 
-        private StructuredNode ParseInline(string text, Line line)
+        private StructuredNode ParseInline(int start, int length, Line line)
         {
             CountNode(line);
-            text = text.Trim();
-            if (text == "null" || text == "Null" || text == "NULL" || text == "~")
-                return StructuredNode.Rent(StructuredNodeKind.Null);
-            if (text == "{}")
-                return StructuredNode.Rent(StructuredNodeKind.Object);
-            if (text == "[]")
-                return StructuredNode.Rent(StructuredNodeKind.Sequence);
-            if (text.Length == 0)
+            TrimRange(_yaml, ref start, ref length);
+            if (length == 0)
                 throw Error(line, "Expected a value.");
+            if (EqualsRange(_yaml, start, length, "null") ||
+                EqualsRange(_yaml, start, length, "Null") ||
+                EqualsRange(_yaml, start, length, "NULL") ||
+                EqualsRange(_yaml, start, length, "~"))
+                return RentNode(StructuredNodeKind.Null);
+            if (EqualsRange(_yaml, start, length, "{}"))
+                return RentNode(StructuredNodeKind.Object);
+            if (EqualsRange(_yaml, start, length, "[]"))
+                return RentNode(StructuredNodeKind.Sequence);
 
-            EnsureScalarLength(text.Length, line);
-
-            if (text[0] == '"')
-                return StructuredNode.RentScalar(ParseDoubleQuoted(text, line), true);
-            if (text[0] == '\'')
-                return StructuredNode.RentScalar(ParseSingleQuoted(text, line), true);
-            if (text[0] == '&' || text[0] == '*' || text[0] == '!' || text[0] == '|' || text[0] == '>')
+            EnsureScalarLength(length, line);
+            char first = _yaml[start];
+            if (first == '"')
+                return RentScalar(ParseDoubleQuoted(start, length, line), true);
+            if (first == '\'')
+                return RentScalar(ParseSingleQuoted(start, length, line), true);
+            if (first == '&' || first == '*' || first == '!' || first == '|' || first == '>')
                 throw Error(line, "YAML anchors, aliases, tags, and multiline scalars are not supported.");
-            return StructuredNode.RentScalar(text, false);
+            return RentScalarSlice(_yaml, start, length, false);
         }
 
-        private string ParseKey(string text, Line line)
+        private string ParseKey(int start, int length, Line line)
         {
-            if (text.Length == 0) throw Error(line, "Mapping key cannot be empty.");
-            EnsureScalarLength(text.Length, line);
-            if (text[0] == '"') return ParseDoubleQuoted(text, line);
-            if (text[0] == '\'') return ParseSingleQuoted(text, line);
-            return text;
+            if (length == 0) throw Error(line, "Mapping key cannot be empty.");
+            EnsureScalarLength(length, line);
+            if (_yaml[start] == '"') return ParseDoubleQuoted(start, length, line);
+            if (_yaml[start] == '\'') return ParseSingleQuoted(start, length, line);
+            return _yaml.Substring(start, length);
         }
 
-        private string ParseDoubleQuoted(string text, Line line)
+        private string ParseDoubleQuoted(int start, int length, Line line)
         {
-            var builder = ClassPool<StringBuilder>.Get();
+            var builder = ClassPool.Get<StringBuilder>();
             builder.Clear();
             try
             {
-                int index = 1;
+                int index = start + 1;
+                int end = start + length;
                 bool closed = false;
-                while (index < text.Length)
+                while (index < end)
                 {
-                    char c = text[index++];
+                    char c = _yaml[index++];
                     if (c == '"')
                     {
                         closed = true;
@@ -308,8 +363,8 @@ namespace ActionBuffer
                         EnsureScalarLength(builder.Length, line);
                         continue;
                     }
-                    if (index >= text.Length) throw Error(line, "Incomplete escape sequence.");
-                    c = text[index++];
+                    if (index >= end) throw Error(line, "Incomplete escape sequence.");
+                    c = _yaml[index++];
                     switch (c)
                     {
                         case '"': builder.Append('"'); break;
@@ -324,11 +379,11 @@ namespace ActionBuffer
                         case 'f': builder.Append('\f'); break;
                         case 'r': builder.Append('\r'); break;
                         case 'u':
-                            if (index + 4 > text.Length) throw Error(line, "Incomplete Unicode escape sequence.");
+                            if (index + 4 > end) throw Error(line, "Incomplete Unicode escape sequence.");
                             int code = 0;
                             for (int i = 0; i < 4; i++)
                             {
-                                char hex = text[index + i];
+                                char hex = _yaml[index + i];
                                 int digit = hex >= '0' && hex <= '9' ? hex - '0'
                                     : hex >= 'a' && hex <= 'f' ? hex - 'a' + 10
                                     : hex >= 'A' && hex <= 'F' ? hex - 'A' + 10
@@ -345,41 +400,64 @@ namespace ActionBuffer
                     }
                     EnsureScalarLength(builder.Length, line);
                 }
-                while (index < text.Length && char.IsWhiteSpace(text[index]))
+                while (index < end && char.IsWhiteSpace(_yaml[index]))
                     index++;
-                if (!closed || index != text.Length)
+                if (!closed || index != end)
                     throw Error(line, "Invalid double-quoted scalar.");
                 return builder.ToString();
             }
             finally
             {
                 builder.Clear();
-                ClassPool<StringBuilder>.Back(builder);
+                ClassPool.Back(builder);
             }
         }
 
-        private string ParseSingleQuoted(string text, Line line)
+        private string ParseSingleQuoted(int start, int length, Line line)
         {
-            if (text.Length < 2 || text[text.Length - 1] != '\'')
+            int end = start + length;
+            if (length < 2 || _yaml[end - 1] != '\'')
                 throw Error(line, "Invalid single-quoted scalar.");
-            var result = text.Substring(1, text.Length - 2).Replace("''", "'");
-            EnsureScalarLength(result.Length, line);
-            return result;
+            var builder = ClassPool.Get<StringBuilder>();
+            builder.Clear();
+            try
+            {
+                for (int i = start + 1; i < end - 1; i++)
+                {
+                    char value = _yaml[i];
+                    if (value == '\'' && i + 1 < end - 1 && _yaml[i + 1] == '\'')
+                        i++;
+                    builder.Append(value);
+                    EnsureScalarLength(builder.Length, line);
+                }
+                return builder.ToString();
+            }
+            finally
+            {
+                builder.Clear();
+                ClassPool.Back(builder);
+            }
         }
 
-        private static bool IsSequenceLine(string content)
+        private bool IsSequenceLine(Line line)
         {
-            return content == "-" || (content.Length > 1 && content[0] == '-' && char.IsWhiteSpace(content[1]));
+            return line.Length == 1 && _yaml[line.Start] == '-' ||
+                   line.Length > 1 && _yaml[line.Start] == '-' &&
+                   char.IsWhiteSpace(_yaml[line.Start + 1]);
         }
 
-        private static int FindMappingColon(string content)
+        private int FindMappingColon(Line line) =>
+            FindMappingColon(_yaml, line.Start, line.Length);
+
+        private static int FindMappingColon(string source, int start, int length)
         {
             bool single = false;
             bool doubleQuoted = false;
             bool escaped = false;
-            for (int i = 0; i < content.Length; i++)
+            int end = start + length;
+            for (int i = start; i < end; i++)
             {
-                char c = content[i];
+                char c = source[i];
                 if (doubleQuoted && escaped)
                 {
                     escaped = false;
@@ -393,7 +471,7 @@ namespace ActionBuffer
                 if (!doubleQuoted && c == '\'') single = !single;
                 else if (!single && c == '"') doubleQuoted = !doubleQuoted;
                 else if (!single && !doubleQuoted && c == ':' &&
-                         (i + 1 == content.Length || char.IsWhiteSpace(content[i + 1])))
+                         (i + 1 == end || char.IsWhiteSpace(source[i + 1])))
                     return i;
             }
             return -1;
@@ -431,27 +509,34 @@ namespace ActionBuffer
             if (contentStart < end && yaml[contentStart] == '\t')
                 throw new FormatException($"YAML line {lineNumber}: tabs cannot be used for indentation.");
 
-            string content = yaml.Substring(contentStart, end - contentStart);
             int indent = contentStart - start;
-            if (indent == 0 && (content == "---" || content == "...")) return;
-            if (_lines.Count >= BufferSerializer.MaxNodeCount)
+            int contentLength = end - contentStart;
+            if (indent == 0 && (EqualsRange(yaml, contentStart, contentLength, "---") ||
+                                EqualsRange(yaml, contentStart, contentLength, "..."))) return;
+            if (_lines.Count >= _maxNodeCount)
                 throw new FormatException(
-                    $"YAML line count cannot exceed {BufferSerializer.MaxNodeCount}.");
-            _lines.Add(new Line { Number = lineNumber, Indent = indent, Content = content });
+                    $"YAML line count cannot exceed {_maxNodeCount}.");
+            _lines.Add(new Line
+            {
+                Number = lineNumber,
+                Indent = indent,
+                Start = contentStart,
+                Length = contentLength
+            });
         }
 
         private void CountNode(Line line)
         {
-            if (_nodeCount >= BufferSerializer.MaxNodeCount)
-                throw Error(line, $"YAML node count cannot exceed {BufferSerializer.MaxNodeCount}.");
+            if (_nodeCount >= _maxNodeCount)
+                throw Error(line, $"YAML node count cannot exceed {_maxNodeCount}.");
             _nodeCount++;
         }
 
-        private static void EnsureScalarLength(int length, Line line)
+        private void EnsureScalarLength(int length, Line line)
         {
-            if (length > BufferSerializer.MaxScalarLength)
+            if (length > _maxScalarLength)
                 throw Error(line,
-                    $"YAML scalar length cannot exceed {BufferSerializer.MaxScalarLength} characters.");
+                    $"YAML scalar length cannot exceed {_maxScalarLength} characters.");
         }
 
         private static int FindCommentStart(string value, int start, int end)
@@ -479,6 +564,23 @@ namespace ActionBuffer
                     return i;
             }
             return end;
+        }
+
+        private static void TrimRange(string source, ref int start, ref int length)
+        {
+            int end = start + length;
+            while (start < end && char.IsWhiteSpace(source[start])) start++;
+            while (end > start && char.IsWhiteSpace(source[end - 1])) end--;
+            length = end - start;
+        }
+
+        private static bool EqualsRange(string source, int start, int length,
+            string expected)
+        {
+            if (length != expected.Length) return false;
+            for (int i = 0; i < length; i++)
+                if (source[start + i] != expected[i]) return false;
+            return true;
         }
 
         private static FormatException Error(Line line, string message)

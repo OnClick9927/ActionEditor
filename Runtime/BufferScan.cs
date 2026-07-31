@@ -6,8 +6,20 @@ namespace ActionBuffer
 {
     public sealed class BufferScan : IDisposable
     {
-        internal const string ReferenceMetadata = "$ActionBuffer.Reference.v1";
-        internal int MaxDepth => Settings.MaxDepth;
+        internal const string LegacyReferenceMetadata = "$ActionBuffer.Reference.v1";
+        internal const string ReferenceMetadata = "$ActionBuffer.Reference.v2";
+        internal int MaxDepth { get; private set; }
+        internal int MaxTextLength { get; private set; }
+        internal int MaxCollectionCount { get; private set; }
+        internal int MaxObjectFieldCount { get; private set; }
+        internal int MaxScalarLength { get; private set; }
+        internal int MaxNodeCount { get; private set; }
+        internal bool SupportReferences { get; private set; }
+        internal bool TypeInfo { get; private set; }
+        internal bool PrettyPrint { get; private set; }
+        internal bool DeterministicCollectionOrder { get; private set; }
+        private bool _invokeBeforeWriteCallbacks;
+        private bool _serializeEvents;
 
         private sealed class ReferenceComparer : IEqualityComparer<object>
         {
@@ -19,14 +31,89 @@ namespace ActionBuffer
         internal readonly struct CachedField
         {
             public TypeHelper.TypeFields.Field Field { get; }
-            public BuffConverter Converter { get; }
-            public object Value { get; }
+            private readonly IFieldValueCache _values;
+            private readonly BuffConverter _converter;
+            private readonly int _index;
 
-            public CachedField(TypeHelper.TypeFields.Field field, BuffConverter converter, object value)
+            internal CachedField(TypeHelper.TypeFields.Field field, IFieldValueCache values,
+                BuffConverter converter, int index)
             {
                 Field = field;
-                Converter = converter;
-                Value = value;
+                _values = values;
+                _converter = converter;
+                _index = index;
+            }
+
+            internal void Scan(BufferScan scan) => _values.Scan(scan, _index, _converter);
+            internal void Write(IBufferWriter writer, BufferScan scan) =>
+                _values.Write(writer, scan, _index, _converter);
+        }
+
+        internal interface IFieldValueCache
+        {
+            void Scan(BufferScan scan, int index, BuffConverter converter);
+            void Write(IBufferWriter writer, BufferScan scan, int index,
+                BuffConverter converter);
+            void Clear();
+        }
+
+        private sealed class FieldValueCache<T> : IFieldValueCache
+        {
+            private readonly List<T> _values = new List<T>();
+
+            internal CachedField Add(TypeHelper.TypeFields.Field field, BuffConverter converter,
+                T value)
+            {
+                int index = _values.Count;
+                _values.Add(value);
+                return new CachedField(field, this, converter, index);
+            }
+
+            public void Scan(BufferScan scan, int index, BuffConverter converter) =>
+                RequireConverter(converter).ScanValue(scan, _values[index]);
+
+            public void Write(IBufferWriter writer, BufferScan scan, int index,
+                BuffConverter converter) =>
+                RequireConverter(converter).WriteValue(writer, scan, _values[index]);
+
+            public void Clear()
+            {
+                _values.Clear();
+                if (_values.Capacity > BuffSettings.RetainedListCapacity)
+                    _values.Capacity = 0;
+            }
+
+            private static BuffConverter<T> RequireConverter(BuffConverter converter)
+            {
+                if (converter is BuffConverter<T> typed) return typed;
+                throw new InvalidOperationException(
+                    $"Converter '{converter?.GetType()}' cannot serialize field type '{typeof(T)}'.");
+            }
+        }
+
+        private sealed class BoxedFieldValueCache : IFieldValueCache
+        {
+            private readonly List<object> _values = new List<object>();
+
+            internal CachedField Add(TypeHelper.TypeFields.Field field, BuffConverter converter,
+                object value)
+            {
+                int index = _values.Count;
+                _values.Add(value);
+                return new CachedField(field, this, converter, index);
+            }
+
+            public void Scan(BufferScan scan, int index, BuffConverter converter) =>
+                converter.Scan(scan, _values[index]);
+
+            public void Write(IBufferWriter writer, BufferScan scan, int index,
+                BuffConverter converter) => converter.Write(writer, scan, _values[index]);
+
+            public void Clear()
+            {
+                _values.Clear();
+                if (_values.Capacity > BuffSettings.RetainedListCapacity)
+                    _values.Capacity = 0;
             }
         }
 
@@ -36,9 +123,9 @@ namespace ActionBuffer
             public Type Type { get; private set; }
             public int ReferenceId { get; private set; }
             public bool IsReference { get; private set; }
-            private List<CachedField> _fields;
+            internal int FieldStart { get; private set; }
 
-            public int FieldCount => _fields?.Count ?? 0;
+            public int FieldCount { get; private set; }
 
             public CachedObject(object value, Type type, int referenceId = -1,
                 bool isReference = false)
@@ -47,32 +134,14 @@ namespace ActionBuffer
                 Type = type;
                 ReferenceId = referenceId;
                 IsReference = isReference;
-                _fields = null;
+                FieldStart = 0;
+                FieldCount = 0;
             }
 
-            public void AddField(CachedField field)
+            public void SetFieldRange(int start, int count)
             {
-                if (_fields == null)
-                {
-                    _fields = ListPool<CachedField>.Get();
-                }
-                _fields.Add(field);
-            }
-
-            public CachedField GetField(int index)
-            {
-                return _fields[index];
-            }
-
-            public static void Release(ref CachedObject cached)
-            {
-                var fields = cached._fields;
-                if (fields != null)
-                {
-                    fields.Clear();
-                    ListPool<CachedField>.Back(fields);
-                }
-                cached = default;
+                FieldStart = start;
+                FieldCount = count;
             }
         }
 
@@ -113,15 +182,19 @@ namespace ActionBuffer
 
         internal struct CachedEnumerable
         {
-            private object _values;
+            private ICachedEnumerableValues _values;
             private Type _elementType;
-            private Action<object> _release;
             private byte _rank;
             private int _length0;
             private int _length1;
             private int _length2;
             private int _length3;
             private int _length4;
+            private int _referenceId;
+            private bool _isReference;
+
+            internal int ReferenceId => _referenceId;
+            internal bool IsReference => _isReference;
 
             public static CachedEnumerable Capture<T>(IEnumerable<T> source, IComparer<T> comparer,
                 int maxCollectionCount)
@@ -129,8 +202,8 @@ namespace ActionBuffer
                 var cached = new CachedEnumerable
                 {
                     _elementType = typeof(T),
-                    _release = CachedEnumerableValues<T>.Release,
-                    _rank = 1
+                    _rank = 1,
+                    _referenceId = -1
                 };
                 if (source == null) return cached;
 
@@ -140,13 +213,18 @@ namespace ActionBuffer
                     throw new FormatException(
                         $"Collection count cannot exceed {maxCollectionCount}.");
 
-                var values = ListPool<T>.Get(knownCount);
-                cached._values = values;
+                var values = ClassPool.GetList<T>(knownCount);
+                var holder = ClassPool.Get<CachedEnumerableValues<T>>();
+                holder.Values = values;
+                cached._values = holder;
                 try
                 {
                     if (collection != null)
                     {
                         values.AddRange(collection);
+                        if (values.Count > maxCollectionCount)
+                            throw new FormatException(
+                                $"Collection count cannot exceed {maxCollectionCount}.");
                     }
                     else
                     {
@@ -163,6 +241,13 @@ namespace ActionBuffer
                         try
                         {
                             values.Sort(comparer);
+                            for (int i = 1; i < values.Count; i++)
+                            {
+                                if (comparer.Compare(values[i - 1], values[i]) == 0 &&
+                                    !EqualityComparer<T>.Default.Equals(values[i - 1], values[i]))
+                                    throw new NotSupportedException(
+                                        $"Collection element type '{typeof(T)}' does not have a unique deterministic order.");
+                            }
                         }
                         catch (InvalidOperationException exception)
                         {
@@ -179,39 +264,11 @@ namespace ActionBuffer
                 }
             }
 
-            public static CachedEnumerable Capture<T>(ReadOnlySpan<T> source,
-                int maxCollectionCount)
-            {
-                if (source.Length > maxCollectionCount)
-                    throw new FormatException(
-                        $"Collection count cannot exceed {maxCollectionCount}.");
-                var values = ListPool<T>.Get(source.Length);
-                var cached = new CachedEnumerable
-                {
-                    _values = values,
-                    _elementType = typeof(T),
-                    _release = CachedEnumerableValues<T>.Release,
-                    _rank = 1,
-                    _length0 = source.Length
-                };
-                try
-                {
-                    for (int i = 0; i < source.Length; i++)
-                        values.Add(source[i]);
-                    return cached;
-                }
-                catch
-                {
-                    cached.Release();
-                    throw;
-                }
-            }
-
             public List<T> GetValues<T>()
             {
                 if (_elementType != typeof(T) || _rank != 1)
                     throw new InvalidOperationException("The enumerable scan cache contains an unexpected element type.");
-                return (List<T>)_values;
+                return _values == null ? null : ((CachedEnumerableValues<T>)_values).Values;
             }
 
             public static CachedEnumerable CaptureMultiDimensional<T>(Array source, int rank,
@@ -222,8 +279,8 @@ namespace ActionBuffer
                 var cached = new CachedEnumerable
                 {
                     _elementType = typeof(T),
-                    _release = CachedEnumerableValues<T>.Release,
-                    _rank = (byte)rank
+                    _rank = (byte)rank,
+                    _referenceId = -1
                 };
                 if (source == null) return cached;
                 if (source.Rank != rank || source.GetType().GetElementType() != typeof(T))
@@ -253,8 +310,10 @@ namespace ActionBuffer
                     }
                 }
 
-                var values = ListPool<T>.Get((int)count);
-                cached._values = values;
+                var values = ClassPool.GetList<T>((int)count);
+                var holder = ClassPool.Get<CachedEnumerableValues<T>>();
+                holder.Values = values;
+                cached._values = holder;
                 cached._length0 = source.GetLength(0);
                 cached._length1 = source.GetLength(1);
                 if (rank > 2) cached._length2 = source.GetLength(2);
@@ -318,28 +377,38 @@ namespace ActionBuffer
                         "The array scan cache contains an unexpected element type or rank.");
                 shape = new ArrayShape(_rank, _length0, _length1, _length2, _length3,
                     _length4);
-                return (List<T>)_values;
+                return _values == null ? null : ((CachedEnumerableValues<T>)_values).Values;
             }
 
             public void Release()
             {
                 var values = _values;
-                var release = _release;
                 this = default;
-                if (values != null)
-                    release(values);
+                values?.Release();
+            }
+
+            internal void SetReference(int referenceId, bool isReference)
+            {
+                _referenceId = referenceId;
+                _isReference = isReference;
             }
         }
 
-        private static class CachedEnumerableValues<T>
+        private interface ICachedEnumerableValues
         {
-            public static readonly Action<object> Release = ReleaseValues;
+            void Release();
+        }
 
-            private static void ReleaseValues(object value)
+        private sealed class CachedEnumerableValues<T> : ICachedEnumerableValues
+        {
+            internal List<T> Values;
+
+            public void Release()
             {
-                var values = (List<T>)value;
-                values.Clear();
-                ListPool<T>.Back(values);
+                var values = Values;
+                Values = null;
+                ClassPool.BackList(values);
+                ClassPool.Back(this);
             }
         }
 
@@ -351,7 +420,10 @@ namespace ActionBuffer
         }
 
         private readonly List<CachedObject> _objects = new();
+        private readonly List<CachedField> _fields = new();
         private readonly List<CachedEnumerable> _enumerables = new();
+        private readonly Dictionary<Type, IFieldValueCache> _fieldValueCaches = new();
+        private readonly BoxedFieldValueCache _boxedFieldValues = new BoxedFieldValueCache();
         private Dictionary<string, int> _metaMap = new();
         private readonly List<string> _metas = new();
         private HashSet<object> _activeReferences = new HashSet<object>(ReferenceComparer.Instance);
@@ -366,8 +438,7 @@ namespace ActionBuffer
         private object _currentObject;
 
         internal object CurrentObject => _currentObject;
-        internal BufferSerializerSettings Settings { get; private set; }
-
+        internal BuffSettings Settings { get; private set; }
         public BufferScan()
         {
             Prepare(null, true, false);
@@ -378,14 +449,9 @@ namespace ActionBuffer
             Prepare(null, collectMeta, fullField);
         }
 
-        internal static BufferScan Rent(bool collectMeta, bool fullField)
+        internal static BufferScan Rent(BuffSettings settings, bool collectMeta, bool fullField)
         {
-            return Rent(null, collectMeta, fullField);
-        }
-
-        internal static BufferScan Rent(BufferSerializerSettings settings, bool collectMeta, bool fullField)
-        {
-            var result = ClassPool<BufferScan>.Get();
+            var result = ClassPool.Get<BufferScan>();
             result.Prepare(settings, collectMeta, fullField);
             return result;
         }
@@ -394,16 +460,29 @@ namespace ActionBuffer
         {
             if (value == null) return;
             value.Clear();
-            ClassPool<BufferScan>.Back(value);
+            ClassPool.Back(value);
         }
 
-        private void Prepare(BufferSerializerSettings settings, bool collectMeta, bool fullField)
+        private void Prepare(BuffSettings settings, bool collectMeta, bool fullField)
         {
             Clear();
-            Settings = settings ?? BufferSerializerSettings.DefaultSetting;
+            settings ??= BuffSettings.DefaultSetting;
+            Settings = settings;
+            MaxDepth = BuffSettings.MaxDepth;
+            MaxTextLength = BuffSettings.MaxTextLength;
+            MaxCollectionCount = BuffSettings.MaxCollectionCount;
+            MaxObjectFieldCount = BuffSettings.MaxObjectFieldCount;
+            MaxScalarLength = BuffSettings.MaxScalarLength;
+            MaxNodeCount = BuffSettings.MaxNodeCount;
+            SupportReferences = settings.SupportReferences;
+            TypeInfo = settings.TypeInfo;
+            PrettyPrint = settings.PrettyPrint;
+            DeterministicCollectionOrder = settings.DeterministicCollectionOrder;
+            _invokeBeforeWriteCallbacks = settings.InvokeBeforeWriteCallbacks;
+            _serializeEvents = settings.SerializeEvents;
             _collectMeta = collectMeta;
             _fullField = fullField;
-            if (Settings.SupportReferences)
+            if (SupportReferences)
                 AddMeta(ReferenceMetadata);
         }
 
@@ -423,7 +502,7 @@ namespace ActionBuffer
                 var type = objectValue?.GetType();
                 int referenceId = -1;
                 if (objectValue != null && !type.IsValueType &&
-                    Settings.SupportReferences)
+                    SupportReferences)
                 {
                     if (_references.TryGetValue(objectValue, out var reference))
                     {
@@ -454,14 +533,14 @@ namespace ActionBuffer
                     tracked = true;
                 }
 
-                if (Settings.InvokeBeforeWriteCallbacks && objectValue is IBufferObject bufferObject)
+                if (_invokeBeforeWriteCallbacks && objectValue is IBufferObject bufferObject)
                     bufferObject.BeforeWriteBuffer();
 
                 if (type != null && type != typeof(T))
                 {
                     if (!typeof(T).IsAssignableFrom(type))
                         throw new NotSupportedException($"'{type}' is not assignable to '{typeof(T)}'.");
-                    if (!BufferSerializer.GetConverter(type, Settings).UsesObjectLayout)
+                    if (!ConverterResolver.Get(type, Settings).UsesObjectLayout)
                         throw new NotSupportedException(
                             $"A field declared as '{typeof(T)}' cannot serialize runtime value type '{type}'. " +
                             "Declare the field with its concrete serializable type.");
@@ -478,22 +557,29 @@ namespace ActionBuffer
                 _currentObject = objectValue;
                 try
                 {
+                    int fieldStart = _fields.Count;
                     for (int i = 0; i < objectFields.Count; i++)
                     {
                         var field = objectFields[i];
-                        if (field.IsEvent && !Settings.SerializeEvents) continue;
-                        var fieldValue = field.GetValue(objectValue);
-                        if (!_fullField && TypeHelper.IsNullOrDefault(fieldValue, field.FieldType)) continue;
-                        if (cachedObject.FieldCount >= Settings.MaxObjectFieldCount)
+                        if (field.IsEvent && !_serializeEvents) continue;
+                        int fieldCount = _fields.Count - fieldStart;
+                        if (fieldCount >= MaxObjectFieldCount)
                             throw new FormatException(
-                                $"Object field count cannot exceed {Settings.MaxObjectFieldCount}.");
-                        var converter = field.GetConverter(Settings);
-                        cachedObject.AddField(new CachedField(field, converter, fieldValue));
-                        if (cachedObject.FieldCount == 1)
-                            _objects[cachedObjectIndex] = cachedObject;
+                                $"Object field count cannot exceed {MaxObjectFieldCount}.");
+                        var converter = ConverterResolver.Get(field.FieldType, Settings);
+                        if (!field.Capture(this, objectValue, converter, _fullField,
+                                out var cachedField))
+                            continue;
+                        _fields.Add(cachedField);
                         AddMeta(field.name);
-                        AddMeta(TypeHelper.GetTypeName(field.FieldType));
-                        converter.Scan(this, fieldValue);
+                        AddMeta(BuffSerializer.GetSerializedTypeName(field.FieldType));
+                    }
+                    cachedObject.SetFieldRange(fieldStart, _fields.Count - fieldStart);
+                    _objects[cachedObjectIndex] = cachedObject;
+                    for (int i = 0; i < cachedObject.FieldCount; i++)
+                    {
+                        var cachedField = _fields[cachedObject.FieldStart + i];
+                        cachedField.Scan(this);
                     }
                 }
                 finally
@@ -509,12 +595,28 @@ namespace ActionBuffer
         }
 
         public void ScanEnumerable<T>(IEnumerable<T> values, BuffConverter<T> converter,
-            IComparer<T> comparer = null)
+            IComparer<T> comparer = null, bool trackReference = true)
         {
             EnterNode();
             bool tracked = false;
             try
             {
+                int referenceId = -1;
+                bool isReference = false;
+                if (trackReference && values != null && !values.GetType().IsValueType &&
+                    SupportReferences)
+                {
+                    isReference = TryDefineReference(values, out referenceId);
+                    if (isReference)
+                    {
+                        var referenceCache = CachedEnumerable.Capture<T>(null, null,
+                            MaxCollectionCount);
+                        referenceCache.SetReference(referenceId, true);
+                        _enumerables.Add(referenceCache);
+                        return;
+                    }
+                }
+
                 if (values != null && !values.GetType().IsValueType)
                 {
                     if (!_activeReferences.Add(values))
@@ -523,7 +625,8 @@ namespace ActionBuffer
                 }
 
                 var cached = CachedEnumerable.Capture(values, comparer,
-                    Settings.MaxCollectionCount);
+                    MaxCollectionCount);
+                cached.SetReference(referenceId, false);
                 try
                 {
                     _enumerables.Add(cached);
@@ -546,33 +649,6 @@ namespace ActionBuffer
             }
         }
 
-        internal void ScanSpan<T>(ReadOnlySpan<T> values, BuffConverter<T> converter)
-        {
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
-            EnterNode();
-            try
-            {
-                var cached = CachedEnumerable.Capture(values, Settings.MaxCollectionCount);
-                try
-                {
-                    _enumerables.Add(cached);
-                }
-                catch
-                {
-                    cached.Release();
-                    throw;
-                }
-
-                var cachedValues = cached.GetValues<T>();
-                for (int i = 0; i < cachedValues.Count; i++)
-                    converter.ScanValue(this, cachedValues[i]);
-            }
-            finally
-            {
-                ExitNode();
-            }
-        }
-
         internal void ScanMultiDimensionalArray<T>(Array values, int rank,
             BuffConverter<T> converter)
         {
@@ -581,6 +657,21 @@ namespace ActionBuffer
             bool tracked = false;
             try
             {
+                int referenceId = -1;
+                bool isReference = false;
+                if (values != null && SupportReferences)
+                {
+                    isReference = TryDefineReference(values, out referenceId);
+                    if (isReference)
+                    {
+                        var referenceCache = CachedEnumerable.CaptureMultiDimensional<T>(null,
+                            rank, MaxCollectionCount);
+                        referenceCache.SetReference(referenceId, true);
+                        _enumerables.Add(referenceCache);
+                        return;
+                    }
+                }
+
                 if (values != null)
                 {
                     if (!_activeReferences.Add(values))
@@ -590,7 +681,8 @@ namespace ActionBuffer
                 }
 
                 var cached = CachedEnumerable.CaptureMultiDimensional<T>(values, rank,
-                    Settings.MaxCollectionCount);
+                    MaxCollectionCount);
+                cached.SetReference(referenceId, false);
                 try
                 {
                     _enumerables.Add(cached);
@@ -624,16 +716,16 @@ namespace ActionBuffer
 
         internal void CountNode()
         {
-            if (_nodeCount >= Settings.MaxNodeCount)
+            if (_nodeCount >= MaxNodeCount)
                 throw new InvalidOperationException(
-                    $"Serialization node count cannot exceed {Settings.MaxNodeCount}.");
+                    $"Serialization node count cannot exceed {MaxNodeCount}.");
             _nodeCount++;
         }
 
         internal int RequireObjectReference(object value)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
-            if (!Settings.SupportReferences)
+            if (!SupportReferences)
                 throw new InvalidOperationException(
                     "Delegates bound to another object require SupportReferences=true.");
             if (value.GetType().IsValueType)
@@ -655,9 +747,29 @@ namespace ActionBuffer
             return referenceId;
         }
 
+        private bool TryDefineReference(object value, out int referenceId)
+        {
+            if (_references.TryGetValue(value, out var reference))
+            {
+                referenceId = reference.Id;
+                if (reference.Defined) return true;
+                reference.Defined = true;
+                _references[value] = reference;
+                return false;
+            }
+
+            referenceId = _references.Count;
+            _references.Add(value, new ReferenceEntry
+            {
+                Id = referenceId,
+                Defined = true
+            });
+            return false;
+        }
+
         internal void ValidateReferences()
         {
-            if (!Settings.SupportReferences) return;
+            if (!SupportReferences) return;
             foreach (var item in _references)
             {
                 var reference = item.Value;
@@ -675,9 +787,9 @@ namespace ActionBuffer
         public void AddMeta(string value)
         {
             if (!_collectMeta) return;
-            if (value != null && value.Length > Settings.MaxScalarLength)
+            if (value != null && value.Length > MaxScalarLength)
                 throw new FormatException(
-                    $"Metadata length cannot exceed {Settings.MaxScalarLength} characters.");
+                    $"Metadata length cannot exceed {MaxScalarLength} characters.");
             if (_metaMap.ContainsKey(value)) return;
             _metaMap.Add(value, _metas.Count);
             _metas.Add(value);
@@ -694,18 +806,47 @@ namespace ActionBuffer
             return _objects[_objectIndex++];
         }
 
-        internal List<T> ReadEnumerable<T>()
+        internal CachedField ReadField(CachedObject cached, int index)
+        {
+            if (index < 0 || index >= cached.FieldCount)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return _fields[cached.FieldStart + index];
+        }
+
+        internal CachedField CacheFieldValue<T>(TypeHelper.TypeFields.Field field,
+            BuffConverter converter, T value)
+        {
+            if (!_fieldValueCaches.TryGetValue(typeof(T), out var values))
+            {
+                values = new FieldValueCache<T>();
+                _fieldValueCaches.Add(typeof(T), values);
+            }
+            return ((FieldValueCache<T>)values).Add(field, converter, value);
+        }
+
+        internal CachedField CacheBoxedFieldValue(TypeHelper.TypeFields.Field field,
+            BuffConverter converter, object value) =>
+            _boxedFieldValues.Add(field, converter, value);
+
+        internal List<T> ReadEnumerable<T>(out int referenceId, out bool isReference)
         {
             if (_enumerableIndex >= _enumerables.Count)
                 throw new InvalidOperationException("The enumerable scan cache is out of sync.");
-            return _enumerables[_enumerableIndex++].GetValues<T>();
+            var cached = _enumerables[_enumerableIndex++];
+            referenceId = cached.ReferenceId;
+            isReference = cached.IsReference;
+            return cached.GetValues<T>();
         }
 
-        internal List<T> ReadMultiDimensionalArray<T>(int rank, out ArrayShape shape)
+        internal List<T> ReadMultiDimensionalArray<T>(int rank, out ArrayShape shape,
+            out int referenceId, out bool isReference)
         {
             if (_enumerableIndex >= _enumerables.Count)
                 throw new InvalidOperationException("The array scan cache is out of sync.");
-            return _enumerables[_enumerableIndex++].GetMultiDimensionalValues<T>(rank, out shape);
+            var cached = _enumerables[_enumerableIndex++];
+            referenceId = cached.ReferenceId;
+            isReference = cached.IsReference;
+            return cached.GetMultiDimensionalValues<T>(rank, out shape);
         }
 
         internal void ResetRead()
@@ -716,14 +857,13 @@ namespace ActionBuffer
 
         private void Clear()
         {
-            for (int i = 0; i < _objects.Count; i++)
-            {
-                var cachedObject = _objects[i];
-                CachedObject.Release(ref cachedObject);
-            }
             _objects.Clear();
-            if (_objects.Capacity > BufferSerializer.RetainedListCapacity)
-                _objects.Capacity = 0;
+            _fields.Clear();
+            foreach (var values in _fieldValueCaches.Values)
+                values.Clear();
+            if (_fieldValueCaches.Count > BuffSettings.PoolLimit * 4)
+                _fieldValueCaches.Clear();
+            _boxedFieldValues.Clear();
 
             for (int i = 0; i < _enumerables.Count; i++)
             {
@@ -731,21 +871,21 @@ namespace ActionBuffer
                 cachedEnumerable.Release();
             }
             _enumerables.Clear();
-            if (_enumerables.Capacity > BufferSerializer.RetainedListCapacity)
-                _enumerables.Capacity = 0;
 
-            if (_metaMap.Count > BufferSerializer.RetainedListCapacity)
+            if (_metaMap.Count > BuffSettings.RetainedListCapacity)
                 _metaMap = new Dictionary<string, int>();
             else
                 _metaMap.Clear();
             _metas.Clear();
-            if (_metas.Capacity > BufferSerializer.RetainedListCapacity)
-                _metas.Capacity = 0;
-            if (_activeReferences.Count > BufferSerializer.RetainedListCapacity)
+            TrimList(_objects);
+            TrimList(_fields);
+            TrimList(_enumerables);
+            TrimList(_metas);
+            if (_activeReferences.Count > BuffSettings.RetainedListCapacity)
                 _activeReferences = new HashSet<object>(ReferenceComparer.Instance);
             else
                 _activeReferences.Clear();
-            if (_references.Count > BufferSerializer.RetainedListCapacity)
+            if (_references.Count > BuffSettings.RetainedListCapacity)
                 _references = new Dictionary<object, ReferenceEntry>(ReferenceComparer.Instance);
             else
                 _references.Clear();
@@ -753,7 +893,25 @@ namespace ActionBuffer
             _nodeCount = 0;
             _currentObject = null;
             Settings = null;
+            MaxDepth = 0;
+            MaxTextLength = 0;
+            MaxCollectionCount = 0;
+            MaxObjectFieldCount = 0;
+            MaxScalarLength = 0;
+            MaxNodeCount = 0;
+            SupportReferences = false;
+            TypeInfo = false;
+            PrettyPrint = false;
+            DeterministicCollectionOrder = false;
+            _invokeBeforeWriteCallbacks = false;
+            _serializeEvents = false;
             ResetRead();
+        }
+
+        private static void TrimList<T>(List<T> values)
+        {
+            if (values.Capacity > BuffSettings.RetainedListCapacity)
+                values.Capacity = 0;
         }
 
         public void Dispose() => Clear();

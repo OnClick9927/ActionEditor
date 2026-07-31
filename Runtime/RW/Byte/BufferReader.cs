@@ -1,22 +1,29 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 namespace ActionBuffer
 {
-    public class BufferReader : IBufferReader, IObjectContextReader
+    public class BufferReader : IBufferReader, IObjectContextReader, IBuffSerializerContext,
+        ITypedEnumReader, IReferenceResolver
     {
         private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
-        private static readonly Func<IBufferReader, string> ReadMetadataValue = ReadMetadata;
+        private static readonly BuffConverter<string> MetadataConverter = new StringConverter();
         private byte[] _buffer;
         private int _index = 0;
         private int _depth;
         private int _nodeCount;
         private int _limit;
         private int _precountedReadDepth;
+        private int _maxDepth;
+        private int _maxNodeCount;
+        private int _maxCollectionCount;
+        private int _maxObjectFieldCount;
+        private int _maxScalarLength;
         private bool _suppressNodeCounting;
         private int _objectReadDepth;
         private object _currentObject;
+        private BuffSettings _settings;
         private sealed class ReferenceEntry
         {
             internal object Value;
@@ -26,8 +33,11 @@ namespace ActionBuffer
         private readonly Dictionary<int, ReferenceEntry> _references =
             new Dictionary<int, ReferenceEntry>();
         private bool _supportReferences;
+        private bool _collectionReferences;
         private readonly List<IBufferObject> _afterReadCallbacks = new List<IBufferObject>();
+        private bool _deferCallbacks;
         object IObjectContextReader.CurrentObject => _currentObject;
+        BuffSettings IBuffSerializerContext.Settings => _settings;
         object IObjectContextReader.GetOrCreateReference(int referenceId, Type type) =>
             GetOrCreateReference(referenceId, type, false);
         public int index
@@ -41,13 +51,20 @@ namespace ActionBuffer
                 _index = value;
             }
         }
-        public void Init(byte[] data)
+        public void Init(byte[] data, BuffSettings settings = null)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
-            if (data.Length > BufferSerializer.MaxBinaryLength)
+            int maxBinaryLength = BuffSettings.MaxBinaryLength;
+            if (data.Length > maxBinaryLength)
                 throw new FormatException(
-                    $"Binary data length cannot exceed {BufferSerializer.MaxBinaryLength} bytes.");
+                    $"Binary data length cannot exceed {maxBinaryLength} bytes.");
             Clear();
+            _settings = settings ?? BuffSettings.DefaultSetting;
+            _maxDepth = BuffSettings.MaxDepth;
+            _maxNodeCount = BuffSettings.MaxNodeCount;
+            _maxCollectionCount = BuffSettings.MaxCollectionCount;
+            _maxObjectFieldCount = BuffSettings.MaxObjectFieldCount;
+            _maxScalarLength = BuffSettings.MaxScalarLength;
             _buffer = data;
             _limit = data.Length;
         }
@@ -63,14 +80,17 @@ namespace ActionBuffer
             _suppressNodeCounting = false;
             _objectReadDepth = 0;
             _currentObject = null;
+            _settings = null;
             _supportReferences = false;
+            _collectionReferences = false;
+            _deferCallbacks = false;
             _references.Clear();
             _afterReadCallbacks.Clear();
-            if (_afterReadCallbacks.Capacity > BufferSerializer.RetainedListCapacity)
+            if (_afterReadCallbacks.Capacity > BuffSettings.RetainedListCapacity)
                 _afterReadCallbacks.Capacity = 0;
             if (metas == null) return;
             metas.Clear();
-            ListPool<string>.Back(metas);
+            ClassPool.BackList(metas);
             metas = null;
         }
         private void CheckReaderIndex(int length)
@@ -97,6 +117,8 @@ namespace ActionBuffer
             if (type == null || !type.IsEnum) throw new ArgumentException("Expected an enum type.", nameof(type));
             return Enum.ToObject(type, ReadUInt64()) as Enum;
         }
+
+        T ITypedEnumReader.ReadEnumValue<T>() => EnumValue<T>.FromUInt64(ReadUInt64());
         public byte ReadByte()
         {
             CheckReaderIndex(1);
@@ -175,9 +197,9 @@ namespace ActionBuffer
                 throw new FormatException($"Invalid binary scalar length '{count}'.");
             if (count == 0)
                 return string.Empty;
-            if (count > BufferSerializer.MaxScalarLength)
+            if (count > _maxScalarLength)
                 throw new FormatException(
-                    $"Binary scalar length cannot exceed {BufferSerializer.MaxScalarLength} bytes.");
+                    $"Binary scalar length cannot exceed {_maxScalarLength} bytes.");
             CheckReaderIndex(count);
             string value;
             try
@@ -191,22 +213,25 @@ namespace ActionBuffer
             _index += count;
             return value;
         }
-        public List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read)
+        public List<T> ReadIEnumerable<T>(List<T> result, BuffConverter<T> converter)
         {
             EnterNode();
             try
             {
-                if (!TryReadCollectionCount(out int count))
-                    return null;
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (List<T>)GetExistingReference(header.ReferenceId, typeof(List<T>));
 
                 if (result == null) throw new ArgumentNullException(nameof(result));
-                if (read == null) throw new ArgumentNullException(nameof(read));
+                if (converter == null) throw new ArgumentNullException(nameof(converter));
+                DefineCollectionReference(header.ReferenceId, result, typeof(List<T>));
                 List<T> values = result;
-                int requiredCapacity = checked(values.Count + count);
+                int requiredCapacity = checked(values.Count + header.Count);
                 if (values.Capacity < requiredCapacity)
                     values.Capacity = requiredCapacity;
-                for (int i = 0; i < count; i++)
-                    values.Add(ReadPrecounted(read));
+                for (int i = 0; i < header.Count; i++)
+                    values.Add(ReadPrecounted(converter));
                 return values;
             }
             finally
@@ -215,15 +240,19 @@ namespace ActionBuffer
             }
         }
 
-        public List<T> ReadList<T>(Func<IBufferReader, T> read)
+        public List<T> ReadList<T>(BuffConverter<T> converter)
         {
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             EnterNode();
             try
             {
-                if (!TryReadCollectionCount(out int count)) return null;
-                var result = new List<T>(count);
-                for (int i = 0; i < count; i++) result.Add(ReadPrecounted(read));
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (List<T>)GetExistingReference(header.ReferenceId, typeof(List<T>));
+                var result = new List<T>(header.Count);
+                DefineCollectionReference(header.ReferenceId, result, typeof(List<T>));
+                for (int i = 0; i < header.Count; i++) result.Add(ReadPrecounted(converter));
                 return result;
             }
             finally
@@ -232,15 +261,19 @@ namespace ActionBuffer
             }
         }
 
-        public T[] ReadArray<T>(Func<IBufferReader, T> read)
+        public T[] ReadArray<T>(BuffConverter<T> converter)
         {
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             EnterNode();
             try
             {
-                if (!TryReadCollectionCount(out int count)) return null;
-                var result = new T[count];
-                for (int i = 0; i < count; i++) result[i] = ReadPrecounted(read);
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (T[])GetExistingReference(header.ReferenceId, typeof(T[]));
+                var result = new T[header.Count];
+                DefineCollectionReference(header.ReferenceId, result, typeof(T[]));
+                for (int i = 0; i < header.Count; i++) result[i] = ReadPrecounted(converter);
                 return result;
             }
             finally
@@ -249,15 +282,26 @@ namespace ActionBuffer
             }
         }
 
-        public Array ReadMultiDimensionalArray<T>(int rank, Func<IBufferReader, T> read)
+        public Array ReadMultiDimensionalArray<T>(int rank, BuffConverter<T> converter)
         {
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             if (rank < 2 || rank > 5) throw new ArgumentOutOfRangeException(nameof(rank));
             EnterNode();
             try
             {
+                var header = ReadCollectionHeader(false);
+                var arrayType = typeof(T).MakeArrayType(rank);
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (Array)GetExistingReference(header.ReferenceId, arrayType);
                 ushort firstLength = ReadUInt16();
-                if (firstLength == ushort.MaxValue) return null;
+                if (firstLength == ushort.MaxValue)
+                {
+                    if (_collectionReferences)
+                        throw new FormatException(
+                            $"Array dimensions cannot exceed {ushort.MaxValue - 1}.");
+                    return null;
+                }
                 int length1 = ReadArrayDimension();
                 int length2 = rank > 2 ? ReadArrayDimension() : 0;
                 int length3 = rank > 3 ? ReadArrayDimension() : 0;
@@ -267,7 +311,7 @@ namespace ActionBuffer
                 bool hasZeroLength = false;
                 for (int dimension = 0; dimension < rank; dimension++)
                     hasZeroLength |= shape.GetLength(dimension) == 0;
-                int maxCollectionCount = BufferSerializerSettings.DefaultSetting.MaxCollectionCount;
+                int maxCollectionCount = _maxCollectionCount;
                 long longCount = hasZeroLength ? 0 : 1;
                 if (!hasZeroLength)
                 {
@@ -281,12 +325,16 @@ namespace ActionBuffer
                     }
                 }
                 int count = (int)longCount;
+                if (header.Count >= 0 && header.Count != count)
+                    throw new FormatException(
+                        $"Array dimensions require {count} values but found {header.Count}.");
                 CountNodes(checked(rank + 2 + count));
 
                 var result = MultiDimensionalArrayHelper.Create<T>(shape);
+                DefineCollectionReference(header.ReferenceId, result, arrayType);
                 for (int index = 0; index < count; index++)
                     MultiDimensionalArrayHelper.SetValue(result, shape, index,
-                        ReadPrecounted(read));
+                        ReadPrecounted(converter));
                 return result;
             }
             finally
@@ -304,15 +352,22 @@ namespace ActionBuffer
             return value;
         }
 
-        public HashSet<T> ReadHashSet<T>(Func<IBufferReader, T> read)
+        public HashSet<T> ReadHashSet<T>(BuffConverter<T> converter)
         {
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             EnterNode();
             try
             {
-                if (!TryReadCollectionCount(out int count)) return null;
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (HashSet<T>)GetExistingReference(header.ReferenceId,
+                        typeof(HashSet<T>));
                 var result = new HashSet<T>();
-                for (int i = 0; i < count; i++) result.Add(ReadPrecounted(read));
+                DefineCollectionReference(header.ReferenceId, result, typeof(HashSet<T>));
+                for (int i = 0; i < header.Count; i++)
+                    if (!result.Add(ReadPrecounted(converter)))
+                        throw new FormatException("Duplicate set value.");
                 return result;
             }
             finally
@@ -321,15 +376,51 @@ namespace ActionBuffer
             }
         }
 
-        public Queue<T> ReadQueue<T>(Func<IBufferReader, T> read)
+        public Queue<T> ReadQueue<T>(BuffConverter<T> converter)
         {
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             EnterNode();
             try
             {
-                if (!TryReadCollectionCount(out int count)) return null;
-                var result = new Queue<T>(count);
-                for (int i = 0; i < count; i++) result.Enqueue(ReadPrecounted(read));
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (Queue<T>)GetExistingReference(header.ReferenceId, typeof(Queue<T>));
+                var result = new Queue<T>(header.Count);
+                DefineCollectionReference(header.ReferenceId, result, typeof(Queue<T>));
+                for (int i = 0; i < header.Count; i++) result.Enqueue(ReadPrecounted(converter));
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        public Stack<T> ReadStack<T>(BuffConverter<T> converter)
+        {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            EnterNode();
+            try
+            {
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (Stack<T>)GetExistingReference(header.ReferenceId, typeof(Stack<T>));
+                var result = new Stack<T>(header.Count);
+                DefineCollectionReference(header.ReferenceId, result, typeof(Stack<T>));
+                var values = ClassPool.GetList<T>(header.Count);
+                try
+                {
+                    for (int i = 0; i < header.Count; i++)
+                        values.Add(ReadPrecounted(converter));
+                    for (int i = values.Count - 1; i >= 0; i--)
+                        result.Push(values[i]);
+                }
+                finally
+                {
+                    ClassPool.BackList(values);
+                }
                 return result;
             }
             finally
@@ -339,17 +430,23 @@ namespace ActionBuffer
         }
 
         public Dictionary<TKey, TValue> ReadDictionary<TKey, TValue>(
-            Func<IBufferReader, KeyValuePair<TKey, TValue>> read)
+            BuffConverter<KeyValuePair<TKey, TValue>> converter)
         {
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             EnterNode();
             try
             {
-                if (!TryReadCollectionCount(out int count)) return null;
-                var result = new Dictionary<TKey, TValue>(count);
-                for (int i = 0; i < count; i++)
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (Dictionary<TKey, TValue>)GetExistingReference(header.ReferenceId,
+                        typeof(Dictionary<TKey, TValue>));
+                var result = new Dictionary<TKey, TValue>(header.Count);
+                DefineCollectionReference(header.ReferenceId, result,
+                    typeof(Dictionary<TKey, TValue>));
+                for (int i = 0; i < header.Count; i++)
                 {
-                    var item = ReadPrecounted(read);
+                    var item = ReadPrecounted(converter);
                     result.Add(item.Key, item.Value);
                 }
                 return result;
@@ -361,17 +458,23 @@ namespace ActionBuffer
         }
 
         public ConcurrentDictionary<TKey, TValue> ReadConcurrentDictionary<TKey, TValue>(
-            Func<IBufferReader, KeyValuePair<TKey, TValue>> read)
+            BuffConverter<KeyValuePair<TKey, TValue>> converter)
         {
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             EnterNode();
             try
             {
-                if (!TryReadCollectionCount(out int count)) return null;
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (ConcurrentDictionary<TKey, TValue>)GetExistingReference(
+                        header.ReferenceId, typeof(ConcurrentDictionary<TKey, TValue>));
                 var result = new ConcurrentDictionary<TKey, TValue>();
-                for (int i = 0; i < count; i++)
+                DefineCollectionReference(header.ReferenceId, result,
+                    typeof(ConcurrentDictionary<TKey, TValue>));
+                for (int i = 0; i < header.Count; i++)
                 {
-                    var item = ReadPrecounted(read);
+                    var item = ReadPrecounted(converter);
                     if (!result.TryAdd(item.Key, item.Value))
                         throw new FormatException($"Duplicate dictionary key '{item.Key}'.");
                 }
@@ -383,37 +486,72 @@ namespace ActionBuffer
             }
         }
 
-        private bool TryReadCollectionCount(out int count)
+        private readonly struct CollectionHeader
         {
-            ushort encodedCount = ReadUInt16();
-            if (encodedCount == ushort.MaxValue)
+            internal readonly int Count;
+            internal readonly int ReferenceId;
+            internal readonly bool IsNull;
+            internal readonly bool IsReference;
+
+            internal CollectionHeader(int count, int referenceId, bool isNull,
+                bool isReference)
             {
-                count = 0;
-                return false;
+                Count = count;
+                ReferenceId = referenceId;
+                IsNull = isNull;
+                IsReference = isReference;
             }
-            count = encodedCount;
-            if (count > BufferSerializer.MaxCollectionCount)
-                throw new FormatException(
-                    $"Collection count cannot exceed {BufferSerializer.MaxCollectionCount}.");
-            CountNodes(count);
-            return true;
         }
 
-        public T? ReadNullable<T>(Func<IBufferReader, T> read) where T : struct
+        private CollectionHeader ReadCollectionHeader(bool readCount = true)
         {
-            if (read == null) throw new ArgumentNullException(nameof(read));
+            int referenceId = -1;
+            if (_collectionReferences)
+            {
+                byte kind = ReadByte();
+                if (kind == 0) return new CollectionHeader(0, -1, true, false);
+                if (kind != 1 && kind != 2)
+                    throw new FormatException($"Invalid collection reference marker '{kind}'.");
+                referenceId = ReadInt32();
+                if (referenceId < -1)
+                    throw new FormatException($"Invalid collection reference id '{referenceId}'.");
+                if (kind == 1)
+                {
+                    if (referenceId < 0)
+                        throw new FormatException("A collection reference requires an id.");
+                    return new CollectionHeader(0, referenceId, false, true);
+                }
+            }
+            if (!readCount && !_collectionReferences)
+                return new CollectionHeader(-1, referenceId, false, false);
+
+            ushort encodedCount = ReadUInt16();
+            if (!_collectionReferences && encodedCount == ushort.MaxValue)
+                return new CollectionHeader(0, -1, true, false);
+            int count = encodedCount;
+            if (count > _maxCollectionCount)
+                throw new FormatException(
+                    $"Collection count cannot exceed {_maxCollectionCount}.");
+            if (readCount) CountNodes(count);
+            return new CollectionHeader(count, referenceId, false, false);
+        }
+
+        public T? ReadNullable<T>(BuffConverter<T> converter) where T : struct
+        {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             if (!ReadBool()) return null;
             CountNodes(1);
-            return ReadPrecounted(read);
+            return ReadPrecounted(converter);
         }
 
         public KeyValuePair<TKey, TValue> ReadKeyValuePair<TKey, TValue>(
-            Func<IBufferReader, TKey> readKey, Func<IBufferReader, TValue> readValue)
+            BuffConverter<TKey> keyConverter, BuffConverter<TValue> valueConverter)
         {
-            if (readKey == null) throw new ArgumentNullException(nameof(readKey));
-            if (readValue == null) throw new ArgumentNullException(nameof(readValue));
+            if (keyConverter == null) throw new ArgumentNullException(nameof(keyConverter));
+            if (valueConverter == null) throw new ArgumentNullException(nameof(valueConverter));
             CountNodes(2);
-            return new KeyValuePair<TKey, TValue>(ReadPrecounted(readKey), ReadPrecounted(readValue));
+            return new KeyValuePair<TKey, TValue>(ReadPrecounted(keyConverter),
+                ReadPrecounted(valueConverter));
         }
         private List<string> metas;
 
@@ -421,13 +559,13 @@ namespace ActionBuffer
         {
             if (metas != null) return;
 
-            metas = ListPool<string>.Get();
+            metas = ClassPool.GetList<string>();
             var previousSuppression = _suppressNodeCounting;
             _suppressNodeCounting = true;
             List<string> values;
             try
             {
-                values = ReadIEnumerable(metas, ReadMetadataValue);
+                values = ReadIEnumerable(metas, MetadataConverter);
             }
             finally
             {
@@ -439,12 +577,13 @@ namespace ActionBuffer
             {
                 if (metas[i] == null)
                     throw new FormatException("The binary metadata table cannot contain null values.");
-                if (metas[i] == BufferScan.ReferenceMetadata)
-                    _supportReferences = true;
             }
+            _supportReferences = metas.Count > 0 &&
+                (metas[0] == BufferScan.ReferenceMetadata ||
+                 metas[0] == BufferScan.LegacyReferenceMetadata);
+            _collectionReferences = metas.Count > 0 &&
+                metas[0] == BufferScan.ReferenceMetadata;
         }
-
-        private static string ReadMetadata(IBufferReader reader) => reader.ReadUTF8();
 
         private string ReadMeta()
         {
@@ -467,23 +606,23 @@ namespace ActionBuffer
             int parentLimit = _limit;
             int fieldCount = 0;
             var previousObject = _currentObject;
+            var presentFields = ClassPool.GetHashSet<TypeHelper.TypeFields.Field>();
             _currentObject = instance;
-            fields.SetDefaultValues(instance);
             _limit = objectEnd;
             try
             {
                 while (_index < objectEnd)
                 {
-                    if (++fieldCount > BufferSerializer.MaxObjectFieldCount)
+                    if (++fieldCount > _maxObjectFieldCount)
                         throw new FormatException(
-                            $"Binary object field count cannot exceed {BufferSerializer.MaxObjectFieldCount}.");
+                            $"Binary object field count cannot exceed {_maxObjectFieldCount}.");
                     CountNodes(1);
                     if (objectEnd - _index < 12)
                         throw new FormatException("Incomplete binary field header.");
 
                     int fieldEnd = ReadInt32();
                     string fieldName = ReadMeta();
-                    string serializedTypeName = TypeHelper.GetRealTypeName(ReadMeta());
+                    string serializedTypeName = BuffSerializer.GetSerializedTypeName(ReadMeta());
                     if (fieldEnd < _index || fieldEnd > objectEnd)
                         throw new FormatException($"Invalid binary field end index '{fieldEnd}'.");
 
@@ -493,6 +632,9 @@ namespace ActionBuffer
                         _index = fieldEnd;
                         continue;
                     }
+                    if (!presentFields.Add(field))
+                        throw new FormatException(
+                            $"Binary object contains duplicate field '{fieldName}'.");
                     if (field.FieldType.FullName != serializedTypeName)
                         throw new FormatException(
                             $"Binary field '{fieldName}' changed type from '{serializedTypeName}' to '{field.FieldType.FullName}'.");
@@ -502,11 +644,11 @@ namespace ActionBuffer
                     try
                     {
                         var fieldType = field.FieldType;
-                        var convert = field.GetConverter(BufferSerializerSettings.DefaultSetting);
+                        var convert = ConverterResolver.Get(field.FieldType, _settings);
                         _precountedReadDepth++;
                         try
                         {
-                            field.SetValue(instance, convert.Read(this, fieldType));
+                            field.ReadAndSet(this, instance, convert);
                         }
                         finally
                         {
@@ -521,11 +663,13 @@ namespace ActionBuffer
                         _limit = objectLimit;
                     }
                 }
+                fields.SetMissingDefaultValues(instance, presentFields);
             }
             finally
             {
                 _currentObject = previousObject;
                 _limit = parentLimit;
+                ClassPool.BackHashSet(presentFields);
             }
         }
 
@@ -536,14 +680,17 @@ namespace ActionBuffer
             try
             {
                 var result = ReadNewObject<T>();
-                if (_objectReadDepth == 1)
+                if (_objectReadDepth == 1 && !_deferCallbacks)
+                {
+                    EnsureReferencesResolved();
                     InvokeAfterReadCallbacks();
+                }
                 return result;
             }
             finally
             {
                 _objectReadDepth--;
-                if (_objectReadDepth == 0)
+                if (_objectReadDepth == 0 && !_deferCallbacks)
                     _afterReadCallbacks.Clear();
                 ExitNode();
             }
@@ -566,7 +713,8 @@ namespace ActionBuffer
 
             string typeName = metas[typeIndex];
             string assemblyName = ReadMeta();
-            Type type = TypeHelper.ResolveSerializedType(typeof(T), typeName, assemblyName);
+            Type type = BuffSerializer.ResolveSerializedType(
+                typeof(T), typeName, assemblyName, _settings);
             int objectEnd = ReadEndIndex("object");
 
             int referenceId = _supportReferences ? ReadInt32() : -1;
@@ -618,6 +766,20 @@ namespace ActionBuffer
             return entry.Value;
         }
 
+        private void DefineCollectionReference(int referenceId, object value, Type type)
+        {
+            if (referenceId < 0) return;
+            if (_references.ContainsKey(referenceId))
+                throw new FormatException(
+                    $"Duplicate object definition for reference id '{referenceId}'.");
+            _references.Add(referenceId, new ReferenceEntry
+            {
+                Value = value,
+                Type = type,
+                Defined = true
+            });
+        }
+
         internal void EnsureReferencesResolved()
         {
             foreach (var item in _references)
@@ -638,7 +800,7 @@ namespace ActionBuffer
 
         private void EnterNode()
         {
-            int maxDepth = BufferSerializerSettings.DefaultSetting.MaxDepth;
+            int maxDepth = _maxDepth;
             if (_depth >= maxDepth)
                 throw new FormatException($"Binary serialization depth cannot exceed {maxDepth}.");
             if (_precountedReadDepth == 0)
@@ -649,18 +811,18 @@ namespace ActionBuffer
         private void CountNodes(int count)
         {
             if (_suppressNodeCounting) return;
-            if (count < 0 || _nodeCount > BufferSerializer.MaxNodeCount - count)
+            if (count < 0 || _nodeCount > _maxNodeCount - count)
                 throw new FormatException(
-                    $"Binary node count cannot exceed {BufferSerializer.MaxNodeCount}.");
+                    $"Binary node count cannot exceed {_maxNodeCount}.");
             _nodeCount += count;
         }
 
-        private T ReadPrecounted<T>(Func<IBufferReader, T> read)
+        private T ReadPrecounted<T>(BuffConverter<T> converter)
         {
             _precountedReadDepth++;
             try
             {
-                return read(this);
+                return converter.ReadValue(this, typeof(T));
             }
             finally
             {
@@ -672,6 +834,27 @@ namespace ActionBuffer
         {
             for (int i = 0; i < _afterReadCallbacks.Count; i++)
                 _afterReadCallbacks[i].AfterReadBuffer();
+        }
+
+        void IReferenceResolver.EnsureReferencesResolved() => EnsureReferencesResolved();
+
+        internal void DeferCallbacks()
+        {
+            _deferCallbacks = true;
+        }
+
+        internal void CompleteCallbacks()
+        {
+            EnsureReferencesResolved();
+            try
+            {
+                InvokeAfterReadCallbacks();
+            }
+            finally
+            {
+                _afterReadCallbacks.Clear();
+                _deferCallbacks = false;
+            }
         }
 
         private void ExitNode()

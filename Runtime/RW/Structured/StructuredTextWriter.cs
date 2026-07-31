@@ -1,309 +1,329 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 
 namespace ActionBuffer
 {
-    public abstract class StructuredTextWriter : IBufferWriter
+    internal static class TextIntegerWriter
     {
-        private StructuredNode _value;
-        private bool _hasValue;
+        internal static void Append(StringBuilder builder, long value)
+        {
+            if (value >= 0)
+            {
+                Append(builder, (ulong)value);
+                return;
+            }
+            builder.Append('-');
+            Append(builder, unchecked((ulong)(-(value + 1))) + 1);
+        }
+
+        internal static void Append(StringBuilder builder, ulong value)
+        {
+            if (value >= 10)
+                Append(builder, value / 10);
+            builder.Append((char)('0' + value % 10));
+        }
+    }
+
+    public abstract class StructuredTextWriter : IBufferWriter, ITypedEnumWriter
+    {
         private bool _typeInfo;
-        private int _maxTextLength = BufferSerializerSettings.DefaultSetting.MaxTextLength;
+        private bool _initialized;
+        private bool _hasRoot;
+        private int _valueDepth;
+        protected int MaxTextLength { get; private set; }
 
         public bool CollectMeta => false;
 
         public void Init(BufferScan scan)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            ResetValue();
-            var settings = scan.Settings;
-            _typeInfo = settings.TypeInfo;
-            _maxTextLength = settings.MaxTextLength;
+            Clear();
+            _typeInfo = scan.TypeInfo;
+            MaxTextLength = scan.MaxTextLength;
+            _initialized = true;
             OnInit(scan);
         }
 
         protected virtual void OnInit(BufferScan scan) { }
 
+        protected void RequireResult()
+        {
+            if (!_initialized || !_hasRoot || _valueDepth != 0)
+                throw new InvalidOperationException("The writer has no complete serialized value.");
+        }
+
         protected void ValidateTextLength(int length, string format)
         {
-            if (length > _maxTextLength)
+            if (length > MaxTextLength)
                 throw new FormatException(
-                    $"{format} output length cannot exceed {_maxTextLength} characters.");
+                    $"{format} output length cannot exceed {MaxTextLength} characters.");
         }
 
         public virtual void Clear()
         {
-            ResetValue();
             _typeInfo = false;
-            _maxTextLength = BufferSerializerSettings.DefaultSetting.MaxTextLength;
+            _initialized = false;
+            _hasRoot = false;
+            _valueDepth = 0;
+            MaxTextLength = 0;
         }
 
-        internal StructuredNode GetRoot()
+        private void EnterValue()
         {
-            if (!_hasValue)
-                throw new InvalidOperationException("The writer has no serialized value.");
-            return _value;
+            if (!_initialized) throw new InvalidOperationException("The writer is not initialized.");
+            if (_valueDepth == 0)
+            {
+                if (_hasRoot)
+                    throw new InvalidOperationException("A converter wrote more than one root value.");
+                _hasRoot = true;
+            }
+            _valueDepth++;
         }
 
-        private void ResetValue()
+        private void ExitValue()
         {
-            if (!_hasValue) return;
-            StructuredNode.Release(ref _value);
-            _hasValue = false;
-        }
-
-        private void SetValue(StructuredNode value)
-        {
-            ResetValue();
-            _value = value;
-            _hasValue = true;
-        }
-
-        private StructuredNode TakeValue()
-        {
-            if (!_hasValue)
-                throw new InvalidOperationException("A converter did not write a value.");
-
-            var value = _value;
-            _value = default;
-            _hasValue = false;
-            return value;
+            _valueDepth--;
         }
 
         public void WriteObject<T>(BufferScan scan, T value, TypeHelper.TypeFields fields)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            var cached = scan.ReadObject();
-            if (cached.Value == null)
-            {
-                SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
-                return;
-            }
-            if (cached.IsReference)
-            {
-                SetValue(StructuredNode.RentReference(cached.ReferenceId));
-                return;
-            }
-            var node = StructuredNode.Rent(StructuredNodeKind.Object);
+            EnterValue();
             try
             {
-                node.ReferenceId = cached.ReferenceId;
+                var cached = scan.ReadObject();
+                if (cached.Value == null)
+                {
+                    WriteNullValue();
+                    return;
+                }
+                if (cached.IsReference)
+                {
+                    BeginObjectValue(cached.ReferenceId, true, null, null, 0);
+                    EndObjectValue();
+                    return;
+                }
                 if (!_typeInfo && cached.Type != typeof(T))
                     throw new InvalidOperationException(
                         $"Writing runtime type '{cached.Type}' through '{typeof(T)}' requires typeInfo=true.");
-                if (_typeInfo)
-                {
-                    node.TypeName = cached.Type.FullName;
-                    node.AssemblyName = cached.Type.Assembly.FullName;
-                }
 
+                string typeName = _typeInfo && cached.Type != typeof(T)
+                    ? cached.Type.FullName
+                    : null;
+                string assemblyName = typeName == null ? null : cached.Type.Assembly.FullName;
+                BeginObjectValue(cached.ReferenceId, false, typeName, assemblyName,
+                    cached.FieldCount);
                 for (int i = 0; i < cached.FieldCount; i++)
                 {
-                    var cachedField = cached.GetField(i);
-                    ResetValue();
-                    cachedField.Converter.Write(this, scan, cachedField.Value);
-                    var valueNode = TakeValue();
-                    try
-                    {
-                        node.AddField(cachedField.Field.name, valueNode);
-                        valueNode = default;
-                    }
-                    finally
-                    {
-                        StructuredNode.Release(ref valueNode);
-                    }
+                    var field = scan.ReadField(cached, i);
+                    BeginObjectField(field.Field.name);
+                    field.Write(this, scan);
+                    EndObjectField();
                 }
+                EndObjectValue();
             }
-            catch
+            finally
             {
-                ResetValue();
-                StructuredNode.Release(ref node);
-                throw;
+                ExitValue();
             }
-            SetValue(node);
         }
 
-        public void WriteIEnumerable<T>(BufferScan scan, IEnumerable<T> values,
-            Action<IBufferWriter, BufferScan, T> write)
+        public void WriteIEnumerable<T>(BufferScan scan, BuffConverter<T> converter)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            var cachedValues = scan.ReadEnumerable<T>();
-            if (cachedValues == null)
-            {
-                SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
-                return;
-            }
-
-            var node = StructuredNode.Rent(StructuredNodeKind.Sequence);
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            EnterValue();
             try
             {
-                for (int i = 0; i < cachedValues.Count; i++)
+                var values = scan.ReadEnumerable<T>(out int referenceId, out bool isReference);
+                if (values == null && !isReference)
                 {
-                    ResetValue();
-                    write(this, scan, cachedValues[i]);
-                    var valueNode = TakeValue();
-                    try
+                    WriteNullValue();
+                    return;
+                }
+                BeginSequenceValue(referenceId, isReference, values?.Count ?? 0);
+                if (!isReference)
+                {
+                    for (int i = 0; i < values.Count; i++)
                     {
-                        node.AddItem(valueNode);
-                        valueNode = default;
-                    }
-                    finally
-                    {
-                        StructuredNode.Release(ref valueNode);
+                        BeginSequenceItem();
+                        converter.WriteValue(this, scan, values[i]);
+                        EndSequenceItem();
                     }
                 }
+                EndSequenceValue();
             }
-            catch
+            finally
             {
-                ResetValue();
-                StructuredNode.Release(ref node);
-                throw;
+                ExitValue();
             }
-            SetValue(node);
         }
 
-        public void WriteMultiDimensionalArray<T>(BufferScan scan, Array values, int rank,
-            Action<IBufferWriter, BufferScan, T> write)
+        public void WriteMultiDimensionalArray<T>(BufferScan scan, int rank,
+            BuffConverter<T> converter)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            if (write == null) throw new ArgumentNullException(nameof(write));
-            var cachedValues = scan.ReadMultiDimensionalArray<T>(rank, out var shape);
-            if (cachedValues == null)
-            {
-                SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
-                return;
-            }
-
-            var node = StructuredNode.Rent(StructuredNodeKind.Object);
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            EnterValue();
             try
             {
-                var dimensions = StructuredNode.Rent(StructuredNodeKind.Sequence);
-                try
+                var values = scan.ReadMultiDimensionalArray<T>(rank, out var shape,
+                    out int referenceId, out bool isReference);
+                if (values == null && !isReference)
                 {
-                    for (int dimension = 0; dimension < rank; dimension++)
-                    {
-                        var lengthNode = StructuredNode.RentScalar(
-                            shape.GetLength(dimension).ToString(CultureInfo.InvariantCulture), false);
-                        try
-                        {
-                            dimensions.AddItem(lengthNode);
-                            lengthNode = default;
-                        }
-                        finally { StructuredNode.Release(ref lengthNode); }
-                    }
-                    node.AddField("dimensions", dimensions);
-                    dimensions = default;
+                    WriteNullValue();
+                    return;
                 }
-                finally { StructuredNode.Release(ref dimensions); }
+                if (isReference)
+                {
+                    BeginObjectValue(referenceId, true, null, null, 0);
+                    EndObjectValue();
+                    return;
+                }
 
-                var valueSequence = StructuredNode.Rent(StructuredNodeKind.Sequence);
-                try
+                BeginObjectValue(referenceId, false, null, null, 2);
+                BeginObjectField("dimensions");
+                BeginSequenceValue(-1, false, rank);
+                for (int dimension = 0; dimension < rank; dimension++)
                 {
-                    for (int index = 0; index < cachedValues.Count; index++)
-                    {
-                        ResetValue();
-                        write(this, scan, cachedValues[index]);
-                        var valueNode = TakeValue();
-                        try
-                        {
-                            valueSequence.AddItem(valueNode);
-                            valueNode = default;
-                        }
-                        finally { StructuredNode.Release(ref valueNode); }
-                    }
-                    node.AddField("values", valueSequence);
-                    valueSequence = default;
+                    BeginSequenceItem();
+                    WriteInt32(shape.GetLength(dimension));
+                    EndSequenceItem();
                 }
-                finally { StructuredNode.Release(ref valueSequence); }
+                EndSequenceValue();
+                EndObjectField();
+
+                BeginObjectField("values");
+                BeginSequenceValue(-1, false, values.Count);
+                for (int i = 0; i < values.Count; i++)
+                {
+                    BeginSequenceItem();
+                    converter.WriteValue(this, scan, values[i]);
+                    EndSequenceItem();
+                }
+                EndSequenceValue();
+                EndObjectField();
+                EndObjectValue();
             }
-            catch
+            finally
             {
-                ResetValue();
-                StructuredNode.Release(ref node);
-                throw;
+                ExitValue();
             }
-            SetValue(node);
         }
 
         public void WriteNullable<T>(BufferScan scan, T? value,
-            Action<IBufferWriter, BufferScan, T> write) where T : struct
+            BuffConverter<T> converter) where T : struct
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            if (write == null) throw new ArgumentNullException(nameof(write));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             if (!value.HasValue)
             {
-                SetValue(StructuredNode.Rent(StructuredNodeKind.Null));
+                WriteAtomic(null, false);
                 return;
             }
-            write(this, scan, value.Value);
+            converter.WriteValue(this, scan, value.Value);
         }
 
-        public void WriteKeyValuePair<TKey, TValue>(BufferScan scan, KeyValuePair<TKey, TValue> value,
-            Action<IBufferWriter, BufferScan, TKey> writeKey,
-            Action<IBufferWriter, BufferScan, TValue> writeValue)
+        public void WriteKeyValuePair<TKey, TValue>(BufferScan scan,
+            KeyValuePair<TKey, TValue> value, BuffConverter<TKey> keyConverter,
+            BuffConverter<TValue> valueConverter)
         {
             if (scan == null) throw new ArgumentNullException(nameof(scan));
-            if (writeKey == null) throw new ArgumentNullException(nameof(writeKey));
-            if (writeValue == null) throw new ArgumentNullException(nameof(writeValue));
-
-            var node = StructuredNode.Rent(StructuredNodeKind.Object);
+            if (keyConverter == null) throw new ArgumentNullException(nameof(keyConverter));
+            if (valueConverter == null) throw new ArgumentNullException(nameof(valueConverter));
+            EnterValue();
             try
             {
-                ResetValue();
-                writeKey(this, scan, value.Key);
-                var keyNode = TakeValue();
-                try
-                {
-                    node.AddField("key", keyNode);
-                    keyNode = default;
-                }
-                finally
-                {
-                    StructuredNode.Release(ref keyNode);
-                }
-
-                ResetValue();
-                writeValue(this, scan, value.Value);
-                var valueNode = TakeValue();
-                try
-                {
-                    node.AddField("value", valueNode);
-                    valueNode = default;
-                }
-                finally
-                {
-                    StructuredNode.Release(ref valueNode);
-                }
+                BeginObjectValue(-1, false, null, null, 2);
+                BeginObjectField("key");
+                keyConverter.WriteValue(this, scan, value.Key);
+                EndObjectField();
+                BeginObjectField("value");
+                valueConverter.WriteValue(this, scan, value.Value);
+                EndObjectField();
+                EndObjectValue();
             }
-            catch
+            finally
             {
-                ResetValue();
-                StructuredNode.Release(ref node);
-                throw;
+                ExitValue();
             }
-            SetValue(node);
         }
 
-        private void WriteScalar(string value, bool quoted)
+        private void WriteAtomic(string value, bool quoted)
         {
-            SetValue(value == null
-                ? StructuredNode.Rent(StructuredNodeKind.Null)
-                : StructuredNode.RentScalar(value, quoted));
+            EnterValue();
+            try
+            {
+                if (value == null) WriteNullValue();
+                else WriteScalarValue(value, quoted);
+            }
+            finally
+            {
+                ExitValue();
+            }
         }
 
-        public void WriteBool(bool value) => WriteScalar(value ? "true" : "false", false);
-        public void WriteByte(byte value) => WriteScalar(value.ToString(CultureInfo.InvariantCulture), false);
-        public void WriteChar(char value) => WriteScalar(value.ToString(), true);
-        public void WriteDouble(double value) => WriteScalar(value.ToString("R", CultureInfo.InvariantCulture), false);
-        public void WriteEnum(Enum data) => WriteScalar(data?.ToString(), true);
-        public void WriteFloat(float value) => WriteScalar(value.ToString("R", CultureInfo.InvariantCulture), false);
-        public void WriteInt16(short value) => WriteScalar(value.ToString(CultureInfo.InvariantCulture), false);
-        public void WriteInt32(int value) => WriteScalar(value.ToString(CultureInfo.InvariantCulture), false);
-        public void WriteInt64(long value) => WriteScalar(value.ToString(CultureInfo.InvariantCulture), false);
-        public void WriteUInt16(ushort value) => WriteScalar(value.ToString(CultureInfo.InvariantCulture), false);
-        public void WriteUInt32(uint value) => WriteScalar(value.ToString(CultureInfo.InvariantCulture), false);
-        public void WriteUInt64(ulong value) => WriteScalar(value.ToString(CultureInfo.InvariantCulture), false);
-        public void WriteUTF8(string value) => WriteScalar(value, true);
+        public void WriteBool(bool value)
+        {
+            EnterValue();
+            try { WriteBooleanValue(value); }
+            finally { ExitValue(); }
+        }
+
+        public void WriteByte(byte value) => WriteUnsignedInteger(value);
+
+        public void WriteChar(char value)
+        {
+            EnterValue();
+            try { WriteCharacterValue(value); }
+            finally { ExitValue(); }
+        }
+
+        public void WriteDouble(double value) => WriteAtomic(value.ToString("R", CultureInfo.InvariantCulture), false);
+        public void WriteEnum(Enum data) => WriteAtomic(data?.ToString(), true);
+        void ITypedEnumWriter.WriteEnumValue<T>(T value) =>
+            WriteAtomic(value.ToString(), true);
+        public void WriteFloat(float value) => WriteAtomic(value.ToString("R", CultureInfo.InvariantCulture), false);
+        public void WriteGuid(Guid value) => WriteAtomic(value.ToString("D"), true);
+        public void WriteInt16(short value) => WriteSignedInteger(value);
+        public void WriteInt32(int value) => WriteSignedInteger(value);
+        public void WriteInt64(long value) => WriteSignedInteger(value);
+        public void WriteUInt16(ushort value) => WriteUnsignedInteger(value);
+        public void WriteUInt32(uint value) => WriteUnsignedInteger(value);
+        public void WriteUInt64(ulong value) => WriteUnsignedInteger(value);
+        public void WriteUTF8(string value) => WriteAtomic(value, true);
+
+        private void WriteSignedInteger(long value)
+        {
+            EnterValue();
+            try { WriteSignedIntegerValue(value); }
+            finally { ExitValue(); }
+        }
+
+        private void WriteUnsignedInteger(ulong value)
+        {
+            EnterValue();
+            try { WriteUnsignedIntegerValue(value); }
+            finally { ExitValue(); }
+        }
+
+        protected abstract void WriteNullValue();
+        protected abstract void WriteScalarValue(string value, bool quoted);
+        protected abstract void WriteBooleanValue(bool value);
+        protected abstract void WriteCharacterValue(char value);
+        protected abstract void WriteSignedIntegerValue(long value);
+        protected abstract void WriteUnsignedIntegerValue(ulong value);
+        protected abstract void BeginObjectValue(int referenceId, bool isReference,
+            string typeName, string assemblyName, int fieldCount);
+        protected abstract void BeginObjectField(string name);
+        protected abstract void EndObjectField();
+        protected abstract void EndObjectValue();
+        protected abstract void BeginSequenceValue(int referenceId, bool isReference,
+            int count);
+        protected abstract void BeginSequenceItem();
+        protected abstract void EndSequenceItem();
+        protected abstract void EndSequenceValue();
     }
 }

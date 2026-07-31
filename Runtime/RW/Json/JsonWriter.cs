@@ -4,143 +4,278 @@ using System.Text;
 
 namespace ActionBuffer
 {
-    public class JsonWriter : StructuredTextWriter
+    public sealed class JsonWriter : StructuredTextWriter
     {
+        private const byte ObjectContainer = 1;
+        private const byte ArrayContainer = 2;
+        private const byte PlainSequence = 0;
+        private const byte WrappedSequence = 1;
+        private const byte ReferenceSequence = 2;
+
         private readonly StringBuilder _builder = new StringBuilder();
+        private byte[] _containerKinds = new byte[16];
+        private int[] _memberCounts = new int[16];
+        private byte[] _sequenceModes = new byte[16];
         private bool _prettyPrint;
+        private int _containerDepth;
+        private int _sequenceDepth;
+
+        internal int Capacity => _builder.Capacity;
+
+        internal void TrimCapacity()
+        {
+            if (_builder.Capacity > BuffSettings.RetainedTextCapacity)
+            {
+                _builder.Clear();
+                _builder.Capacity = 1024;
+            }
+        }
 
         public string GetJson()
         {
-            _builder.Clear();
-            Write(GetRoot(), _builder, _prettyPrint);
+            RequireResult();
             ValidateTextLength(_builder.Length, "JSON");
             return _builder.ToString();
         }
 
         protected override void OnInit(BufferScan scan)
         {
-            _prettyPrint = scan.Settings.PrettyPrint;
+            _prettyPrint = scan.PrettyPrint;
         }
 
         public override void Clear()
         {
             _builder.Clear();
-            if (_builder.Capacity > BufferSerializer.RetainedTextCapacity)
-                _builder.Capacity = 1024;
             _prettyPrint = false;
+            _containerDepth = 0;
+            _sequenceDepth = 0;
             base.Clear();
         }
 
-        private static void Write(StructuredNode node, StringBuilder builder, bool prettyPrint)
+        protected override void WriteNullValue()
         {
-            if (builder == null) throw new ArgumentNullException(nameof(builder));
-            WriteNode(node, builder, prettyPrint, 0);
+            Append("null");
         }
 
-        private static void WriteNode(StructuredNode node, StringBuilder builder, bool prettyPrint, int indent)
+        protected override void WriteScalarValue(string value, bool quoted)
         {
-            switch (node.Kind)
-            {
-                case StructuredNodeKind.Null:
-                    builder.Append("null");
-                    break;
-                case StructuredNodeKind.Scalar:
-                    WriteScalar(node, builder);
-                    break;
-                case StructuredNodeKind.Object:
-                    WriteObject(node, builder, prettyPrint, indent);
-                    break;
-                case StructuredNodeKind.Sequence:
-                    WriteSequence(node, builder, prettyPrint, indent);
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(node));
-            }
-            EnsureLength(builder);
-        }
-
-        private static void WriteObject(StructuredNode node, StringBuilder builder, bool prettyPrint, int indent)
-        {
-            builder.Append('{');
-            int memberIndex = 0;
-
-            if (node.IsReference)
-            {
-                WritePropertyPrefix("$ref", memberIndex++, builder, prettyPrint, indent);
-                builder.Append(node.ReferenceId.ToString(CultureInfo.InvariantCulture));
-            }
-            else if (node.ReferenceId >= 0)
-            {
-                WritePropertyPrefix("$id", memberIndex++, builder, prettyPrint, indent);
-                builder.Append(node.ReferenceId.ToString(CultureInfo.InvariantCulture));
-            }
-
-            if (!node.IsReference && !string.IsNullOrEmpty(node.TypeName))
-            {
-                WritePropertyPrefix("$type", memberIndex++, builder, prettyPrint, indent);
-                WriteString(node.TypeName, builder);
-                WritePropertyPrefix("$assembly", memberIndex++, builder, prettyPrint, indent);
-                WriteString(node.AssemblyName ?? string.Empty, builder);
-            }
-
-            for (int i = 0; !node.IsReference && i < node.FieldCount; i++)
-            {
-                var field = node.GetField(i);
-                WritePropertyPrefix(StructuredNode.EncodeTextFieldName(field.Name), memberIndex++, builder, prettyPrint, indent);
-                WriteNode(field.Value, builder, prettyPrint, indent + 1);
-            }
-
-            if (prettyPrint && memberIndex > 0)
-            {
-                builder.Append('\n');
-                AppendIndent(builder, indent);
-            }
-            builder.Append('}');
-        }
-
-        private static void WritePropertyPrefix(string name, int index, StringBuilder builder, bool prettyPrint, int indent)
-        {
-            if (index > 0)
-                builder.Append(',');
-            if (prettyPrint)
-            {
-                builder.Append('\n');
-                AppendIndent(builder, indent + 1);
-            }
-            WriteString(name, builder);
-            builder.Append(':');
-            if (prettyPrint)
-                builder.Append(' ');
-        }
-
-        private static void WriteSequence(StructuredNode node, StringBuilder builder, bool prettyPrint, int indent)
-        {
-            builder.Append('[');
-            for (int i = 0; i < node.ItemCount; i++)
-            {
-                if (i > 0)
-                    builder.Append(',');
-                if (prettyPrint)
-                {
-                    builder.Append('\n');
-                    AppendIndent(builder, indent + 1);
-                }
-                WriteNode(node.GetItem(i), builder, prettyPrint, indent + 1);
-            }
-            if (prettyPrint && node.ItemCount > 0)
-            {
-                builder.Append('\n');
-                AppendIndent(builder, indent);
-            }
-            builder.Append(']');
-        }
-
-        private static void WriteScalar(StructuredNode node, StringBuilder builder)
-        {
-            if (node.Quoted || !IsJsonLiteral(node.Scalar))
-                WriteString(node.Scalar ?? string.Empty, builder);
+            if (quoted || !IsJsonLiteral(value))
+                WriteString(value ?? string.Empty);
             else
-                builder.Append(node.Scalar);
+                Append(value);
+        }
+
+        protected override void WriteBooleanValue(bool value)
+        {
+            Append(value ? "true" : "false");
+        }
+
+        protected override void WriteCharacterValue(char value)
+        {
+            EnsureAppend(value < 0x20 ? 8 : 4);
+            _builder.Append('"');
+            switch (value)
+            {
+                case '"': _builder.Append("\\\""); break;
+                case '\\': _builder.Append("\\\\"); break;
+                case '\b': _builder.Append("\\b"); break;
+                case '\f': _builder.Append("\\f"); break;
+                case '\n': _builder.Append("\\n"); break;
+                case '\r': _builder.Append("\\r"); break;
+                case '\t': _builder.Append("\\t"); break;
+                default:
+                    if (value < 0x20)
+                    {
+                        _builder.Append("\\u");
+                        AppendHex4(value);
+                    }
+                    else
+                    {
+                        _builder.Append(value);
+                    }
+                    break;
+            }
+            _builder.Append('"');
+        }
+
+        protected override void WriteSignedIntegerValue(long value)
+        {
+            ulong magnitude = value < 0
+                ? unchecked((ulong)(-(value + 1))) + 1
+                : (ulong)value;
+            EnsureAppend(DigitCount(magnitude) + (value < 0 ? 1 : 0));
+            TextIntegerWriter.Append(_builder, value);
+        }
+
+        protected override void WriteUnsignedIntegerValue(ulong value)
+        {
+            EnsureAppend(DigitCount(value));
+            TextIntegerWriter.Append(_builder, value);
+        }
+
+        private static int DigitCount(ulong value)
+        {
+            int count = 1;
+            while (value >= 10)
+            {
+                value /= 10;
+                count++;
+            }
+            return count;
+        }
+
+        protected override void BeginObjectValue(int referenceId, bool isReference,
+            string typeName, string assemblyName, int fieldCount)
+        {
+            BeginContainer('{', ObjectContainer);
+            if (isReference)
+            {
+                WriteIntegerProperty("$ref", referenceId);
+                return;
+            }
+            if (referenceId >= 0)
+                WriteIntegerProperty("$id", referenceId);
+            if (typeName != null)
+            {
+                WriteStringProperty("$type", typeName);
+                WriteStringProperty("$assembly", assemblyName ?? string.Empty);
+            }
+        }
+
+        protected override void BeginObjectField(string name)
+        {
+            WritePropertyPrefix(StructuredNode.EncodeTextFieldName(name));
+        }
+
+        protected override void EndObjectField()
+        {
+            EnsureLength();
+        }
+
+        protected override void EndObjectValue()
+        {
+            EndContainer('}', ObjectContainer);
+        }
+
+        protected override void BeginSequenceValue(int referenceId, bool isReference,
+            int count)
+        {
+            EnsureSequenceCapacity();
+            if (isReference)
+            {
+                _sequenceModes[_sequenceDepth++] = ReferenceSequence;
+                BeginContainer('{', ObjectContainer);
+                WriteIntegerProperty("$ref", referenceId);
+                return;
+            }
+            if (referenceId >= 0)
+            {
+                _sequenceModes[_sequenceDepth++] = WrappedSequence;
+                BeginContainer('{', ObjectContainer);
+                WriteIntegerProperty("$id", referenceId);
+                WritePropertyPrefix("$values");
+                BeginContainer('[', ArrayContainer);
+                return;
+            }
+            _sequenceModes[_sequenceDepth++] = PlainSequence;
+            BeginContainer('[', ArrayContainer);
+        }
+
+        protected override void BeginSequenceItem()
+        {
+            WriteArrayPrefix();
+        }
+
+        protected override void EndSequenceItem()
+        {
+            EnsureLength();
+        }
+
+        protected override void EndSequenceValue()
+        {
+            if (_sequenceDepth <= 0)
+                throw new InvalidOperationException("JSON sequence state is unbalanced.");
+            byte mode = _sequenceModes[--_sequenceDepth];
+            if (mode == ReferenceSequence)
+            {
+                EndContainer('}', ObjectContainer);
+                return;
+            }
+            EndContainer(']', ArrayContainer);
+            if (mode == WrappedSequence)
+                EndContainer('}', ObjectContainer);
+        }
+
+        private void BeginContainer(char token, byte kind)
+        {
+            EnsureContainerCapacity();
+            _builder.Append(token);
+            _containerKinds[_containerDepth] = kind;
+            _memberCounts[_containerDepth] = 0;
+            _containerDepth++;
+            EnsureLength();
+        }
+
+        private void EndContainer(char token, byte expectedKind)
+        {
+            if (_containerDepth <= 0 || _containerKinds[_containerDepth - 1] != expectedKind)
+                throw new InvalidOperationException("JSON container state is unbalanced.");
+            int count = _memberCounts[_containerDepth - 1];
+            _containerDepth--;
+            if (_prettyPrint && count > 0)
+            {
+                _builder.Append('\n');
+                AppendIndent(_containerDepth);
+            }
+            _builder.Append(token);
+            EnsureLength();
+        }
+
+        private void WritePropertyPrefix(string name)
+        {
+            if (_containerDepth <= 0 || _containerKinds[_containerDepth - 1] != ObjectContainer)
+                throw new InvalidOperationException("A JSON property must be written inside an object.");
+            int index = _containerDepth - 1;
+            if (_memberCounts[index]++ > 0)
+                _builder.Append(',');
+            if (_prettyPrint)
+            {
+                _builder.Append('\n');
+                AppendIndent(_containerDepth);
+            }
+            WriteString(name);
+            _builder.Append(':');
+            if (_prettyPrint)
+                _builder.Append(' ');
+            EnsureLength();
+        }
+
+        private void WriteArrayPrefix()
+        {
+            if (_containerDepth <= 0 || _containerKinds[_containerDepth - 1] != ArrayContainer)
+                throw new InvalidOperationException("A JSON item must be written inside an array.");
+            int index = _containerDepth - 1;
+            if (_memberCounts[index]++ > 0)
+                _builder.Append(',');
+            if (_prettyPrint)
+            {
+                _builder.Append('\n');
+                AppendIndent(_containerDepth);
+            }
+            EnsureLength();
+        }
+
+        private void WriteIntegerProperty(string name, int value)
+        {
+            WritePropertyPrefix(name);
+            TextIntegerWriter.Append(_builder, value);
+            EnsureLength();
+        }
+
+        private void WriteStringProperty(string name, string value)
+        {
+            WritePropertyPrefix(name);
+            WriteString(value);
         }
 
         private static bool IsJsonLiteral(string value)
@@ -148,93 +283,138 @@ namespace ActionBuffer
             if (value == "true" || value == "false") return true;
             if (string.IsNullOrEmpty(value)) return false;
 
-            int index = 0;
-            if (value[index] == '-')
-            {
-                index++;
-                if (index == value.Length) return false;
-            }
-
+            int index = value[0] == '-' ? 1 : 0;
+            if (index == value.Length) return false;
             if (value[index] == '0')
-            {
                 index++;
-            }
             else
             {
                 if (value[index] < '1' || value[index] > '9') return false;
                 while (index < value.Length && value[index] >= '0' && value[index] <= '9')
                     index++;
             }
-
             if (index < value.Length && value[index] == '.')
             {
-                index++;
-                int fractionStart = index;
+                int start = ++index;
                 while (index < value.Length && value[index] >= '0' && value[index] <= '9')
                     index++;
-                if (index == fractionStart) return false;
+                if (index == start) return false;
             }
-
             if (index < value.Length && (value[index] == 'e' || value[index] == 'E'))
             {
                 index++;
                 if (index < value.Length && (value[index] == '+' || value[index] == '-'))
                     index++;
-                int exponentStart = index;
+                int start = index;
                 while (index < value.Length && value[index] >= '0' && value[index] <= '9')
                     index++;
-                if (index == exponentStart) return false;
+                if (index == start) return false;
             }
-
             return index == value.Length;
         }
 
-        private static void WriteString(string value, StringBuilder builder)
+        private void WriteString(string value)
         {
             if (value == null)
             {
-                builder.Append("null");
+                Append("null");
                 return;
             }
 
-            builder.Append('"');
+            int outputLength = 2;
+            bool requiresEscaping = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                int characterLength = c == '"' || c == '\\' || c == '\b' || c == '\f' ||
+                                      c == '\n' || c == '\r' || c == '\t'
+                    ? 2
+                    : c < 0x20 ? 6 : 1;
+                requiresEscaping |= characterLength != 1;
+                if (outputLength > int.MaxValue - characterLength)
+                    throw new FormatException("JSON string is too long.");
+                outputLength += characterLength;
+            }
+            EnsureAppend(outputLength);
+
+            _builder.Append('"');
+            if (!requiresEscaping)
+            {
+                _builder.Append(value).Append('"');
+                return;
+            }
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
                 switch (c)
                 {
-                    case '"': builder.Append("\\\""); break;
-                    case '\\': builder.Append("\\\\"); break;
-                    case '\b': builder.Append("\\b"); break;
-                    case '\f': builder.Append("\\f"); break;
-                    case '\n': builder.Append("\\n"); break;
-                    case '\r': builder.Append("\\r"); break;
-                    case '\t': builder.Append("\\t"); break;
+                    case '"': _builder.Append("\\\""); break;
+                    case '\\': _builder.Append("\\\\"); break;
+                    case '\b': _builder.Append("\\b"); break;
+                    case '\f': _builder.Append("\\f"); break;
+                    case '\n': _builder.Append("\\n"); break;
+                    case '\r': _builder.Append("\\r"); break;
+                    case '\t': _builder.Append("\\t"); break;
                     default:
                         if (c < 0x20)
                         {
-                            builder.Append("\\u");
-                            builder.Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+                            _builder.Append("\\u");
+                            AppendHex4(c);
                         }
                         else
                         {
-                            builder.Append(c);
+                            _builder.Append(c);
                         }
                         break;
                 }
-                EnsureLength(builder);
             }
-            builder.Append('"');
-            EnsureLength(builder);
+            _builder.Append('"');
         }
 
-        private static void AppendIndent(StringBuilder builder, int indent)
+        private void AppendHex4(int value)
         {
-            builder.Append(' ', indent * 2);
+            const string Hex = "0123456789ABCDEF";
+            _builder.Append(Hex[(value >> 12) & 15]);
+            _builder.Append(Hex[(value >> 8) & 15]);
+            _builder.Append(Hex[(value >> 4) & 15]);
+            _builder.Append(Hex[value & 15]);
         }
 
-        private static void EnsureLength(StringBuilder builder)
+        private void AppendIndent(int indent)
         {
+            _builder.Append(' ', indent * 2);
+        }
+
+        private void Append(string value)
+        {
+            EnsureAppend(value.Length);
+            _builder.Append(value);
+        }
+
+        private void EnsureLength()
+        {
+            if (_builder.Length > MaxTextLength)
+                throw new FormatException($"JSON output length cannot exceed {MaxTextLength} characters.");
+        }
+
+        private void EnsureAppend(int count)
+        {
+            if (count > MaxTextLength - _builder.Length)
+                throw new FormatException($"JSON output length cannot exceed {MaxTextLength} characters.");
+        }
+
+        private void EnsureContainerCapacity()
+        {
+            if (_containerDepth < _containerKinds.Length) return;
+            int size = checked(_containerKinds.Length * 2);
+            Array.Resize(ref _containerKinds, size);
+            Array.Resize(ref _memberCounts, size);
+        }
+
+        private void EnsureSequenceCapacity()
+        {
+            if (_sequenceDepth < _sequenceModes.Length) return;
+            Array.Resize(ref _sequenceModes, checked(_sequenceModes.Length * 2));
         }
     }
 }

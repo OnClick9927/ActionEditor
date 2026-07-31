@@ -1,51 +1,210 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+#if !ENABLE_IL2CPP
+using System.Linq.Expressions;
+#endif
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using System.Text;
 
-
 namespace ActionBuffer
 {
     public static class TypeHelper
     {
-        public class TypeFields
+        private static readonly object CacheSync = new object();
+        private static IReadOnlyList<Type> _types;
+        private static readonly Dictionary<Type, IReadOnlyList<Type>> SubTypes =
+            new Dictionary<Type, IReadOnlyList<Type>>();
+        private static readonly Dictionary<TypeCacheKey, Type> TypesByName =
+            new Dictionary<TypeCacheKey, Type>();
+        private static readonly Dictionary<Type, object> DefaultValues =
+            new Dictionary<Type, object>();
+
+        static TypeHelper()
         {
-            private readonly Type type;
-            public class Field
+            AppDomain.CurrentDomain.AssemblyLoad += OnAssemblyLoad;
+        }
+
+        private static void OnAssemblyLoad(object sender, AssemblyLoadEventArgs args)
+        {
+            lock (CacheSync)
+            {
+                _types = null;
+                SubTypes.Clear();
+                TypesByName.Clear();
+            }
+        }
+
+        public sealed class TypeFields
+        {
+            public sealed class Field
             {
                 public readonly string name;
                 public readonly Type FieldType;
-                private readonly FieldInfo field;
-                private readonly object defaultValue;
-                private BuffConverter converter;
-                private long converterVersion = -1;
                 public readonly Type DeclaringType;
                 public readonly bool IsEvent;
-                public object GetValue(object target) => field.GetValue(target);
-                public void SetValue(object target, object value) => field.SetValue(target, value);
-                internal void SetDefaultValue(object target) => field.SetValue(target, defaultValue);
-                internal BuffConverter GetConverter(BufferSerializerSettings settings = null)
+                private readonly FieldInfo _field;
+                private readonly FieldAccess _access;
+
+                internal Field(FieldInfo field, string name)
                 {
-                    long version = BufferSerializer.GetResolverVersion(settings);
-                    if (converterVersion == version) return converter;
-                    converter = BufferSerializer.GetConverter(FieldType, settings);
-                    converterVersion = version;
-                    return converter;
-                }
-                public Field(FieldInfo field, string name)
-                {
-                    DeclaringType = field.DeclaringType;
-                    FieldType = field.FieldType;
-                    this.field = field;
+                    _field = field;
                     this.name = name;
+                    FieldType = field.FieldType;
+                    DeclaringType = field.DeclaringType;
                     IsEvent = field.DeclaringType?.GetEvent(field.Name,
                         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
                         BindingFlags.DeclaredOnly) != null;
-                    defaultValue = GetDefaultValue(FieldType);
+                    _access = FieldAccess.Create(field);
+                }
+
+                public object GetValue(object target) => _access.GetValue(target);
+                public void SetValue(object target, object value) =>
+                    _access.SetValue(target, value);
+                internal void SetDefaultValue(object target) => _access.SetDefaultValue(target);
+                internal bool Capture(BufferScan scan, object target, BuffConverter converter,
+                    bool fullField, out BufferScan.CachedField cached) =>
+                    _access.Capture(scan, this, target, converter, fullField, out cached);
+                internal void ReadAndSet(IBufferReader reader, object target,
+                    BuffConverter converter) => _access.ReadAndSet(reader, target, converter);
+            }
+
+            private abstract class FieldAccess
+            {
+                internal abstract object GetValue(object target);
+                internal abstract void SetValue(object target, object value);
+                internal abstract void SetDefaultValue(object target);
+                internal abstract bool Capture(BufferScan scan, Field field, object target,
+                    BuffConverter converter, bool fullField,
+                    out BufferScan.CachedField cached);
+                internal abstract void ReadAndSet(IBufferReader reader, object target,
+                    BuffConverter converter);
+
+                internal static FieldAccess Create(FieldInfo field)
+                {
+#if ENABLE_IL2CPP
+                    return new ReflectionFieldAccess(field);
+#else
+                    try
+                    {
+                        var accessType = typeof(TypedFieldAccess<,>).MakeGenericType(
+                            field.DeclaringType, field.FieldType);
+                        return (FieldAccess)Activator.CreateInstance(accessType,
+                            BindingFlags.Instance | BindingFlags.Public |
+                            BindingFlags.NonPublic, null, new object[] { field }, null);
+                    }
+                    catch
+                    {
+                        return new ReflectionFieldAccess(field);
+                    }
+#endif
                 }
             }
+
+            private sealed class ReflectionFieldAccess : FieldAccess
+            {
+                private readonly FieldInfo _field;
+                private readonly object _defaultValue;
+
+                internal ReflectionFieldAccess(FieldInfo field)
+                {
+                    _field = field;
+                    _defaultValue = GetDefaultValue(field.FieldType);
+                }
+
+                internal override object GetValue(object target) => _field.GetValue(target);
+                internal override void SetValue(object target, object value) =>
+                    _field.SetValue(target, value);
+                internal override void SetDefaultValue(object target) =>
+                    _field.SetValue(target, _defaultValue);
+
+                internal override bool Capture(BufferScan scan, Field field, object target,
+                    BuffConverter converter, bool fullField,
+                    out BufferScan.CachedField cached)
+                {
+                    var value = _field.GetValue(target);
+                    if (!fullField && IsNullOrDefault(value, _field.FieldType))
+                    {
+                        cached = default;
+                        return false;
+                    }
+                    cached = scan.CacheBoxedFieldValue(field, converter, value);
+                    return true;
+                }
+
+                internal override void ReadAndSet(IBufferReader reader, object target,
+                    BuffConverter converter) =>
+                    _field.SetValue(target, converter.Read(reader, _field.FieldType));
+            }
+
+#if !ENABLE_IL2CPP
+            private sealed class TypedFieldAccess<TTarget, TValue> : FieldAccess
+            {
+                private readonly FieldInfo _field;
+                private readonly Func<TTarget, TValue> _getter;
+                private readonly Action<TTarget, TValue> _setter;
+
+                internal TypedFieldAccess(FieldInfo field)
+                {
+                    _field = field;
+                    var target = Expression.Parameter(typeof(TTarget), "target");
+                    _getter = Expression.Lambda<Func<TTarget, TValue>>(
+                        Expression.Field(target, field), target).Compile();
+                    if (!typeof(TTarget).IsValueType && !field.IsInitOnly)
+                    {
+                        var value = Expression.Parameter(typeof(TValue), "value");
+                        _setter = Expression.Lambda<Action<TTarget, TValue>>(
+                            Expression.Assign(Expression.Field(target, field), value),
+                            target, value).Compile();
+                    }
+                }
+
+                private TValue Read(object target) => _getter((TTarget)target);
+
+                private void Write(object target, TValue value)
+                {
+                    if (_setter != null)
+                        _setter((TTarget)target, value);
+                    else
+                        _field.SetValue(target, value);
+                }
+
+                internal override object GetValue(object target) => Read(target);
+                internal override void SetValue(object target, object value) =>
+                    Write(target, (TValue)value);
+                internal override void SetDefaultValue(object target) => Write(target, default);
+
+                internal override bool Capture(BufferScan scan, Field field, object target,
+                    BuffConverter converter, bool fullField,
+                    out BufferScan.CachedField cached)
+                {
+                    TValue value = Read(target);
+                    if (!fullField && IsDefault(value))
+                    {
+                        cached = default;
+                        return false;
+                    }
+                    cached = scan.CacheFieldValue(field, converter, value);
+                    return true;
+                }
+
+                internal override void ReadAndSet(IBufferReader reader, object target,
+                    BuffConverter converter)
+                {
+                    if (!(converter is BuffConverter<TValue> typed))
+                        throw new InvalidOperationException(
+                            $"Converter '{converter?.GetType()}' cannot deserialize field type '{typeof(TValue)}'.");
+                    Write(target, typed.ReadValue(reader, typeof(TValue)));
+                }
+
+                private static bool IsDefault(TValue value)
+                {
+                    if (!typeof(TValue).IsValueType) return ReferenceEquals(value, null);
+                    return EqualityComparer<TValue>.Default.Equals(value, default);
+                }
+            }
+#endif
 
             public sealed class FieldCollection : IReadOnlyList<Field>
             {
@@ -58,207 +217,247 @@ namespace ActionBuffer
 
                 public int Count => _items.Count;
                 public Field this[int index] => _items[index];
-                public List<Field> FindAll(Predicate<Field> match) => _items.FindAll(match);
                 public List<Field>.Enumerator GetEnumerator() => _items.GetEnumerator();
                 System.Collections.Generic.IEnumerator<Field>
-                    System.Collections.Generic.IEnumerable<Field>.GetEnumerator() => _items.GetEnumerator();
-                System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => _items.GetEnumerator();
+                    System.Collections.Generic.IEnumerable<Field>.GetEnumerator() =>
+                    _items.GetEnumerator();
+                System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() =>
+                    _items.GetEnumerator();
             }
 
-            public TypeFields(Type type, bool usePropertyBackingFields)
+            private static readonly object Sync = new object();
+            private static readonly Dictionary<Type, TypeFields> Cache =
+                new Dictionary<Type, TypeFields>();
+            private readonly Type _type;
+            private readonly List<Field> _fields = new List<Field>();
+            private readonly Dictionary<string, Field> _fieldsByName =
+                new Dictionary<string, Field>();
+            private readonly FieldCollection _fieldView;
+            private readonly bool _useUninitializedObject;
+
+            private TypeFields(Type type, bool usePropertyBackingFields)
             {
-                this.type = type;
-                fieldView = new FieldCollection(fields);
-                this.usePropertyBackingFields = usePropertyBackingFields;
-                useUninitializedObject = usePropertyBackingFields ||
-                                         (!type.IsValueType && type.GetConstructor(
-                                             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                                             null, Type.EmptyTypes, null) == null);
+                _type = type;
+                _fieldView = new FieldCollection(_fields);
+                _useUninitializedObject = usePropertyBackingFields ||
+                    (!type.IsValueType && type.GetConstructor(
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                        null, Type.EmptyTypes, null) == null);
             }
-            private readonly List<Field> fields = new();
-            private readonly Dictionary<string, Field> map = new();
-            private readonly FieldCollection fieldView;
-            private readonly bool usePropertyBackingFields;
-            private readonly bool useUninitializedObject;
-            public FieldCollection GetFields() => fieldView;
+
+            internal static TypeFields Get(Type type)
+            {
+                if (type == null) throw new ArgumentNullException(nameof(type));
+                lock (Sync)
+                {
+                    if (Cache.TryGetValue(type, out var cached)) return cached;
+                    var fields = Create(type);
+                    Cache.Add(type, fields);
+                    return fields;
+                }
+            }
+
+            public FieldCollection GetFields() => _fieldView;
+
             public Field FindField(string name)
             {
-                if (map.TryGetValue(name, out var field)) return field;
-                return null;
-            }
-            internal void SetDefaultValues(object target)
-            {
-                for (int i = 0; i < fields.Count; i++)
-                    fields[i].SetDefaultValue(target);
-            }
-            internal void AddField(Field field)
-            {
-                if (map.ContainsKey(field.name)) return;
-                map[field.name] = field;
-                fields.Add(field);
-            }
-            internal void AddField(FieldInfo field, bool force = false)
-            {
-                if (field.IsDefined(typeof(System.NonSerializedAttribute))) return;
-                var attr = field.GetCustomAttribute<BufferAttribute>();
-                if (typeof(Delegate).IsAssignableFrom(field.FieldType) && attr == null)
-                    return;
-                if (!force)
-                    if (!field.IsPublic && attr == null) return;
-                var name = attr?.bufferName ?? field.Name;
-                if (map.TryGetValue(name, out var info))
-                    throw new InvalidOperationException(
-                        $"Type '{type}' contains duplicate serialized field name '{name}' " +
-                        $"in '{info.DeclaringType}' and '{field.DeclaringType}'.");
-                var _f = new Field(field, name);
-                AddField(_f);
+                _fieldsByName.TryGetValue(name, out var field);
+                return field;
             }
 
-            internal void AddField(FieldInfo field, string name)
+            internal void SetMissingDefaultValues(object target, HashSet<Field> presentFields)
             {
-                if (field == null) return;
-                if (typeof(Delegate).IsAssignableFrom(field.FieldType) &&
-                    field.GetCustomAttribute<BufferAttribute>() == null) return;
-                if (map.TryGetValue(name, out var info))
-                    throw new InvalidOperationException(
-                        $"Type '{type}' contains duplicate serialized field name '{name}' " +
-                        $"in '{info.DeclaringType}' and '{field.DeclaringType}'.");
-                AddField(new Field(field, name));
-            }
-
-            internal bool Contains(string name) => map.ContainsKey(name);
-
-            internal void Sort()
-            {
-                fields.Sort((left, right) => string.CompareOrdinal(left.name, right.name));
+                for (int i = 0; i < _fields.Count; i++)
+                    if (!presentFields.Contains(_fields[i]))
+                        _fields[i].SetDefaultValue(target);
             }
 
             internal object CreateInstance()
             {
-                if (useUninitializedObject)
-                    return FormatterServices.GetUninitializedObject(type);
-                return Activator.CreateInstance(type, true);
+                if (_useUninitializedObject)
+                    return FormatterServices.GetUninitializedObject(_type);
+                return Activator.CreateInstance(_type, true);
             }
 
-            internal bool UsePropertyBackingFields => usePropertyBackingFields;
+            private static TypeFields Create(Type type)
+            {
+                bool usePropertyBackingFields = UsesPropertyBackingFields(type);
+                var result = new TypeFields(type, usePropertyBackingFields);
+                var baseType = type.BaseType;
+                if (baseType != null && baseType != typeof(object))
+                {
+                    var baseFields = Get(baseType).GetFields();
+                    for (int i = 0; i < baseFields.Count; i++)
+                        result.AddField(baseFields[i]);
+                }
+
+                var declaredFields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                for (int i = 0; i < declaredFields.Length; i++)
+                    result.AddField(declaredFields[i]);
+                if (usePropertyBackingFields)
+                    AddPropertyBackingFields(result, type, declaredFields);
+                result._fields.Sort((left, right) =>
+                    string.CompareOrdinal(left.name, right.name));
+                return result;
+            }
+
+            private void AddField(Field field)
+            {
+                if (_fieldsByName.ContainsKey(field.name)) return;
+                _fieldsByName.Add(field.name, field);
+                _fields.Add(field);
+            }
+
+            private void AddField(FieldInfo field)
+            {
+                if (field.IsDefined(typeof(NonSerializedAttribute))) return;
+                var attribute = field.GetCustomAttribute<BufferAttribute>();
+                if (typeof(Delegate).IsAssignableFrom(field.FieldType) && attribute == null)
+                    return;
+                if (!field.IsPublic && attribute == null) return;
+                AddField(field, attribute?.bufferName ?? field.Name);
+            }
+
+            private void AddField(FieldInfo field, string name)
+            {
+                if (field == null) return;
+                if (typeof(Delegate).IsAssignableFrom(field.FieldType) &&
+                    field.GetCustomAttribute<BufferAttribute>() == null) return;
+                if (_fieldsByName.TryGetValue(name, out var existing))
+                    throw new InvalidOperationException(
+                        $"Type '{_type}' contains duplicate serialized field name '{name}' " +
+                        $"in '{existing.DeclaringType}' and '{field.DeclaringType}'.");
+                AddField(new Field(field, name));
+            }
+
+            private static void AddPropertyBackingFields(TypeFields typeFields, Type type,
+                FieldInfo[] fields)
+            {
+                var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance |
+                    BindingFlags.DeclaredOnly);
+                for (int i = 0; i < properties.Length; i++)
+                {
+                    var property = properties[i];
+                    if (!property.CanRead || property.GetIndexParameters().Length != 0 ||
+                        typeof(Delegate).IsAssignableFrom(property.PropertyType) ||
+                        typeFields._fieldsByName.ContainsKey(property.Name))
+                        continue;
+                    var backingField = FindPropertyBackingField(fields, property);
+                    if (backingField != null)
+                        typeFields.AddField(backingField, property.Name);
+                }
+            }
+
+            private static FieldInfo FindPropertyBackingField(FieldInfo[] fields,
+                PropertyInfo property)
+            {
+                string compilerName = $"<{property.Name}>k__BackingField";
+                string anonymousName = $"<{property.Name}>i__Field";
+                string tupleName = "m_" + property.Name;
+                for (int i = 0; i < fields.Length; i++)
+                {
+                    var field = fields[i];
+                    if (field.FieldType != property.PropertyType) continue;
+                    if (field.Name == compilerName || field.Name == anonymousName ||
+                        field.Name == tupleName)
+                        return field;
+                }
+                return null;
+            }
+
+            private static bool UsesPropertyBackingFields(Type type)
+            {
+                if (!type.IsValueType && type.Namespace == "System" && type.IsGenericType &&
+                    type.GetGenericTypeDefinition().FullName.StartsWith(
+                        "System.Tuple`", StringComparison.Ordinal))
+                    return true;
+                if (type.IsDefined(typeof(CompilerGeneratedAttribute), false) &&
+                    type.Name.IndexOf("AnonymousType", StringComparison.Ordinal) >= 0)
+                    return true;
+                if (type.GetMethod("<Clone>$", BindingFlags.Instance | BindingFlags.Public |
+                        BindingFlags.NonPublic) != null ||
+                    type.GetProperty("EqualityContract", BindingFlags.Instance |
+                        BindingFlags.NonPublic) != null)
+                    return true;
+                return type.GetMethod("PrintMembers",
+                    BindingFlags.Instance | BindingFlags.NonPublic, null,
+                    new[] { typeof(StringBuilder) }, null) != null;
+            }
         }
-        private static readonly Dictionary<Type, TypeFields> map =
-            new Dictionary<Type, TypeFields>();
-        public static TypeFields GetTypeFields(Type type)
+
+        public static TypeFields GetTypeFields(Type type) => TypeFields.Get(type);
+
+        internal static object CreateInstance(Type type) =>
+            GetTypeFields(type).CreateInstance();
+
+        public static IReadOnlyList<Type> GetSubTypes(Type type)
         {
             if (type == null) throw new ArgumentNullException(nameof(type));
-            if (map.TryGetValue(type, out var typefield)) return typefield;
-            typefield = CreateTypeFields(type);
-            map[type] = typefield;
-            return typefield;
-        }
-
-        private static TypeFields CreateTypeFields(Type type)
-        {
-            bool usePropertyBackingFields = UsesPropertyBackingFields(type);
-            var typefield = new TypeFields(type, usePropertyBackingFields);
-            var baseType = type.BaseType;
-            if (baseType != null && baseType != typeof(object))
+            lock (CacheSync)
             {
-                var baseFields = GetTypeFields(baseType).GetFields();
-                for (int i = 0; i < baseFields.Count; i++)
-                    typefield.AddField(baseFields[i]);
-            }
+                if (SubTypes.TryGetValue(type, out var cached)) return cached;
+                var source = GetConcreteTypes();
+                var matches = new List<Type>();
+                for (int i = 0; i < source.Count; i++)
+                {
+                    var candidate = source[i];
+                    if (candidate == type || candidate.IsAbstract || candidate.IsInterface)
+                        continue;
+                    bool isMatch = type.IsGenericTypeDefinition
+                        ? IsSubclassOfGeneric(candidate, type)
+                        : type.IsAssignableFrom(candidate);
+                    if (isMatch) matches.Add(candidate);
+                }
 
-            var declaredFields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
-                                                BindingFlags.Instance | BindingFlags.DeclaredOnly);
-            for (int i = 0; i < declaredFields.Length; i++)
-                typefield.AddField(declaredFields[i]);
-            if (usePropertyBackingFields)
-                AddPropertyBackingFields(typefield, type, declaredFields);
-            typefield.Sort();
-            return typefield;
-        }
-
-        private static void AddPropertyBackingFields(TypeFields typeFields, Type type, FieldInfo[] fields)
-        {
-            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance |
-                                                BindingFlags.DeclaredOnly);
-            for (int i = 0; i < properties.Length; i++)
-            {
-                var property = properties[i];
-                if (!property.CanRead || property.GetIndexParameters().Length != 0 ||
-                    typeof(Delegate).IsAssignableFrom(property.PropertyType) ||
-                    typeFields.Contains(property.Name))
-                    continue;
-
-                var backingField = FindPropertyBackingField(fields, property);
-                if (backingField != null)
-                    typeFields.AddField(backingField, property.Name);
+                var result = matches.AsReadOnly();
+                SubTypes.Add(type, result);
+                return result;
             }
         }
 
-        private static FieldInfo FindPropertyBackingField(FieldInfo[] fields, PropertyInfo property)
+        public static Type GetTypeByFullName(string typeFullName, string assemblyName = null)
         {
-            string compilerName = $"<{property.Name}>k__BackingField";
-            string anonymousName = $"<{property.Name}>i__Field";
-            string tupleName = "m_" + property.Name;
-            for (int i = 0; i < fields.Length; i++)
+            if (string.IsNullOrEmpty(typeFullName)) return null;
+            var cacheKey = new TypeCacheKey(typeFullName, assemblyName);
+            lock (CacheSync)
             {
-                var field = fields[i];
-                if (field.FieldType != property.PropertyType) continue;
-                if (field.Name == compilerName || field.Name == anonymousName || field.Name == tupleName)
-                    return field;
+                if (TypesByName.TryGetValue(cacheKey, out var cached)) return cached;
+                var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+                Type result = string.IsNullOrEmpty(assemblyName)
+                    ? FindUniqueType(assemblies, typeFullName)
+                    : FindType(assemblies, typeFullName, assemblyName);
+                TypesByName.Add(cacheKey, result);
+                return result;
             }
-            return null;
         }
 
-        private static bool UsesPropertyBackingFields(Type type)
+        internal static object GetDefaultValue(Type type)
         {
-            if (type == null) return false;
-            if (!type.IsValueType && type.Namespace == "System" && type.IsGenericType &&
-                type.GetGenericTypeDefinition().FullName.StartsWith("System.Tuple`", StringComparison.Ordinal))
-                return true;
-            if (type.IsDefined(typeof(CompilerGeneratedAttribute), false) &&
-                type.Name.IndexOf("AnonymousType", StringComparison.Ordinal) >= 0)
-                return true;
-            if (type.GetMethod("<Clone>$", BindingFlags.Instance | BindingFlags.Public |
-                    BindingFlags.NonPublic) != null ||
-                type.GetProperty("EqualityContract", BindingFlags.Instance | BindingFlags.NonPublic) != null)
-                return true;
-            return type.GetMethod("PrintMembers", BindingFlags.Instance | BindingFlags.NonPublic,
-                       null, new[] { typeof(StringBuilder) }, null) != null;
+            if (type == null) throw new ArgumentNullException(nameof(type));
+            if (!type.IsValueType || Nullable.GetUnderlyingType(type) != null) return null;
+            lock (CacheSync)
+            {
+                if (DefaultValues.TryGetValue(type, out var cached)) return cached;
+                var value = Activator.CreateInstance(type);
+                DefaultValues.Add(type, value);
+                return value;
+            }
         }
 
-        private static bool IsSubclassOfGeneric(Type self, Type genericType)
+        internal static bool IsNullOrDefault(object value, Type declaredType)
         {
-            if (!genericType.IsGenericTypeDefinition)
+            if (value == null) return true;
+            if (declaredType == null) throw new ArgumentNullException(nameof(declaredType));
+            if (!declaredType.IsValueType || Nullable.GetUnderlyingType(declaredType) != null)
                 return false;
-
-            if (self.IsGenericType && self.GetGenericTypeDefinition().Equals(genericType))
-                return true;
-
-            Type baseType = self.BaseType;
-            if (baseType != null && baseType != typeof(object))
-            {
-                if (IsSubclassOfGeneric(baseType, genericType))
-                    return true;
-            }
-
-            foreach (Type t in self.GetInterfaces())
-            {
-                if (IsSubclassOfGeneric(t, genericType))
-                    return true;
-            }
-
-            return false;
+            return value.Equals(GetDefaultValue(declaredType));
         }
-
-        private static IReadOnlyList<Type> types;
-        private static int typeAssemblyCount;
-        private static readonly Dictionary<Type, IReadOnlyList<Type>> subMap =
-            new Dictionary<Type, IReadOnlyList<Type>>();
 
         private static IReadOnlyList<Type> GetConcreteTypes()
         {
+            if (_types != null) return _types;
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-            if (types != null && typeAssemblyCount == assemblies.Length) return types;
-
             var result = new List<Type>();
             for (int i = 0; i < assemblies.Length; i++)
             {
@@ -272,42 +471,59 @@ namespace ActionBuffer
                     assemblyTypes = exception.Types;
                 }
                 for (int j = 0; j < assemblyTypes.Length; j++)
-                {
-                    var assemblyType = assemblyTypes[j];
-                    if (assemblyType != null)
-                        result.Add(assemblyType);
-                }
+                    if (assemblyTypes[j] != null)
+                        result.Add(assemblyTypes[j]);
             }
-
-            types = result.AsReadOnly();
-            typeAssemblyCount = assemblies.Length;
-            subMap.Clear();
-            return types;
+            _types = result.AsReadOnly();
+            return _types;
         }
 
-        public static IReadOnlyList<Type> GetSubTypes(Type type)
+        private static bool IsSubclassOfGeneric(Type type, Type genericType)
         {
-            if (type == null) throw new ArgumentNullException(nameof(type));
-            var source = GetConcreteTypes();
-            if (!subMap.TryGetValue(type, out var result))
+            if (!genericType.IsGenericTypeDefinition) return false;
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == genericType) return true;
+            var baseType = type.BaseType;
+            if (baseType != null && baseType != typeof(object) &&
+                IsSubclassOfGeneric(baseType, genericType))
+                return true;
+            var interfaces = type.GetInterfaces();
+            for (int i = 0; i < interfaces.Length; i++)
+                if (IsSubclassOfGeneric(interfaces[i], genericType))
+                    return true;
+            return false;
+        }
+
+        private static Type FindType(Assembly[] assemblies, string typeName, string assemblyName)
+        {
+            string requestedAssembly;
+            try
             {
-                var matches = new List<Type>();
-                for (int i = 0; i < source.Count; i++)
-                {
-                    var candidate = source[i];
-                    if (candidate == type) continue;
-                    if (candidate.IsAbstract || candidate.IsInterface)
-                        continue;
+                requestedAssembly = new AssemblyName(assemblyName).Name;
+            }
+            catch
+            {
+                return null;
+            }
+            for (int i = 0; i < assemblies.Length; i++)
+            {
+                if (!string.Equals(assemblies[i].GetName().Name, requestedAssembly,
+                        StringComparison.Ordinal))
+                    continue;
+                var result = assemblies[i].GetType(typeName, false);
+                if (result != null) return result;
+            }
+            return null;
+        }
 
-                    var isMatch = type.IsGenericTypeDefinition
-                        ? IsSubclassOfGeneric(candidate, type)
-                        : type.IsAssignableFrom(candidate);
-                    if (isMatch)
-                        matches.Add(candidate);
-                }
-
-                result = matches.AsReadOnly();
-                subMap.Add(type, result);
+        private static Type FindUniqueType(Assembly[] assemblies, string typeName)
+        {
+            Type result = null;
+            for (int i = 0; i < assemblies.Length; i++)
+            {
+                var candidate = assemblies[i].GetType(typeName, false);
+                if (candidate == null) continue;
+                if (result != null && result != candidate) return null;
+                result = candidate;
             }
             return result;
         }
@@ -317,7 +533,7 @@ namespace ActionBuffer
             private readonly string _typeName;
             private readonly string _assemblyName;
 
-            public TypeCacheKey(string typeName, string assemblyName)
+            internal TypeCacheKey(string typeName, string assemblyName)
             {
                 _typeName = typeName;
                 _assemblyName = assemblyName ?? string.Empty;
@@ -326,148 +542,17 @@ namespace ActionBuffer
             public bool Equals(TypeCacheKey other) =>
                 string.Equals(_typeName, other._typeName, StringComparison.Ordinal) &&
                 string.Equals(_assemblyName, other._assemblyName, StringComparison.Ordinal);
-            public override bool Equals(object obj) => obj is TypeCacheKey other && Equals(other);
+            public override bool Equals(object obj) =>
+                obj is TypeCacheKey other && Equals(other);
+
             public override int GetHashCode()
             {
                 unchecked
                 {
-                    return ((_typeName?.GetHashCode() ?? 0) * 397) ^ _assemblyName.GetHashCode();
+                    return ((_typeName?.GetHashCode() ?? 0) * 397) ^
+                        _assemblyName.GetHashCode();
                 }
             }
-        }
-
-        private static readonly Dictionary<TypeCacheKey, Type> _typeMap =
-            new Dictionary<TypeCacheKey, Type>();
-        private static int _typeMapAssemblyCount;
-
-        internal static Type ResolveSerializedType(Type declaredType, string typeFullName, string assemblyName)
-        {
-            if (declaredType == null) throw new ArgumentNullException(nameof(declaredType));
-            if (string.IsNullOrEmpty(typeFullName)) return declaredType;
-
-            var actualType = GetTypeByFullName(typeFullName, assemblyName);
-            if (actualType == null)
-                throw new FormatException($"Cannot resolve type '{typeFullName}, {assemblyName}'.");
-            if (!declaredType.IsAssignableFrom(actualType))
-                throw new FormatException($"Type '{actualType}' is not assignable to '{declaredType}'.");
-            if (actualType.IsAbstract || actualType.IsInterface || actualType.ContainsGenericParameters)
-                throw new FormatException($"Type '{actualType}' is not a concrete serializable type.");
-            return actualType;
-        }
-
-        public static Type GetTypeByFullName(string typeFullName, string assemblyName = null)
-        {
-            if (string.IsNullOrEmpty(typeFullName))
-                return null;
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-            if (_typeMapAssemblyCount != assemblies.Length)
-            {
-                _typeMap.Clear();
-                _typeMapAssemblyCount = assemblies.Length;
-            }
-            var cacheKey = new TypeCacheKey(typeFullName, assemblyName);
-            if (_typeMap.TryGetValue(cacheKey, out var type)) return type;
-
-            if (!string.IsNullOrEmpty(assemblyName))
-            {
-                string requestedAssembly;
-                try
-                {
-                    requestedAssembly = new AssemblyName(assemblyName).Name;
-                }
-                catch
-                {
-                    return null;
-                }
-                for (int i = 0; i < assemblies.Length; i++)
-                {
-                    if (!string.Equals(assemblies[i].GetName().Name, requestedAssembly, StringComparison.Ordinal))
-                        continue;
-                    type = assemblies[i].GetType(typeFullName, false);
-                    if (type != null) break;
-                }
-            }
-            else
-            {
-                Type match = null;
-                for (int i = 0; i < assemblies.Length; i++)
-                {
-                    var candidate = assemblies[i].GetType(typeFullName, false);
-                    if (candidate == null) continue;
-                    if (match != null && match != candidate) return null;
-                    match = candidate;
-                }
-                type = match;
-            }
-
-            _typeMap[cacheKey] = type;
-            return type;
-        }
-
-        public static T DeepCopyByBuffer<T>(this T value) =>
-            BufferSerializer.ToObject<T>(BufferSerializer.ToBytes(value));
-
-        private static readonly Dictionary<Type, object> _defaultValues =
-            new Dictionary<Type, object>();
-        internal static object GetDefaultValue(Type type)
-        {
-            if (type == null) throw new ArgumentNullException(nameof(type));
-            if (!type.IsValueType || Nullable.GetUnderlyingType(type) != null) return null;
-            if (_defaultValues.TryGetValue(type, out var defaultValue)) return defaultValue;
-            defaultValue = Activator.CreateInstance(type);
-            _defaultValues[type] = defaultValue;
-            return defaultValue;
-        }
-
-        internal static bool IsNullOrDefault(object obj, Type declaredType)
-        {
-            if (obj == null) return true;
-            if (declaredType == null) throw new ArgumentNullException(nameof(declaredType));
-            if (!declaredType.IsValueType || Nullable.GetUnderlyingType(declaredType) != null) return false;
-            return obj.Equals(GetDefaultValue(declaredType));
-        }
-        private static readonly Dictionary<Type, string> type_warp = new Dictionary<Type, string>()
-        {
-            { typeof(byte),"a"},
-            {typeof(bool),"b" },
-            { typeof(char),"c" },
-            { typeof(short),"d"},
-            { typeof(ushort),"e"},
-            { typeof(int),"f"},
-            { typeof(uint),"g"},
-            { typeof(long),"h"},
-            { typeof(ulong),"i"},
-            { typeof(float),"j"},
-            { typeof(double),"k"},
-            { typeof(string),"l"},
-            { typeof(DateTime),"m"},
-            { typeof(TimeSpan),"n"},
-        };
-        private static readonly Dictionary<string, string> type_warp_2 = CreateReverseTypeMap();
-        internal static object CreateInstance(Type type)
-        {
-            if (type == null) throw new ArgumentNullException(nameof(type));
-            return GetTypeFields(type).CreateInstance();
-        }
-        internal static string GetTypeName(Type type)
-        {
-            if (type_warp.TryGetValue(type, out var result))
-                return result;
-            return type.FullName;
-        }
-        internal static string GetRealTypeName(string src)
-        {
-            if (type_warp_2.TryGetValue(src, out var result))
-                return result;
-            return src;
-        }
-
-        private static Dictionary<string, string> CreateReverseTypeMap()
-        {
-            var result = new Dictionary<string, string>();
-            foreach (var item in type_warp)
-                result.Add(item.Value, item.Key.FullName);
-            return result;
         }
     }
 }
