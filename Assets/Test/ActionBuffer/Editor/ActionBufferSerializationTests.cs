@@ -137,6 +137,15 @@ namespace ActionBuffer.Tests
             Assert.That(result.Invocations, Is.EqualTo(2));
         }
 
+        private sealed class SettingsScopedConverter : AtomicBuffConverter<SettingsScopedValue>
+        {
+            protected override SettingsScopedValue OnRead(IBufferReader reader, Type type) =>
+                new SettingsScopedValue { Value = reader.ReadInt32() - 2000 };
+
+            protected override void OnWrite(IBufferWriter writer, BufferScan scan,
+                SettingsScopedValue value) => writer.WriteInt32(value.Value + 2000);
+        }
+
         [TestCaseSource(nameof(Formats))]
         public void TwoDimensionalArraysRoundTrip(string format)
         {
@@ -188,13 +197,27 @@ namespace ActionBuffer.Tests
         {
             var source = new ExternalDelegateModel();
             source.Configure(10);
+            var settings = new BufferSerializerSettings { SupportReferences = true };
 
-            var result = RoundTrip(source, format);
+            var result = RoundTrip(source, format, settings);
             result.Callback(7);
 
             var target = result.Callback.Target as ExternalDelegateTarget;
             Assert.That(target, Is.Not.Null);
             Assert.That(target.Value, Is.EqualTo(17));
+            Assert.That(ReferenceEquals(target, result.Target), Is.True);
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void DelegatesBoundToObjectsOutsideTheRootGraphAreRejected(string format)
+        {
+            var source = new DetachedDelegateTargetModel();
+            source.Configure();
+            var settings = new BufferSerializerSettings { SupportReferences = true };
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => Write(source, format, settings));
+            Assert.That(exception.Message, Does.Contain("not part of the serialized object graph"));
         }
 
         [TestCaseSource(nameof(Formats))]
@@ -207,12 +230,42 @@ namespace ActionBuffer.Tests
             Assert.That(exception.Message, Does.Contain("Closure delegates are not supported"));
         }
 
-        [Test]
-        public void ArraysWithMoreThanTwoDimensionsAreRejected()
+        [TestCaseSource(nameof(Formats))]
+        public void ArraysUpToFiveDimensionsRoundTrip(string format)
         {
-            var source = new int[1, 1, 1];
-            var exception = Assert.Throws<NotSupportedException>(() => BufferSerializer.ToJson(source));
-            Assert.That(exception.Message, Does.Contain("only one- and two-dimensional arrays"));
+            var rank3 = new int[2, 1, 2];
+            rank3[1, 0, 1] = 31;
+            var result3 = RoundTrip(rank3, format);
+            Assert.That(result3[1, 0, 1], Is.EqualTo(31));
+
+            var rank4 = new int[1, 2, 1, 2];
+            rank4[0, 1, 0, 1] = 41;
+            var result4 = RoundTrip(rank4, format);
+            Assert.That(result4[0, 1, 0, 1], Is.EqualTo(41));
+
+            var rank5 = new int[1, 1, 2, 1, 2];
+            rank5[0, 0, 1, 0, 1] = 51;
+            var result5 = RoundTrip(rank5, format);
+            Assert.That(result5[0, 0, 1, 0, 1], Is.EqualTo(51));
+
+            var empty = new int[2, 0, 3, 0, 4];
+            var emptyResult = RoundTrip(empty, format);
+            Assert.That(emptyResult.GetLength(0), Is.EqualTo(2));
+            Assert.That(emptyResult.GetLength(1), Is.Zero);
+            Assert.That(emptyResult.GetLength(2), Is.EqualTo(3));
+            Assert.That(emptyResult.GetLength(3), Is.Zero);
+            Assert.That(emptyResult.GetLength(4), Is.EqualTo(4));
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void ExplicitEventsRoundTrip(string format)
+        {
+            var source = new SerializableEventModel();
+            source.Configure();
+
+            var result = RoundTrip(source, format);
+            result.Raise(9);
+            Assert.That(result.Value, Is.EqualTo(9));
         }
 
         [TestCaseSource(nameof(Formats))]
@@ -238,6 +291,24 @@ namespace ActionBuffer.Tests
             Assert.Throws<InvalidOperationException>(() => Write(circular, format));
         }
 
+        [TestCaseSource(nameof(Formats))]
+        public void ReferenceModePreservesSharedAndMutuallyReferencingObjects(string format)
+        {
+            var settings = new BufferSerializerSettings { SupportReferences = true };
+            var leaf = new SharedLeaf { Value = 5 };
+            var shared = RoundTrip(new SharedReferenceModel { First = leaf, Second = leaf },
+                format, settings);
+            Assert.That(ReferenceEquals(shared.First, shared.Second), Is.True);
+
+            var first = new ReferenceNode { Name = "first" };
+            var second = new ReferenceNode { Name = "second" };
+            first.Next = second;
+            second.Next = first;
+            var result = RoundTrip(first, format, settings);
+            Assert.That(result.Next.Name, Is.EqualTo("second"));
+            Assert.That(ReferenceEquals(result.Next.Next, result), Is.True);
+        }
+
         [Test]
         public void MissingFieldsResetConstructorValuesToTypeDefaults()
         {
@@ -249,6 +320,48 @@ namespace ActionBuffer.Tests
             var result = BufferSerializer.ToObject<DefaultValueModel>(json);
             Assert.That(result.Zero, Is.Zero);
             Assert.That(result.Null, Is.Null);
+        }
+
+        [Test]
+        public void WriteSettingsControlFormattingFieldsLimitsAndConverters()
+        {
+            var settings = new BufferSerializerSettings
+            {
+                TypeInfo = false,
+                FullField = true,
+                PrettyPrint = true,
+                MaxScalarLength = 8
+            };
+            settings.RegisterConverter(new SettingsScopedConverter());
+
+            string json = BufferSerializer.ToJson(new DefaultValueModel
+            {
+                Zero = 0,
+                Null = null
+            }, settings);
+            Assert.That(json, Does.Not.Contain("$type"));
+            Assert.That(json, Does.Contain("\n"));
+            Assert.That(json, Does.Contain("\"Zero\""));
+            Assert.That(json, Does.Contain("\"Null\""));
+
+            Assert.That(BufferSerializer.ToJson(new SettingsScopedValue { Value = 7 }, settings),
+                Is.EqualTo("2007"));
+            Assert.Throws<FormatException>(() => BufferSerializer.ToJson(
+                new LongStringModel { Value = "123456789" }, settings));
+            Assert.That(BufferSerializerSettings.DefaultSetting.MaxScalarLength,
+                Is.GreaterThan(8));
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void EventsCanBeDisabledPerWrite(string format)
+        {
+            var source = new SerializableEventModel();
+            source.Configure();
+            var settings = new BufferSerializerSettings { SerializeEvents = false };
+
+            var result = RoundTrip(source, format, settings);
+            result.Raise(9);
+            Assert.That(result.Value, Is.Zero);
         }
 
         [Test]
@@ -360,29 +473,32 @@ namespace ActionBuffer.Tests
                 typeof(GenericDiscoveryTemplate<>));
         }
 
-        private static T RoundTrip<T>(T source, string format) =>
-            (T)RoundTripObject(source, typeof(T), format);
+        private static T RoundTrip<T>(T source, string format,
+            BufferSerializerSettings settings = null) =>
+            (T)RoundTripObject(source, typeof(T), format, settings);
 
-        private static object RoundTripObject(object source, Type type, string format)
+        private static object RoundTripObject(object source, Type type, string format,
+            BufferSerializerSettings settings = null)
         {
             switch (format)
             {
-                case "Json": return BufferSerializer.ToObject(BufferSerializer.ToJson(source), type);
-                case "Yaml": return BufferSerializer.FromYaml(BufferSerializer.ToYaml(source), type);
-                case "Xml": return BufferSerializer.FromXml(BufferSerializer.ToXml(source), type);
-                case "Binary": return BufferSerializer.ToObject(BufferSerializer.ToBytes(source), type);
+                case "Json": return BufferSerializer.ToObject(BufferSerializer.ToJson(source, settings), type);
+                case "Yaml": return BufferSerializer.FromYaml(BufferSerializer.ToYaml(source, settings), type);
+                case "Xml": return BufferSerializer.FromXml(BufferSerializer.ToXml(source, settings), type);
+                case "Binary": return BufferSerializer.ToObject(BufferSerializer.ToBytes(source, settings), type);
                 default: throw new ArgumentOutOfRangeException(nameof(format));
             }
         }
 
-        private static object Write(object source, string format)
+        private static object Write(object source, string format,
+            BufferSerializerSettings settings = null)
         {
             switch (format)
             {
-                case "Json": return BufferSerializer.ToJson(source);
-                case "Yaml": return BufferSerializer.ToYaml(source);
-                case "Xml": return BufferSerializer.ToXml(source);
-                case "Binary": return BufferSerializer.ToBytes(source);
+                case "Json": return BufferSerializer.ToJson(source, settings);
+                case "Yaml": return BufferSerializer.ToYaml(source, settings);
+                case "Xml": return BufferSerializer.ToXml(source, settings);
+                case "Binary": return BufferSerializer.ToBytes(source, settings);
                 default: throw new ArgumentOutOfRangeException(nameof(format));
             }
         }

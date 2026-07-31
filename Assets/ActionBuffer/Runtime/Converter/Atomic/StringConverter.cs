@@ -6,9 +6,9 @@ namespace ActionBuffer
     {
         protected override void OnScan(BufferScan scan, string value)
         {
-            if (value != null && value.Length > BufferSerializer.MaxScalarLength)
+            if (value != null && value.Length > scan.Settings.MaxScalarLength)
                 throw new FormatException(
-                    $"String length cannot exceed {BufferSerializer.MaxScalarLength} characters.");
+                    $"String length cannot exceed {scan.Settings.MaxScalarLength} characters.");
         }
 
         protected override string OnRead(IBufferReader reader, Type type) => reader.ReadUTF8();

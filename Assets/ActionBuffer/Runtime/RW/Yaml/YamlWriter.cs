@@ -12,6 +12,7 @@ namespace ActionBuffer
         {
             _builder.Clear();
             Write(GetRoot(), _builder);
+            ValidateTextLength(_builder.Length, "YAML");
             return _builder.ToString();
         }
 
@@ -38,7 +39,7 @@ namespace ActionBuffer
         private static bool IsBlock(StructuredNode node)
         {
             if (node.Kind == StructuredNodeKind.Object)
-                return node.FieldCount > 0 || !string.IsNullOrEmpty(node.TypeName);
+                return node.ReferenceId >= 0 || node.FieldCount > 0 || !string.IsNullOrEmpty(node.TypeName);
             return node.Kind == StructuredNodeKind.Sequence && node.ItemCount > 0;
         }
 
@@ -46,6 +47,15 @@ namespace ActionBuffer
         {
             if (node.Kind == StructuredNodeKind.Object)
             {
+                if (node.IsReference)
+                {
+                    WriteScalarEntry("$ref", node.ReferenceId.ToString(CultureInfo.InvariantCulture),
+                        builder, indent);
+                    return;
+                }
+                if (node.ReferenceId >= 0)
+                    WriteScalarEntry("$id", node.ReferenceId.ToString(CultureInfo.InvariantCulture),
+                        builder, indent);
                 if (!string.IsNullOrEmpty(node.TypeName))
                 {
                     WriteScalarEntry("$type", node.TypeName, builder, indent);
@@ -179,9 +189,6 @@ namespace ActionBuffer
 
         private static void EnsureLength(StringBuilder builder)
         {
-            if (builder.Length > BufferSerializer.MaxTextLength)
-                throw new FormatException(
-                    $"YAML output length cannot exceed {BufferSerializer.MaxTextLength} characters.");
         }
     }
 }

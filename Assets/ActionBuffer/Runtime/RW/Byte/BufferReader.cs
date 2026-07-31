@@ -17,8 +17,19 @@ namespace ActionBuffer
         private bool _suppressNodeCounting;
         private int _objectReadDepth;
         private object _currentObject;
+        private sealed class ReferenceEntry
+        {
+            internal object Value;
+            internal Type Type;
+            internal bool Defined;
+        }
+        private readonly Dictionary<int, ReferenceEntry> _references =
+            new Dictionary<int, ReferenceEntry>();
+        private bool _supportReferences;
         private readonly List<IBufferObject> _afterReadCallbacks = new List<IBufferObject>();
         object IObjectContextReader.CurrentObject => _currentObject;
+        object IObjectContextReader.GetOrCreateReference(int referenceId, Type type) =>
+            GetOrCreateReference(referenceId, type, false);
         public int index
         {
             get { return _index; }
@@ -52,6 +63,8 @@ namespace ActionBuffer
             _suppressNodeCounting = false;
             _objectReadDepth = 0;
             _currentObject = null;
+            _supportReferences = false;
+            _references.Clear();
             _afterReadCallbacks.Clear();
             if (_afterReadCallbacks.Capacity > BufferSerializer.RetainedListCapacity)
                 _afterReadCallbacks.Capacity = 0;
@@ -236,36 +249,59 @@ namespace ActionBuffer
             }
         }
 
-        public T[,] ReadArray2D<T>(Func<IBufferReader, T> read)
+        public Array ReadMultiDimensionalArray<T>(int rank, Func<IBufferReader, T> read)
         {
             if (read == null) throw new ArgumentNullException(nameof(read));
+            if (rank < 2 || rank > 5) throw new ArgumentOutOfRangeException(nameof(rank));
             EnterNode();
             try
             {
-                ushort encodedRows = ReadUInt16();
-                if (encodedRows == ushort.MaxValue) return null;
-                int rows = encodedRows;
-                int columns = ReadUInt16();
-                if (columns == ushort.MaxValue)
-                    throw new FormatException(
-                        $"Array dimensions cannot exceed {ushort.MaxValue - 1}.");
-                long longCount = (long)rows * columns;
-                if (longCount > BufferSerializer.MaxCollectionCount)
-                    throw new FormatException(
-                        $"Collection count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+                ushort firstLength = ReadUInt16();
+                if (firstLength == ushort.MaxValue) return null;
+                int length1 = ReadArrayDimension();
+                int length2 = rank > 2 ? ReadArrayDimension() : 0;
+                int length3 = rank > 3 ? ReadArrayDimension() : 0;
+                int length4 = rank > 4 ? ReadArrayDimension() : 0;
+                var shape = new BufferScan.ArrayShape(rank, firstLength, length1, length2,
+                    length3, length4);
+                bool hasZeroLength = false;
+                for (int dimension = 0; dimension < rank; dimension++)
+                    hasZeroLength |= shape.GetLength(dimension) == 0;
+                int maxCollectionCount = BufferSerializerSettings.DefaultSetting.MaxCollectionCount;
+                long longCount = hasZeroLength ? 0 : 1;
+                if (!hasZeroLength)
+                {
+                    for (int dimension = 0; dimension < rank; dimension++)
+                    {
+                        int length = shape.GetLength(dimension);
+                        if (longCount > maxCollectionCount / length)
+                            throw new FormatException(
+                                $"Collection count cannot exceed {maxCollectionCount}.");
+                        longCount *= length;
+                    }
+                }
                 int count = (int)longCount;
-                CountNodes(checked(rows + count));
+                CountNodes(checked(rank + 2 + count));
 
-                var result = new T[rows, columns];
-                for (int row = 0; row < rows; row++)
-                for (int column = 0; column < columns; column++)
-                    result[row, column] = ReadPrecounted(read);
+                var result = MultiDimensionalArrayHelper.Create<T>(shape);
+                for (int index = 0; index < count; index++)
+                    MultiDimensionalArrayHelper.SetValue(result, shape, index,
+                        ReadPrecounted(read));
                 return result;
             }
             finally
             {
                 ExitNode();
             }
+        }
+
+        private int ReadArrayDimension()
+        {
+            ushort value = ReadUInt16();
+            if (value == ushort.MaxValue)
+                throw new FormatException(
+                    $"Array dimensions cannot exceed {ushort.MaxValue - 1}.");
+            return value;
         }
 
         public HashSet<T> ReadHashSet<T>(Func<IBufferReader, T> read)
@@ -403,6 +439,8 @@ namespace ActionBuffer
             {
                 if (metas[i] == null)
                     throw new FormatException("The binary metadata table cannot contain null values.");
+                if (metas[i] == BufferScan.ReferenceMetadata)
+                    _supportReferences = true;
             }
         }
 
@@ -464,7 +502,7 @@ namespace ActionBuffer
                     try
                     {
                         var fieldType = field.FieldType;
-                        var convert = field.GetConverter();
+                        var convert = field.GetConverter(BufferSerializerSettings.DefaultSetting);
                         _precountedReadDepth++;
                         try
                         {
@@ -517,6 +555,12 @@ namespace ActionBuffer
 
             int typeIndex = ReadInt32();
             if (typeIndex == -1) return default;
+            if (typeIndex == -2)
+            {
+                if (!_supportReferences)
+                    throw new FormatException("Object reference marker requires reference metadata.");
+                return (T)GetExistingReference(ReadInt32(), typeof(T));
+            }
             if (typeIndex < 0 || typeIndex >= metas.Count)
                 throw new FormatException($"Invalid binary metadata index '{typeIndex}'.");
 
@@ -525,7 +569,10 @@ namespace ActionBuffer
             Type type = TypeHelper.ResolveSerializedType(typeof(T), typeName, assemblyName);
             int objectEnd = ReadEndIndex("object");
 
-            object t = TypeHelper.CreateInstance(type);
+            int referenceId = _supportReferences ? ReadInt32() : -1;
+            object t = referenceId >= 0
+                ? GetOrCreateReference(referenceId, type, true)
+                : TypeHelper.CreateInstance(type);
             var typeField = TypeHelper.GetTypeFields(type);
             ReadFields(t, typeField, objectEnd);
             _index = objectEnd;
@@ -533,6 +580,52 @@ namespace ActionBuffer
                 _afterReadCallbacks.Add(callback);
 
             return (T)t;
+        }
+
+        private object GetOrCreateReference(int referenceId, Type type, bool define)
+        {
+            if (referenceId < 0) throw new FormatException($"Invalid object reference id '{referenceId}'.");
+            if (type == null || type.IsValueType)
+                throw new FormatException($"Reference id '{referenceId}' must identify a reference type.");
+            if (_references.TryGetValue(referenceId, out var entry))
+            {
+                if (entry.Type != type)
+                    throw new FormatException(
+                        $"Reference id '{referenceId}' changed type from '{entry.Type}' to '{type}'.");
+                if (define && entry.Defined)
+                    throw new FormatException($"Duplicate object definition for reference id '{referenceId}'.");
+                if (define) entry.Defined = true;
+                return entry.Value;
+            }
+
+            var value = TypeHelper.CreateInstance(type);
+            _references.Add(referenceId, new ReferenceEntry
+            {
+                Value = value,
+                Type = type,
+                Defined = define
+            });
+            return value;
+        }
+
+        private object GetExistingReference(int referenceId, Type declaredType)
+        {
+            if (!_references.TryGetValue(referenceId, out var entry))
+                throw new FormatException($"Unknown or forward object reference id '{referenceId}'.");
+            if (!declaredType.IsAssignableFrom(entry.Type))
+                throw new FormatException(
+                    $"Reference type '{entry.Type}' is not assignable to '{declaredType}'.");
+            return entry.Value;
+        }
+
+        internal void EnsureReferencesResolved()
+        {
+            foreach (var item in _references)
+            {
+                if (!item.Value.Defined)
+                    throw new FormatException(
+                        $"Object reference id '{item.Key}' has no object definition.");
+            }
         }
 
         public void EnsureFullyConsumed()
@@ -545,8 +638,9 @@ namespace ActionBuffer
 
         private void EnterNode()
         {
-            if (_depth >= BufferScan.MaxDepth)
-                throw new FormatException($"Binary serialization depth cannot exceed {BufferScan.MaxDepth}.");
+            int maxDepth = BufferSerializerSettings.DefaultSetting.MaxDepth;
+            if (_depth >= maxDepth)
+                throw new FormatException($"Binary serialization depth cannot exceed {maxDepth}.");
             if (_precountedReadDepth == 0)
                 CountNodes(1);
             _depth++;

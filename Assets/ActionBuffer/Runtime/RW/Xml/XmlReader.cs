@@ -60,8 +60,9 @@ namespace ActionBuffer
 
         private static StructuredNode ParseNode(System.Xml.XmlReader reader, int depth, ref int nodeCount)
         {
-            if (depth >= BufferScan.MaxDepth)
-                throw Error(reader, $"XML depth cannot exceed {BufferScan.MaxDepth}.");
+            int maxDepth = BufferSerializerSettings.DefaultSetting.MaxDepth;
+            if (depth >= maxDepth)
+                throw Error(reader, $"XML depth cannot exceed {maxDepth}.");
             if (nodeCount >= BufferSerializer.MaxNodeCount)
                 throw Error(reader, $"XML node count cannot exceed {BufferSerializer.MaxNodeCount}.");
             nodeCount++;
@@ -95,6 +96,19 @@ namespace ActionBuffer
             {
                 if (kind == StructuredNodeKind.Object)
                 {
+                    string id = reader.GetAttribute("id");
+                    string reference = reader.GetAttribute("ref");
+                    if (id != null && reference != null)
+                        throw Error(reader, "An object cannot contain both 'id' and 'ref'.");
+                    if (reference != null)
+                    {
+                        node.ReferenceId = ParseReferenceId(reference, reader);
+                        node.IsReference = true;
+                    }
+                    else if (id != null)
+                    {
+                        node.ReferenceId = ParseReferenceId(id, reader);
+                    }
                     node.TypeName = reader.GetAttribute("type");
                     node.AssemblyName = reader.GetAttribute("assembly");
                     EnsureScalarLength(node.TypeName, reader);
@@ -104,6 +118,8 @@ namespace ActionBuffer
                 bool empty = reader.IsEmptyElement;
                 reader.ReadStartElement();
                 if (empty) return node;
+                if (node.IsReference)
+                    throw Error(reader, "A reference object cannot contain child elements.");
 
                 while (reader.MoveToContent() != XmlNodeType.EndElement)
                 {
@@ -170,6 +186,13 @@ namespace ActionBuffer
             {
                 HashSetPool<string>.Back(fieldNames);
             }
+        }
+
+        private static int ParseReferenceId(string value, System.Xml.XmlReader reader)
+        {
+            if (!int.TryParse(value, out int result) || result < 0)
+                throw Error(reader, $"Invalid object reference id '{value}'.");
+            return result;
         }
 
         private static void EnsureScalarLength(string value, System.Xml.XmlReader reader)

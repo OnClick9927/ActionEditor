@@ -44,54 +44,46 @@ namespace ActionBuffer
             new Dictionary<Type, BuffConverter>();
         internal static int ConverterVersion { get; private set; }
 
-        private static int _maxDepth = 256;
-        private static int _maxTextLength = 16 * 1024 * 1024;
-        private static int _maxBinaryLength = 64 * 1024 * 1024;
-        private static int _maxNodeCount = 100000;
-        private static int _maxCollectionCount = ushort.MaxValue - 1;
-        private static int _maxObjectFieldCount = 4096;
-        private static int _maxScalarLength = 4 * 1024 * 1024;
-
         public static int MaxDepth
         {
-            get => _maxDepth;
-            set => SetLimit(ref _maxDepth, value, 1, 1024);
+            get => BufferSerializerSettings.DefaultSetting.MaxDepth;
+            set => BufferSerializerSettings.DefaultSetting.MaxDepth = value;
         }
 
         public static int MaxTextLength
         {
-            get => _maxTextLength;
-            set => SetPositiveLimit(ref _maxTextLength, value);
+            get => BufferSerializerSettings.DefaultSetting.MaxTextLength;
+            set => BufferSerializerSettings.DefaultSetting.MaxTextLength = value;
         }
 
         public static int MaxBinaryLength
         {
-            get => _maxBinaryLength;
-            set => SetPositiveLimit(ref _maxBinaryLength, value);
+            get => BufferSerializerSettings.DefaultSetting.MaxBinaryLength;
+            set => BufferSerializerSettings.DefaultSetting.MaxBinaryLength = value;
         }
 
         public static int MaxNodeCount
         {
-            get => _maxNodeCount;
-            set => SetPositiveLimit(ref _maxNodeCount, value);
+            get => BufferSerializerSettings.DefaultSetting.MaxNodeCount;
+            set => BufferSerializerSettings.DefaultSetting.MaxNodeCount = value;
         }
 
         public static int MaxCollectionCount
         {
-            get => _maxCollectionCount;
-            set => SetLimit(ref _maxCollectionCount, value, 1, ushort.MaxValue - 1);
+            get => BufferSerializerSettings.DefaultSetting.MaxCollectionCount;
+            set => BufferSerializerSettings.DefaultSetting.MaxCollectionCount = value;
         }
 
         public static int MaxObjectFieldCount
         {
-            get => _maxObjectFieldCount;
-            set => SetPositiveLimit(ref _maxObjectFieldCount, value);
+            get => BufferSerializerSettings.DefaultSetting.MaxObjectFieldCount;
+            set => BufferSerializerSettings.DefaultSetting.MaxObjectFieldCount = value;
         }
 
         public static int MaxScalarLength
         {
-            get => _maxScalarLength;
-            set => SetPositiveLimit(ref _maxScalarLength, value);
+            get => BufferSerializerSettings.DefaultSetting.MaxScalarLength;
+            set => BufferSerializerSettings.DefaultSetting.MaxScalarLength = value;
         }
 
         internal const int PoolLimit = 16;
@@ -99,7 +91,10 @@ namespace ActionBuffer
         internal const int RetainedTextCapacity = 64 * 1024;
         internal const int RetainedBinaryCapacity = 1024 * 1024;
 
-        public static BuffConverter GetConverter(Type type)
+        public static BuffConverter GetConverter(Type type) =>
+            GetConverter(type, BufferSerializerSettings.DefaultSetting);
+
+        private static BuffConverter GetRegisteredConverter(Type type)
         {
             if (type == null) throw new ArgumentNullException(nameof(type));
             if (Converters.TryGetValue(type, out var converter)) return converter;
@@ -111,12 +106,44 @@ namespace ActionBuffer
             return converter;
         }
 
+        internal static BuffConverter GetConverter(Type type, BufferSerializerSettings settings)
+        {
+            if (type == null) throw new ArgumentNullException(nameof(type));
+            if (settings != null && settings.TryGetConverter(type, out var converter))
+                return converter;
+            var defaultSetting = BufferSerializerSettings.DefaultSetting;
+            if (!ReferenceEquals(settings, defaultSetting) &&
+                defaultSetting.TryGetConverter(type, out converter))
+                return converter;
+            return GetRegisteredConverter(type);
+        }
+
         public static BuffConverter<T> GetConverter<T>()
         {
             var converter = GetConverter(typeof(T));
             if (converter is BuffConverter<T> typedConverter) return typedConverter;
             throw new InvalidOperationException(
                 $"Converter '{converter.GetType()}' cannot serialize target type '{typeof(T)}'.");
+        }
+
+        internal static BuffConverter<T> GetConverter<T>(BufferSerializerSettings settings)
+        {
+            var converter = GetConverter(typeof(T), settings);
+            if (converter is BuffConverter<T> typedConverter) return typedConverter;
+            throw new InvalidOperationException(
+                $"Converter '{converter.GetType()}' cannot serialize target type '{typeof(T)}'.");
+        }
+
+        internal static long GetResolverVersion(BufferSerializerSettings settings)
+        {
+            unchecked
+            {
+                long version = ConverterVersion;
+                version = version * 397 ^ BufferSerializerSettings.DefaultSetting.ResolverVersion;
+                if (!ReferenceEquals(settings, BufferSerializerSettings.DefaultSetting))
+                    version = version * 397 ^ (settings?.ResolverVersion ?? 0);
+                return version;
+            }
         }
 
         public static void RegisterConverter<T>(BuffConverter<T> converter)
@@ -163,7 +190,10 @@ namespace ActionBuffer
             }
 
             if (!Converters.ContainsKey(typeof(T[]))) { Converters[typeof(T[])] = new ArrayConverter<T>(); changed = true; }
-            if (!Converters.ContainsKey(typeof(T[,]))) { Converters[typeof(T[,])] = new Array2DConverter<T>(); changed = true; }
+            if (!Converters.ContainsKey(typeof(T[,]))) { Converters[typeof(T[,])] = new MultiDimensionalArrayConverter<T[,], T>(); changed = true; }
+            if (!Converters.ContainsKey(typeof(T[,,]))) { Converters[typeof(T[,,])] = new MultiDimensionalArrayConverter<T[,,], T>(); changed = true; }
+            if (!Converters.ContainsKey(typeof(T[,,,]))) { Converters[typeof(T[,,,])] = new MultiDimensionalArrayConverter<T[,,,], T>(); changed = true; }
+            if (!Converters.ContainsKey(typeof(T[,,,,]))) { Converters[typeof(T[,,,,])] = new MultiDimensionalArrayConverter<T[,,,,], T>(); changed = true; }
             if (!Converters.ContainsKey(typeof(List<T>))) { Converters[typeof(List<T>)] = new ListConverter<T>(); changed = true; }
             if (!Converters.ContainsKey(typeof(IEnumerable<T>))) { Converters[typeof(IEnumerable<T>)] = new EnumerableInterfaceConverter<T>(); changed = true; }
             if (!Converters.ContainsKey(typeof(ICollection<T>))) { Converters[typeof(ICollection<T>)] = new CollectionInterfaceConverter<T>(); changed = true; }
@@ -208,18 +238,21 @@ namespace ActionBuffer
             ConverterVersion++;
         }
 
-        public static void WriteObject(IBufferWriter writer, object obj)
+        public static void WriteObject(IBufferWriter writer, object obj,
+            BufferSerializerSettings settings = null)
         {
             if (writer == null) throw new ArgumentNullException(nameof(writer));
             if (obj == null) throw new ArgumentNullException(nameof(obj));
 
-            var converter = GetConverter(obj.GetType());
-            var scan = BufferScan.Rent(writer.CollectMeta, writer.FullField);
+            settings ??= BufferSerializerSettings.DefaultSetting;
+            var converter = GetConverter(obj.GetType(), settings);
+            var scan = BufferScan.Rent(settings, writer.CollectMeta, settings.FullField);
             try
             {
                 converter.Scan(scan, obj);
+                scan.ValidateReferences();
                 scan.ResetRead();
-                writer.Init();
+                writer.Init(scan);
                 converter.Write(writer, scan, obj);
             }
             finally
@@ -228,17 +261,20 @@ namespace ActionBuffer
             }
         }
 
-        public static void WriteObject<T>(IBufferWriter writer, T obj)
+        public static void WriteObject<T>(IBufferWriter writer, T obj,
+            BufferSerializerSettings settings = null)
         {
             if (writer == null) throw new ArgumentNullException(nameof(writer));
 
-            var converter = GetConverter<T>();
-            var scan = BufferScan.Rent(writer.CollectMeta, writer.FullField);
+            settings ??= BufferSerializerSettings.DefaultSetting;
+            var converter = GetConverter<T>(settings);
+            var scan = BufferScan.Rent(settings, writer.CollectMeta, settings.FullField);
             try
             {
                 converter.ScanValue(scan, obj);
+                scan.ValidateReferences();
                 scan.ResetRead();
-                writer.Init();
+                writer.Init(scan);
                 converter.WriteValue(writer, scan, obj);
             }
             finally
@@ -251,19 +287,20 @@ namespace ActionBuffer
         {
             if (reader == null) throw new ArgumentNullException(nameof(reader));
             if (type == null) throw new ArgumentNullException(nameof(type));
-            return GetConverter(type).Read(reader, type);
+            var result = GetConverter(type, BufferSerializerSettings.DefaultSetting).Read(reader, type);
+            if (reader is BufferReader binaryReader)
+                binaryReader.EnsureReferencesResolved();
+            else if (reader is StructuredTextReader textReader)
+                textReader.EnsureReferencesResolved();
+            return result;
         }
 
-        public static string ToJson(object obj, bool pretty = false, bool typeInfo = true,
-            bool fullField = false)
+        public static string ToJson(object obj, BufferSerializerSettings settings = null)
         {
             var writer = ClassPool<JsonWriter>.Get();
             try
             {
-                writer.typeInfo = typeInfo;
-                writer.prettyPrint = pretty;
-                writer.fullField = fullField;
-                WriteObject(writer, obj);
+                WriteObject(writer, obj, settings);
                 return writer.GetJson();
             }
             finally
@@ -290,16 +327,13 @@ namespace ActionBuffer
 
         public static T ToObject<T>(string data) => (T)ToObject(data, typeof(T));
 
-        public static string ToJson<T>(ReadOnlySpan<T> value, bool pretty = false,
-            bool typeInfo = true, bool fullField = false)
+        public static string ToJson<T>(ReadOnlySpan<T> value,
+            BufferSerializerSettings settings = null)
         {
             var writer = ClassPool<JsonWriter>.Get();
             try
             {
-                writer.typeInfo = typeInfo;
-                writer.prettyPrint = pretty;
-                writer.fullField = fullField;
-                WriteSpan(writer, value);
+                WriteSpan(writer, value, settings);
                 return writer.GetJson();
             }
             finally
@@ -311,16 +345,13 @@ namespace ActionBuffer
 
         public static Span<T> ToSpan<T>(string data) => ToObject<T[]>(data);
 
-        public static string ToJson<T>(T? value, bool pretty = false, bool typeInfo = true,
-            bool fullField = false) where T : struct
+        public static string ToJson<T>(T? value, BufferSerializerSettings settings = null)
+            where T : struct
         {
             var writer = ClassPool<JsonWriter>.Get();
             try
             {
-                writer.typeInfo = typeInfo;
-                writer.prettyPrint = pretty;
-                writer.fullField = fullField;
-                WriteObject<T?>(writer, value);
+                WriteObject<T?>(writer, value, settings);
                 return writer.GetJson();
             }
             finally
@@ -330,14 +361,12 @@ namespace ActionBuffer
             }
         }
 
-        public static string ToYaml(object obj, bool typeInfo = true, bool fullField = false)
+        public static string ToYaml(object obj, BufferSerializerSettings settings = null)
         {
             var writer = ClassPool<YamlWriter>.Get();
             try
             {
-                writer.typeInfo = typeInfo;
-                writer.fullField = fullField;
-                WriteObject(writer, obj);
+                WriteObject(writer, obj, settings);
                 return writer.GetYaml();
             }
             finally
@@ -364,15 +393,13 @@ namespace ActionBuffer
 
         public static T FromYaml<T>(string data) => (T)FromYaml(data, typeof(T));
 
-        public static string ToYaml<T>(ReadOnlySpan<T> value, bool typeInfo = true,
-            bool fullField = false)
+        public static string ToYaml<T>(ReadOnlySpan<T> value,
+            BufferSerializerSettings settings = null)
         {
             var writer = ClassPool<YamlWriter>.Get();
             try
             {
-                writer.typeInfo = typeInfo;
-                writer.fullField = fullField;
-                WriteSpan(writer, value);
+                WriteSpan(writer, value, settings);
                 return writer.GetYaml();
             }
             finally
@@ -384,15 +411,13 @@ namespace ActionBuffer
 
         public static Span<T> FromYamlSpan<T>(string data) => FromYaml<T[]>(data);
 
-        public static string ToYaml<T>(T? value, bool typeInfo = true,
-            bool fullField = false) where T : struct
+        public static string ToYaml<T>(T? value, BufferSerializerSettings settings = null)
+            where T : struct
         {
             var writer = ClassPool<YamlWriter>.Get();
             try
             {
-                writer.typeInfo = typeInfo;
-                writer.fullField = fullField;
-                WriteObject<T?>(writer, value);
+                WriteObject<T?>(writer, value, settings);
                 return writer.GetYaml();
             }
             finally
@@ -402,16 +427,12 @@ namespace ActionBuffer
             }
         }
 
-        public static string ToXml(object obj, bool pretty = true, bool typeInfo = true,
-            bool fullField = false)
+        public static string ToXml(object obj, BufferSerializerSettings settings = null)
         {
             var writer = ClassPool<XmlWriter>.Get();
             try
             {
-                writer.prettyPrint = pretty;
-                writer.typeInfo = typeInfo;
-                writer.fullField = fullField;
-                WriteObject(writer, obj);
+                WriteObject(writer, obj, settings);
                 return writer.GetXml();
             }
             finally
@@ -438,16 +459,13 @@ namespace ActionBuffer
 
         public static T FromXml<T>(string data) => (T)FromXml(data, typeof(T));
 
-        public static string ToXml<T>(ReadOnlySpan<T> value, bool pretty = true,
-            bool typeInfo = true, bool fullField = false)
+        public static string ToXml<T>(ReadOnlySpan<T> value,
+            BufferSerializerSettings settings = null)
         {
             var writer = ClassPool<XmlWriter>.Get();
             try
             {
-                writer.prettyPrint = pretty;
-                writer.typeInfo = typeInfo;
-                writer.fullField = fullField;
-                WriteSpan(writer, value);
+                WriteSpan(writer, value, settings);
                 return writer.GetXml();
             }
             finally
@@ -459,16 +477,13 @@ namespace ActionBuffer
 
         public static Span<T> FromXmlSpan<T>(string data) => FromXml<T[]>(data);
 
-        public static string ToXml<T>(T? value, bool pretty = true, bool typeInfo = true,
-            bool fullField = false) where T : struct
+        public static string ToXml<T>(T? value, BufferSerializerSettings settings = null)
+            where T : struct
         {
             var writer = ClassPool<XmlWriter>.Get();
             try
             {
-                writer.prettyPrint = pretty;
-                writer.typeInfo = typeInfo;
-                writer.fullField = fullField;
-                WriteObject<T?>(writer, value);
+                WriteObject<T?>(writer, value, settings);
                 return writer.GetXml();
             }
             finally
@@ -478,12 +493,12 @@ namespace ActionBuffer
             }
         }
 
-        public static byte[] ToBytes(object obj)
+        public static byte[] ToBytes(object obj, BufferSerializerSettings settings = null)
         {
             var writer = ClassPool<BufferWriter>.Get();
             try
             {
-                WriteObject(writer, obj);
+                WriteObject(writer, obj, settings);
                 return writer.GetValidBuffer();
             }
             finally
@@ -512,12 +527,13 @@ namespace ActionBuffer
 
         public static T ToObject<T>(byte[] bytes) => (T)ToObject(bytes, typeof(T));
 
-        public static byte[] ToBytes<T>(ReadOnlySpan<T> value)
+        public static byte[] ToBytes<T>(ReadOnlySpan<T> value,
+            BufferSerializerSettings settings = null)
         {
             var writer = ClassPool<BufferWriter>.Get();
             try
             {
-                WriteSpan(writer, value);
+                WriteSpan(writer, value, settings);
                 return writer.GetValidBuffer();
             }
             finally
@@ -529,12 +545,13 @@ namespace ActionBuffer
 
         public static Span<T> ToSpan<T>(byte[] bytes) => ToObject<T[]>(bytes);
 
-        public static byte[] ToBytes<T>(T? value) where T : struct
+        public static byte[] ToBytes<T>(T? value, BufferSerializerSettings settings = null)
+            where T : struct
         {
             var writer = ClassPool<BufferWriter>.Get();
             try
             {
-                WriteObject<T?>(writer, value);
+                WriteObject<T?>(writer, value, settings);
                 return writer.GetValidBuffer();
             }
             finally
@@ -544,15 +561,18 @@ namespace ActionBuffer
             }
         }
 
-        private static void WriteSpan<T>(IBufferWriter writer, ReadOnlySpan<T> value)
+        private static void WriteSpan<T>(IBufferWriter writer, ReadOnlySpan<T> value,
+            BufferSerializerSettings settings)
         {
-            var scan = BufferScan.Rent(writer.CollectMeta, writer.FullField);
+            settings ??= BufferSerializerSettings.DefaultSetting;
+            var scan = BufferScan.Rent(settings, writer.CollectMeta, settings.FullField);
             try
             {
                 scan.CountNode();
-                scan.ScanSpan(value, SpanSerialization<T>.Converter);
+                scan.ScanSpan(value, SpanSerialization<T>.GetConverter(settings));
+                scan.ValidateReferences();
                 scan.ResetRead();
-                writer.Init();
+                writer.Init(scan);
                 writer.WriteIEnumerable<T>(scan, null, SpanSerialization<T>.WriteElement);
             }
             finally
@@ -564,22 +584,20 @@ namespace ActionBuffer
         private static class SpanSerialization<T>
         {
             private static BuffConverter<T> _converter;
-            private static int _converterVersion = -1;
+            private static long _converterVersion = -1;
             internal static readonly Action<IBufferWriter, BufferScan, T> WriteElement = Write;
 
-            internal static BuffConverter<T> Converter
+            internal static BuffConverter<T> GetConverter(BufferSerializerSettings settings)
             {
-                get
-                {
-                    if (_converterVersion == ConverterVersion) return _converter;
-                    _converter = GetConverter<T>();
-                    _converterVersion = ConverterVersion;
-                    return _converter;
-                }
+                long version = GetResolverVersion(settings);
+                if (_converterVersion == version) return _converter;
+                _converter = BufferSerializer.GetConverter<T>(settings);
+                _converterVersion = version;
+                return _converter;
             }
 
             private static void Write(IBufferWriter writer, BufferScan scan, T value) =>
-                Converter.WriteValue(writer, scan, value);
+                GetConverter(scan.Settings).WriteValue(writer, scan, value);
         }
 
         private static BuffConverter CreateConverter(Type type)
@@ -593,10 +611,11 @@ namespace ActionBuffer
                 int rank = type.GetArrayRank();
                 if (rank == 1)
                     return CreateConverterInstance(typeof(ArrayConverter<>).MakeGenericType(type.GetElementType()));
-                if (rank == 2)
-                    return CreateConverterInstance(typeof(Array2DConverter<>).MakeGenericType(type.GetElementType()));
+                if (rank >= 2 && rank <= 5)
+                    return CreateConverterInstance(typeof(MultiDimensionalArrayConverter<,>)
+                        .MakeGenericType(type, type.GetElementType()));
                 throw new NotSupportedException(
-                    $"Array type '{type}' has rank {rank}; only one- and two-dimensional arrays are supported.");
+                    $"Array type '{type}' has rank {rank}; only arrays up to rank five are supported.");
             }
             if (type.IsGenericType)
             {

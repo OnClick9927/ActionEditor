@@ -13,7 +13,9 @@ namespace ActionBuffer
         public string MethodName;
         public string Signature;
         public byte Binding;
-        public object Target;
+        public int TargetReferenceId;
+        public string TargetType;
+        public string TargetAssembly;
     }
 
     internal sealed class DelegateConverter<TDelegate> : BuffConverter<TDelegate>
@@ -21,7 +23,7 @@ namespace ActionBuffer
     {
         private const byte NoTarget = 0;
         private const byte CurrentObjectTarget = 1;
-        private const byte SerializedTarget = 2;
+        private const byte ObjectReferenceTarget = 2;
         private static readonly int InvokeParameterCount =
             typeof(TDelegate).GetMethod("Invoke").GetParameters().Length;
         private readonly Dictionary<MethodInfo, MethodDescriptor> _methodDescriptors =
@@ -29,7 +31,7 @@ namespace ActionBuffer
         private readonly Func<IBufferReader, DelegateMethodReference> _readReference;
         private readonly Action<IBufferWriter, BufferScan, DelegateMethodReference> _writeReference;
         private BuffConverter<DelegateMethodReference> _referenceConverter;
-        private int _converterVersion = -1;
+        private long _converterVersion = -1;
 
         private sealed class MethodDescriptor
         {
@@ -43,22 +45,22 @@ namespace ActionBuffer
             _writeReference = WriteReference;
         }
 
-        private BuffConverter<DelegateMethodReference> ReferenceConverter
+        private BuffConverter<DelegateMethodReference> GetReferenceConverter(
+            BufferSerializerSettings settings)
         {
-            get
-            {
-                if (_converterVersion == BufferSerializer.ConverterVersion) return _referenceConverter;
-                _referenceConverter = BufferSerializer.GetConverter<DelegateMethodReference>();
-                _converterVersion = BufferSerializer.ConverterVersion;
-                return _referenceConverter;
-            }
+            long version = BufferSerializer.GetResolverVersion(settings);
+            if (_converterVersion == version) return _referenceConverter;
+            _referenceConverter = BufferSerializer.GetConverter<DelegateMethodReference>(settings);
+            _converterVersion = version;
+            return _referenceConverter;
         }
 
         protected override void OnScan(BufferScan scan, TDelegate value)
         {
             if (value == null)
             {
-                scan.ScanEnumerable<DelegateMethodReference>(null, ReferenceConverter);
+                scan.ScanEnumerable<DelegateMethodReference>(null,
+                    GetReferenceConverter(scan.Settings));
                 return;
             }
 
@@ -68,7 +70,7 @@ namespace ActionBuffer
             {
                 for (int i = 0; i < invocationList.Length; i++)
                     references.Add(CreateReference(scan, invocationList[i]));
-                scan.ScanEnumerable(references, ReferenceConverter);
+                scan.ScanEnumerable(references, GetReferenceConverter(scan.Settings));
             }
             finally
             {
@@ -127,22 +129,29 @@ namespace ActionBuffer
                     throw new NotSupportedException(
                         $"Delegate '{typeof(TDelegate)}' uses compiler-generated closure target '{targetType}'. " +
                         "Closure delegates are not supported.");
-                if (!BufferSerializer.GetConverter(targetType).UsesObjectLayout)
+                if (!BufferSerializer.GetConverter(targetType, scan.Settings).UsesObjectLayout)
                     throw new NotSupportedException(
                         $"Delegate target type '{targetType}' must use object-field serialization.");
-                binding = SerializedTarget;
+                binding = ObjectReferenceTarget;
             }
 
             var reference = descriptor.Reference;
             reference.Binding = binding;
-            reference.Target = binding == SerializedTarget ? value.Target : null;
+            reference.TargetReferenceId = -1;
+            if (binding == ObjectReferenceTarget)
+            {
+                var targetType = value.Target.GetType();
+                reference.TargetReferenceId = scan.RequireObjectReference(value.Target);
+                reference.TargetType = targetType.FullName;
+                reference.TargetAssembly = targetType.Assembly.FullName;
+            }
             return reference;
         }
 
         private Delegate CreateDelegate(IBufferReader reader, DelegateMethodReference reference)
         {
             if (reference.Binding != NoTarget && reference.Binding != CurrentObjectTarget &&
-                reference.Binding != SerializedTarget)
+                reference.Binding != ObjectReferenceTarget)
                 throw new FormatException($"Unknown delegate binding kind '{reference.Binding}'.");
 
             var declaringType = TypeHelper.GetTypeByFullName(reference.DeclaringType, reference.AssemblyName);
@@ -176,11 +185,18 @@ namespace ActionBuffer
                     throw new FormatException(
                         $"Delegate method '{match}' requires a containing object context.");
             }
-            else if (reference.Binding == SerializedTarget)
+            else if (reference.Binding == ObjectReferenceTarget)
             {
-                target = reference.Target;
-                if (target == null)
-                    throw new FormatException($"Delegate method '{match}' has no serialized target.");
+                var targetType = TypeHelper.GetTypeByFullName(
+                    reference.TargetType, reference.TargetAssembly);
+                if (targetType == null)
+                    throw new FormatException(
+                        $"Cannot resolve delegate target type '{reference.TargetType}, " +
+                        $"{reference.TargetAssembly}'.");
+                var context = reader as IObjectContextReader;
+                if (context == null)
+                    throw new FormatException("The reader does not support object references.");
+                target = context.GetOrCreateReference(reference.TargetReferenceId, targetType);
             }
 
             var result = target == null
@@ -193,11 +209,12 @@ namespace ActionBuffer
         }
 
         private DelegateMethodReference ReadReference(IBufferReader reader) =>
-            ReferenceConverter.ReadValue(reader, typeof(DelegateMethodReference));
+            GetReferenceConverter(BufferSerializerSettings.DefaultSetting)
+                .ReadValue(reader, typeof(DelegateMethodReference));
 
         private void WriteReference(IBufferWriter writer, BufferScan scan,
             DelegateMethodReference reference) =>
-            ReferenceConverter.WriteValue(writer, scan, reference);
+            GetReferenceConverter(scan.Settings).WriteValue(writer, scan, reference);
 
         private MethodDescriptor GetMethodDescriptor(MethodInfo method)
         {

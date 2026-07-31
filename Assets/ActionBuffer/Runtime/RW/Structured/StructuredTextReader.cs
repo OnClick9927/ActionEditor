@@ -12,9 +12,19 @@ namespace ActionBuffer
         private bool _hasRoot;
         private bool _hasCurrent;
         private readonly List<IBufferObject> _afterReadCallbacks = new List<IBufferObject>();
+        private sealed class ReferenceEntry
+        {
+            internal object Value;
+            internal Type Type;
+            internal bool Defined;
+        }
+        private readonly Dictionary<int, ReferenceEntry> _references =
+            new Dictionary<int, ReferenceEntry>();
         private int _objectReadDepth;
         private object _currentObject;
         object IObjectContextReader.CurrentObject => _currentObject;
+        object IObjectContextReader.GetOrCreateReference(int referenceId, Type type) =>
+            GetOrCreateReference(referenceId, type, false);
 
         internal void SetRoot(StructuredNode root)
         {
@@ -34,6 +44,7 @@ namespace ActionBuffer
             _hasCurrent = false;
             _objectReadDepth = 0;
             _currentObject = null;
+            _references.Clear();
             _afterReadCallbacks.Clear();
             if (_afterReadCallbacks.Capacity > BufferSerializer.RetainedListCapacity)
                 _afterReadCallbacks.Capacity = 0;
@@ -68,8 +79,13 @@ namespace ActionBuffer
                 if (node.Kind == StructuredNodeKind.Null) return default;
                 RequireKind(node, StructuredNodeKind.Object);
 
+                if (node.IsReference)
+                    return (T)GetExistingReference(node.ReferenceId, typeof(T));
+
                 var actualType = ResolveType(typeof(T), node);
-                var instance = TypeHelper.CreateInstance(actualType);
+                var instance = node.ReferenceId >= 0
+                    ? GetOrCreateReference(node.ReferenceId, actualType, true)
+                    : TypeHelper.CreateInstance(actualType);
                 ReadFields(node, instance, TypeHelper.GetTypeFields(actualType));
                 if (instance is IBufferObject callback)
                     _afterReadCallbacks.Add(callback);
@@ -102,7 +118,7 @@ namespace ActionBuffer
                     _current = serializedField.Value;
                     try
                     {
-                        var converter = field.GetConverter();
+                        var converter = field.GetConverter(BufferSerializerSettings.DefaultSetting);
                         field.SetValue(instance, converter.Read(this, field.FieldType));
                     }
                     finally
@@ -121,6 +137,52 @@ namespace ActionBuffer
         {
             for (int i = 0; i < _afterReadCallbacks.Count; i++)
                 _afterReadCallbacks[i].AfterReadBuffer();
+        }
+
+        private object GetOrCreateReference(int referenceId, Type type, bool define)
+        {
+            if (referenceId < 0) throw new FormatException($"Invalid object reference id '{referenceId}'.");
+            if (type == null || type.IsValueType)
+                throw new FormatException($"Reference id '{referenceId}' must identify a reference type.");
+            if (_references.TryGetValue(referenceId, out var entry))
+            {
+                if (entry.Type != type)
+                    throw new FormatException(
+                        $"Reference id '{referenceId}' changed type from '{entry.Type}' to '{type}'.");
+                if (define && entry.Defined)
+                    throw new FormatException($"Duplicate object definition for reference id '{referenceId}'.");
+                if (define) entry.Defined = true;
+                return entry.Value;
+            }
+
+            var value = TypeHelper.CreateInstance(type);
+            _references.Add(referenceId, new ReferenceEntry
+            {
+                Value = value,
+                Type = type,
+                Defined = define
+            });
+            return value;
+        }
+
+        private object GetExistingReference(int referenceId, Type declaredType)
+        {
+            if (!_references.TryGetValue(referenceId, out var entry))
+                throw new FormatException($"Unknown or forward object reference id '{referenceId}'.");
+            if (!declaredType.IsAssignableFrom(entry.Type))
+                throw new FormatException(
+                    $"Reference type '{entry.Type}' is not assignable to '{declaredType}'.");
+            return entry.Value;
+        }
+
+        internal void EnsureReferencesResolved()
+        {
+            foreach (var item in _references)
+            {
+                if (!item.Value.Defined)
+                    throw new FormatException(
+                        $"Object reference id '{item.Key}' has no object definition.");
+            }
         }
 
         public List<T> ReadIEnumerable<T>(List<T> result, Func<IBufferReader, T> read)
@@ -173,68 +235,89 @@ namespace ActionBuffer
             return result;
         }
 
-        public T[,] ReadArray2D<T>(Func<IBufferReader, T> read)
+        public Array ReadMultiDimensionalArray<T>(int rank, Func<IBufferReader, T> read)
         {
             var node = RequireCurrent();
             if (node.Kind == StructuredNodeKind.Null) return null;
             if (read == null) throw new ArgumentNullException(nameof(read));
-            if (node.Kind == StructuredNodeKind.Object)
-                return ReadEmptyArray2D<T>(node);
-            RequireKind(node, StructuredNodeKind.Sequence);
+            if (rank < 2 || rank > 5) throw new ArgumentOutOfRangeException(nameof(rank));
+            RequireKind(node, StructuredNodeKind.Object);
 
-            int rows = node.ItemCount;
-            int columns = 0;
-            if (rows > 0)
+            StructuredNode dimensions = default;
+            StructuredNode values = default;
+            bool hasDimensions = false;
+            bool hasValues = false;
+            for (int fieldIndex = 0; fieldIndex < node.FieldCount; fieldIndex++)
             {
-                var firstRow = node.GetItem(0);
-                RequireKind(firstRow, StructuredNodeKind.Sequence);
-                columns = firstRow.ItemCount;
+                var field = node.GetField(fieldIndex);
+                if (field.Name == "dimensions" && !hasDimensions)
+                {
+                    dimensions = field.Value;
+                    hasDimensions = true;
+                }
+                else if (field.Name == "values" && !hasValues)
+                {
+                    values = field.Value;
+                    hasValues = true;
+                }
+                else
+                {
+                    throw new FormatException(
+                        $"Unknown or duplicate multi-dimensional array property '{field.Name}'.");
+                }
             }
-            if (rows >= ushort.MaxValue || columns >= ushort.MaxValue)
+            if (!hasDimensions || !hasValues)
                 throw new FormatException(
-                    $"Array dimensions cannot exceed {ushort.MaxValue - 1}.");
-            long count = (long)rows * columns;
-            if (count > BufferSerializer.MaxCollectionCount)
+                    "Multi-dimensional arrays require dimensions and values properties.");
+            RequireKind(dimensions, StructuredNodeKind.Sequence);
+            RequireKind(values, StructuredNodeKind.Sequence);
+            if (dimensions.ItemCount != rank)
                 throw new FormatException(
-                    $"Collection count cannot exceed {BufferSerializer.MaxCollectionCount}.");
+                    $"Expected {rank} array dimensions but found {dimensions.ItemCount}.");
 
-            var result = new T[rows, columns];
-            for (int row = 0; row < rows; row++)
+            int length0 = ParseArrayDimension(dimensions.GetItem(0));
+            int length1 = ParseArrayDimension(dimensions.GetItem(1));
+            int length2 = rank > 2 ? ParseArrayDimension(dimensions.GetItem(2)) : 0;
+            int length3 = rank > 3 ? ParseArrayDimension(dimensions.GetItem(3)) : 0;
+            int length4 = rank > 4 ? ParseArrayDimension(dimensions.GetItem(4)) : 0;
+            var shape = new BufferScan.ArrayShape(rank, length0, length1, length2, length3,
+                length4);
+            bool hasZeroLength = false;
+            for (int dimension = 0; dimension < rank; dimension++)
+                hasZeroLength |= shape.GetLength(dimension) == 0;
+            int maxCollectionCount = BufferSerializerSettings.DefaultSetting.MaxCollectionCount;
+            long count = hasZeroLength ? 0 : 1;
+            if (!hasZeroLength)
             {
-                var rowNode = node.GetItem(row);
-                RequireKind(rowNode, StructuredNodeKind.Sequence);
-                if (rowNode.ItemCount != columns)
-                    throw new FormatException("Two-dimensional array rows must have the same length.");
-                for (int column = 0; column < columns; column++)
-                    result[row, column] = ReadItem(rowNode, column, read);
+                for (int dimension = 0; dimension < rank; dimension++)
+                {
+                    int length = shape.GetLength(dimension);
+                    if (count > maxCollectionCount / length)
+                        throw new FormatException(
+                            $"Collection count cannot exceed {maxCollectionCount}.");
+                    count *= length;
+                }
             }
+            if (values.ItemCount != count)
+                throw new FormatException(
+                    $"Array dimensions require {count} values but found {values.ItemCount}.");
+
+            var result = MultiDimensionalArrayHelper.Create<T>(shape);
+            for (int index = 0; index < values.ItemCount; index++)
+                MultiDimensionalArrayHelper.SetValue(result, shape, index,
+                    ReadItem(values, index, read));
             return result;
         }
 
-        private static T[,] ReadEmptyArray2D<T>(StructuredNode node)
+        private static int ParseArrayDimension(StructuredNode node)
         {
-            int rows = -1;
-            int columns = -1;
-            for (int i = 0; i < node.FieldCount; i++)
+            RequireKind(node, StructuredNodeKind.Scalar);
+            if (!int.TryParse(node.Scalar, NumberStyles.None, CultureInfo.InvariantCulture,
+                    out int result) || result < 0 || result >= ushort.MaxValue)
             {
-                var field = node.GetField(i);
-                RequireKind(field.Value, StructuredNodeKind.Scalar);
-                if (field.Name == "$rows")
-                    rows = ParseArrayDimension(field.Value.Scalar);
-                else if (field.Name == "$columns")
-                    columns = ParseArrayDimension(field.Value.Scalar);
-                else
-                    throw new FormatException($"Unknown two-dimensional array property '{field.Name}'.");
+                throw new FormatException(
+                    $"Invalid multi-dimensional array dimension '{node.Scalar}'.");
             }
-            if (rows != 0 || columns <= 0 || columns >= ushort.MaxValue)
-                throw new FormatException("Invalid empty two-dimensional array dimensions.");
-            return new T[rows, columns];
-        }
-
-        private static int ParseArrayDimension(string value)
-        {
-            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int result))
-                throw new FormatException($"Invalid two-dimensional array dimension '{value}'.");
             return result;
         }
 

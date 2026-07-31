@@ -213,14 +213,36 @@ namespace ActionBuffer.Tests
     public sealed class ExternalDelegateModel
     {
         [Buffer] public Action<int> Callback;
+        public ExternalDelegateTarget Target;
 
         public void Configure(int initialValue)
         {
-            Callback = new ExternalDelegateTarget
+            Target = new ExternalDelegateTarget
             {
                 Value = initialValue
-            }.CreateCallback();
+            };
+            Callback = Target.CreateCallback();
         }
+    }
+
+    public sealed class DetachedDelegateTargetModel
+    {
+        [Buffer] public Action<int> Callback;
+
+        public void Configure()
+        {
+            Callback = new ExternalDelegateTarget().CreateCallback();
+        }
+    }
+
+    public sealed class SerializableEventModel
+    {
+        public int Value;
+        [field: Buffer] public event Action<int> Changed;
+
+        public void Configure() => Changed = Add;
+        public void Raise(int value) => Changed?.Invoke(value);
+        private void Add(int value) => Value += value;
     }
 
     public sealed class CallbackChild : IBufferObject
@@ -261,6 +283,12 @@ namespace ActionBuffer.Tests
         public CircularModel Self;
     }
 
+    public sealed class ReferenceNode
+    {
+        public string Name;
+        public ReferenceNode Next;
+    }
+
     public sealed class EmptyNode { }
 
     public sealed class NodeLimitModel
@@ -274,6 +302,11 @@ namespace ActionBuffer.Tests
     }
 
     public sealed class LateRegisteredValue
+    {
+        public int Value;
+    }
+
+    public sealed class SettingsScopedValue
     {
         public int Value;
     }
