@@ -3,7 +3,7 @@ namespace ActionEditor.Nodes.BT
     [System.Serializable, Name("×ÓÊ÷"), Attachable(typeof(BTTree)), Icon("sub")]
     public class BTSubTree : BTNode
     {
-        public string path;
+        [ReadOnly]public string path;
         public BTNode runtimeNode;
 
         public BTTree tree { get; internal set; }

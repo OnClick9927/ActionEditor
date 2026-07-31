@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
+using IMGUIControls = UnityEditor.IMGUI.Controls;
 
 namespace ActionEditor.Nodes.BT
 {
@@ -13,8 +14,7 @@ namespace ActionEditor.Nodes.BT
         void RefreshNodeTree();
     }
 
-    public class BTTreeView<T> : Nodes.NodeGraphView<T>, IGraphInspectorOverride,
-        IBTTreeHierarchy where T : BTTree
+    public class BTTreeView<T> : Nodes.NodeGraphView<T>, IBTTreeHierarchy where T : BTTree
     {
         protected BTTree runningTree { get; private set; }
 
@@ -23,12 +23,25 @@ namespace ActionEditor.Nodes.BT
             public readonly GraphNode GraphNode;
             public readonly NodeData Data;
             public readonly string SourcePath;
+            public readonly string[] RuntimeTreePath;
+            public readonly int TreeId;
+            public readonly NodeTreeEntry Parent;
+            public readonly List<NodeTreeEntry> Children = new List<NodeTreeEntry>();
+            public readonly int Depth;
+            public readonly int SubTreeDepth;
 
-            public NodeTreeEntry(GraphNode graphNode, NodeData data, string sourcePath)
+            public NodeTreeEntry(GraphNode graphNode, NodeData data, string sourcePath,
+                string[] runtimeTreePath, int treeId, NodeTreeEntry parent,
+                int depth, int subTreeDepth)
             {
                 GraphNode = graphNode;
                 Data = data;
                 SourcePath = sourcePath;
+                RuntimeTreePath = runtimeTreePath;
+                TreeId = treeId;
+                Parent = parent;
+                Depth = depth;
+                SubTreeDepth = subTreeDepth;
             }
         }
 
@@ -44,59 +57,240 @@ namespace ActionEditor.Nodes.BT
             }
         }
 
-        private sealed class TreeNodeRow : VisualElement
+        private sealed class NodeTreeViewItem : IMGUIControls.TreeViewItem
         {
-            public readonly Image Icon;
-            public readonly Label Label;
-            public readonly Image SourceIcon;
+            public readonly NodeTreeEntry Entry;
 
-            public TreeNodeRow()
+            public NodeTreeViewItem(NodeTreeEntry entry, string displayName)
+                : base(entry.TreeId, entry.Depth, displayName)
             {
-                style.flexDirection = FlexDirection.Row;
-                style.alignItems = Align.Center;
-                style.height = 20;
-
-                Icon = new Image();
-                Icon.style.width = 16;
-                Icon.style.height = 16;
-                Icon.style.marginRight = 4;
-                Icon.style.flexShrink = 0;
-                Add(Icon);
-
-                Label = new Label();
-                Label.style.flexGrow = 1;
-                Label.style.unityTextAlign = TextAnchor.MiddleLeft;
-                Add(Label);
-
-                SourceIcon = new Image();
-                SourceIcon.style.width = 14;
-                SourceIcon.style.height = 14;
-                SourceIcon.style.marginRight = 3;
-                SourceIcon.style.flexShrink = 0;
-                Add(SourceIcon);
+                Entry = entry;
+                icon = entry.Data.GetIcon();
             }
         }
 
-        private static bool _showNodeTree;
-        private static Texture _subTreeSourceIcon;
+        private sealed class NodeTreeIMGUI : IMGUIControls.TreeView
+        {
+            private const float SubTreeMarkerWidth = 24;
+            private static readonly Color RunningColor = new Color(0.2f, 1f, 0.35f);
+            private static readonly Color SubTreeMarkerColor =
+                new Color(0.2f, 0.82f, 0.78f);
+            private static readonly string[] SubTreeDepthLabels =
+                CreateSubTreeDepthLabels();
+            private static Texture2D _runningIcon;
+            private static GUIStyle _subTreeMarkerStyle;
+            private readonly BTTreeView<T> _owner;
+            private readonly Dictionary<int, int> _visibleRowIndices =
+                new Dictionary<int, int>();
+
+            public NodeTreeIMGUI(IMGUIControls.TreeViewState state, BTTreeView<T> owner)
+                : base(state)
+            {
+                _owner = owner;
+                rowHeight = 20;
+                showAlternatingRowBackgrounds = true;
+                showBorder = false;
+                extraSpaceBeforeIconAndLabel = 12;
+            }
+
+            protected override IMGUIControls.TreeViewItem BuildRoot()
+            {
+                var root = new IMGUIControls.TreeViewItem(0, -1, "Root");
+                for (int i = 0; i < _owner._allTreeItems.Count; i++)
+                {
+                    var entry = _owner._allTreeItems[i];
+                    if (entry.Parent == null) root.AddChild(BuildItem(entry));
+                }
+                SetupDepthsFromParentsAndChildren(root);
+                return root;
+            }
+
+            private static NodeTreeViewItem BuildItem(NodeTreeEntry entry)
+            {
+                string displayName = entry.GraphNode == null
+                    ? EditorEX.GetTypeName(entry.Data.GetType())
+                    : entry.GraphNode.NodeName;
+                var item = new NodeTreeViewItem(entry, displayName);
+                for (int i = 0; i < entry.Children.Count; i++)
+                    item.AddChild(BuildItem(entry.Children[i]));
+                return item;
+            }
+
+            protected override void RowGUI(RowGUIArgs args)
+            {
+                var item = (NodeTreeViewItem)args.item;
+                var entry = item.Entry;
+                bool running = _owner.IsTreeEntryRunning(entry);
+                bool parentRunning = running && entry.Parent != null &&
+                    _owner.IsTreeEntryRunning(entry.Parent);
+                bool childRunning = running && _owner.HasRunningChild(entry);
+                float dotX = args.rowRect.x + GetContentIndent(item) -
+                    extraSpaceBeforeIconAndLabel + 6;
+                float centerY = args.rowRect.center.y;
+
+                if (parentRunning)
+                {
+                    float parentX = dotX - depthIndentWidth;
+                    EditorGUI.DrawRect(new Rect(parentX - 1, args.rowRect.y, 2,
+                        centerY - args.rowRect.y), RunningColor);
+                    EditorGUI.DrawRect(new Rect(parentX, centerY - 1,
+                        dotX - parentX, 2), RunningColor);
+                }
+                if (childRunning)
+                {
+                    EditorGUI.DrawRect(new Rect(dotX - 1, centerY, 2,
+                        args.rowRect.yMax - centerY), RunningColor);
+                }
+
+                bool fromSubTree = entry.SubTreeDepth > 0;
+                var baseArgs = args;
+                if (fromSubTree) baseArgs.rowRect.xMax -= SubTreeMarkerWidth;
+                base.RowGUI(baseArgs);
+
+                if (running)
+                {
+                    if (_runningIcon == null)
+                        _runningIcon = EditorGUIUtility.TrIconContent("d_greenLight").image
+                            as Texture2D;
+                    var dotRect = new Rect(dotX - 4, centerY - 4, 8, 8);
+                    if (_runningIcon != null)
+                        GUI.DrawTexture(dotRect, _runningIcon, ScaleMode.ScaleToFit, true);
+                    else
+                        EditorGUI.DrawRect(new Rect(dotX - 3, centerY - 3, 6, 6),
+                            RunningColor);
+                }
+
+                if (!fromSubTree) return;
+                var markerRect = new Rect(args.rowRect.xMax - SubTreeMarkerWidth,
+                    args.rowRect.y, SubTreeMarkerWidth, args.rowRect.height);
+                GUI.Label(markerRect, GetSubTreeDepthLabel(entry.SubTreeDepth),
+                    GetSubTreeMarkerStyle());
+                GUI.Label(args.rowRect, new GUIContent(string.Empty, entry.SourcePath),
+                    GUIStyle.none);
+            }
+
+            private static string[] CreateSubTreeDepthLabels()
+            {
+                var labels = new string[51];
+                for (int depth = 1; depth <= 50; depth++)
+                {
+                    int codePoint = depth <= 20
+                        ? 0x2460 + depth - 1
+                        : depth <= 35
+                            ? 0x3251 + depth - 21
+                            : 0x32B1 + depth - 36;
+                    labels[depth] = char.ConvertFromUtf32(codePoint);
+                }
+                return labels;
+            }
+
+            private static string GetSubTreeDepthLabel(int depth)
+            {
+                return depth > 0 && depth < SubTreeDepthLabels.Length
+                    ? SubTreeDepthLabels[depth]
+                    : depth.ToString();
+            }
+
+            private static GUIStyle GetSubTreeMarkerStyle()
+            {
+                if (_subTreeMarkerStyle != null) return _subTreeMarkerStyle;
+                _subTreeMarkerStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 12,
+                    padding = new RectOffset()
+                };
+                _subTreeMarkerStyle.normal.textColor = SubTreeMarkerColor;
+                return _subTreeMarkerStyle;
+            }
+
+            protected override void AfterRowsGUI()
+            {
+                base.AfterRowsGUI();
+                if (Event.current.type != EventType.Repaint) return;
+
+                IList<IMGUIControls.TreeViewItem> rows = GetRows();
+                _visibleRowIndices.Clear();
+                for (int i = 0; i < rows.Count; i++)
+                    _visibleRowIndices[rows[i].id] = i;
+
+                for (int parentIndex = 0; parentIndex < rows.Count; parentIndex++)
+                {
+                    var parentItem = rows[parentIndex] as NodeTreeViewItem;
+                    if (parentItem == null || !_owner.IsTreeEntryRunning(parentItem.Entry))
+                        continue;
+
+                    for (int i = 0; i < parentItem.Entry.Children.Count; i++)
+                    {
+                        NodeTreeEntry child = parentItem.Entry.Children[i];
+                        int childIndex;
+                        if (!_owner.IsTreeEntryRunning(child) ||
+                            !_visibleRowIndices.TryGetValue(child.TreeId, out childIndex) ||
+                            childIndex <= parentIndex + 1)
+                            continue;
+
+                        Rect parentRect = GetRowRect(parentIndex);
+                        Rect childRect = GetRowRect(childIndex);
+                        float lineX = parentRect.x + GetContentIndent(parentItem) -
+                            extraSpaceBeforeIconAndLabel + 6;
+                        EditorGUI.DrawRect(new Rect(lineX - 1, parentRect.center.y, 2,
+                            childRect.center.y - parentRect.center.y), RunningColor);
+                    }
+                }
+            }
+
+            protected override void SelectionChanged(IList<int> selectedIds)
+            {
+                if (_owner._syncingTreeSelection || selectedIds.Count == 0) return;
+                var item = FindItem(selectedIds[0], rootItem) as NodeTreeViewItem;
+                if (item != null) _owner.SelectTreeNode(item.Entry);
+            }
+
+            protected override void DoubleClickedItem(int id)
+            {
+                var item = FindItem(id, rootItem) as NodeTreeViewItem;
+                if (item?.Entry.GraphNode == null) return;
+                _owner.SelectTreeNode(item.Entry);
+                _owner.FocusGraphNode(item.Entry.GraphNode);
+            }
+        }
+
+        private const string ShowNodeTreePrefKey =
+            "ActionEditor.Nodes.BT.BTTreeView.ShowNodeTree";
+        private const string NodeTreeWidthPrefKey =
+            "ActionEditor.Nodes.BT.BTTreeView.NodeTreeWidth";
+        private const float DefaultNodeTreeWidth = 240;
+        private const float MinNodeTreeWidth = 200;
+        private static bool _showNodeTree = EditorPrefs.GetBool(ShowNodeTreePrefKey, false);
         private readonly Dictionary<GraphNode, List<GraphNode>> _treeChildren =
             new Dictionary<GraphNode, List<GraphNode>>();
         private readonly Dictionary<GraphNode, int> _treeItemIds =
             new Dictionary<GraphNode, int>();
+        private readonly Dictionary<string, int> _treeIdsByKey =
+            new Dictionary<string, int>();
         private readonly HashSet<GraphNode> _reachableNodes = new HashSet<GraphNode>();
         private readonly Dictionary<string, LoadedSubTree> _loadedSubTrees =
             new Dictionary<string, LoadedSubTree>();
         private readonly HashSet<string> _subTreeAssetStack = new HashSet<string>();
-        private readonly List<TreeViewItemData<NodeTreeEntry>> _treeRoots =
-            new List<TreeViewItemData<NodeTreeEntry>>(1);
+        private readonly List<NodeTreeEntry> _allTreeItems = new List<NodeTreeEntry>();
         private VisualElement _treePanel;
-        private TreeView _nodeTree;
+        private IMGUIContainer _nodeTreeContainer;
+        private NodeTreeIMGUI _nodeTree;
+        private Label _emptyTreeLabel;
+        private VisualElement _treeResizeHandle;
+        private VisualElement _treeResizeIndicator;
         private NodeData _subTreeInspectorNode;
         private Vector2 _subTreeInspectorScroll;
+        private float _treeWidth;
+        private float _treeResizeStartX;
+        private float _treeResizeStartWidth;
+        private bool _treeResizeHovered;
+        private bool _treeResizeActive;
         private bool _treeDirty = true;
         private bool _treeRefreshScheduled;
         private bool _syncingTreeSelection;
-        private int _nextTreeItemId;
+        private bool _nodeTreeInitialized;
+        private int _nextTreeId = 1;
         private int _subTreePathHash;
 
         private static int _Runing_BlackBoard = -1;
@@ -242,6 +436,7 @@ namespace ActionEditor.Nodes.BT
             if (show == _showNodeTree) return;
 
             _showNodeTree = show;
+            EditorPrefs.SetBool(ShowNodeTreePrefKey, show);
             SetNodeTreeVisible(show);
         }
 
@@ -267,7 +462,12 @@ namespace ActionEditor.Nodes.BT
             if (_subTreeInspectorNode != null && selection.Count > 0)
             {
                 _subTreeInspectorNode = null;
-                GraphWindowBridge.Repaint();
+                RepaintEditorWindow();
+            }
+            if (_showNodeTree)
+            {
+                ExpandRunningTreeNodes();
+                RepaintNodeTree();
             }
             base.Update();
         }
@@ -316,6 +516,7 @@ namespace ActionEditor.Nodes.BT
                 if (nodes[i] is IBTNodeView node)
                     node.OnBTTreeChanged(tree);
             }
+            RepaintNodeTree();
         }
         protected virtual void OnBTTreeChanged(BTTree tree)
         {
@@ -328,11 +529,12 @@ namespace ActionEditor.Nodes.BT
 
             _syncingTreeSelection = true;
             if (_treeItemIds.TryGetValue(obj, out int id))
-                _nodeTree.SetSelectionById(id);
+                _nodeTree.SetSelection(new[] { id },
+                    IMGUIControls.TreeViewSelectionOptions.RevealAndFrame);
             else
-                _nodeTree.ClearSelection();
+                _nodeTree.SetSelection(Array.Empty<int>());
             _syncingTreeSelection = false;
-            GraphWindowBridge.Repaint();
+            RepaintEditorWindow();
         }
 
         private void OnProjectChanged()
@@ -342,6 +544,7 @@ namespace ActionEditor.Nodes.BT
 
         private void OnDetachedFromPanel(DetachFromPanelEvent evt)
         {
+            SaveTreeWidth();
             EditorApplication.projectChanged -= OnProjectChanged;
             BTTree.onInstanceChanged -= BTTree_onInstanceChanged;
         }
@@ -353,49 +556,235 @@ namespace ActionEditor.Nodes.BT
 
         private void CreateNodeTree()
         {
+            _treeWidth = EditorPrefs.GetFloat(NodeTreeWidthPrefKey, DefaultNodeTreeWidth);
+            if (float.IsNaN(_treeWidth) || float.IsInfinity(_treeWidth))
+                _treeWidth = DefaultNodeTreeWidth;
+            _treeWidth = Mathf.Max(MinNodeTreeWidth, _treeWidth);
+
             _treePanel = new VisualElement();
-            _treePanel.style.flexGrow = 1;
+            _treePanel.style.position = Position.Absolute;
+            _treePanel.style.left = 0;
+            _treePanel.style.top = 0;
+            _treePanel.style.bottom = 0;
+            _treePanel.style.width = _treeWidth;
+            _treePanel.style.minWidth = MinNodeTreeWidth;
             _treePanel.style.borderRightWidth = 1;
             _treePanel.style.borderRightColor = new Color(0f, 0f, 0f, 0.45f);
             _treePanel.style.backgroundColor = EditorGUIUtility.isProSkin
-                ? new Color(0.15f, 0.15f, 0.15f)
+                ? new Color(0.22f, 0.22f, 0.22f)
                 : new Color(0.76f, 0.76f, 0.76f);
 
-            _nodeTree = new TreeView(20, MakeTreeItem, BindTreeItem)
-            {
-                selectionType = SelectionType.Single,
-                showAlternatingRowBackgrounds = AlternatingRowBackground.ContentOnly,
-                showBorder = false
-            };
-            _nodeTree.style.flexGrow = 1;
-            _nodeTree.selectionChanged += OnTreeSelectionChanged;
-            _nodeTree.itemsChosen += OnTreeItemsChosen;
-            _treePanel.Add(_nodeTree);
+            _emptyTreeLabel = new Label("Not found RootNode");
+            _emptyTreeLabel.style.display = DisplayStyle.None;
+            _emptyTreeLabel.style.alignSelf = Align.Center;
+            _emptyTreeLabel.style.marginTop = 28;
+            _emptyTreeLabel.style.fontSize = 17;
+            _emptyTreeLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _emptyTreeLabel.style.color = EditorGUIUtility.isProSkin
+                ? new Color(1f, 0.52f, 0.42f)
+                : new Color(0.68f, 0.12f, 0.08f);
+            _treePanel.Add(_emptyTreeLabel);
+
+            _nodeTree = new NodeTreeIMGUI(new IMGUIControls.TreeViewState(), this);
+            _nodeTreeContainer = new IMGUIContainer(DrawNodeTreeGUI);
+            _nodeTreeContainer.style.flexGrow = 1;
+            _treePanel.Add(_nodeTreeContainer);
+
+            _treeResizeHandle = new VisualElement();
+            _treeResizeHandle.style.position = Position.Absolute;
+            _treeResizeHandle.style.left = _treeWidth - 2;
+            _treeResizeHandle.style.top = 0;
+            _treeResizeHandle.style.bottom = 0;
+            _treeResizeHandle.style.width = 5;
+            _treeResizeHandle.style.backgroundColor = Color.clear;
+            _treeResizeHandle.style.cursor = CreateResizeHorizontalCursor();
+            _treeResizeHandle.RegisterCallback<PointerEnterEvent>(OnTreeResizeEnter);
+            _treeResizeHandle.RegisterCallback<PointerLeaveEvent>(OnTreeResizeLeave);
+            _treeResizeHandle.RegisterCallback<PointerDownEvent>(OnTreeResizeDown);
+            _treeResizeHandle.RegisterCallback<PointerMoveEvent>(OnTreeResizeMove);
+            _treeResizeHandle.RegisterCallback<PointerUpEvent>(OnTreeResizeUp);
+            _treeResizeHandle.RegisterCallback<PointerCaptureOutEvent>(OnTreeResizeCaptureOut);
+
+            _treeResizeIndicator = new VisualElement();
+            _treeResizeIndicator.style.position = Position.Absolute;
+            _treeResizeIndicator.style.left = 2;
+            _treeResizeIndicator.style.top = 0;
+            _treeResizeIndicator.style.bottom = 0;
+            _treeResizeIndicator.style.width = 1;
+            _treeResizeIndicator.pickingMode = PickingMode.Ignore;
+            _treeResizeHandle.Add(_treeResizeIndicator);
+            SetTreeResizeFeedback(false);
+
+            hierarchy.Add(_treePanel);
+            hierarchy.Add(_treeResizeHandle);
         }
 
-        private static VisualElement MakeTreeItem() => new TreeNodeRow();
-
-        private void BindTreeItem(VisualElement element, int index)
+        private void DrawNodeTreeGUI()
         {
-            var row = (TreeNodeRow)element;
-            var entry = _nodeTree.GetItemDataForIndex<NodeTreeEntry>(index);
-            row.Label.text = entry.GraphNode == null
-                ? EditorEX.GetTypeName(entry.Data.GetType())
-                : entry.GraphNode.NodeName;
-            row.Icon.image = entry.Data.GetIcon();
-            bool fromSubTree = !string.IsNullOrEmpty(entry.SourcePath);
-            if (fromSubTree && _subTreeSourceIcon == null)
-                _subTreeSourceIcon = EditorGUIUtility.TrIconContent("d_TextAsset Icon").image;
-            row.SourceIcon.image = fromSubTree ? _subTreeSourceIcon : null;
-            row.SourceIcon.style.display = fromSubTree ? DisplayStyle.Flex : DisplayStyle.None;
-            row.tooltip = fromSubTree ? entry.SourcePath : entry.Data.guid;
+            var rect = new Rect(0, 0, _nodeTreeContainer.contentRect.width,
+                _nodeTreeContainer.contentRect.height);
+            _nodeTree.OnGUI(rect);
+        }
+
+        private bool HasRunningChild(NodeTreeEntry entry)
+        {
+            for (int i = 0; i < entry.Children.Count; i++)
+            {
+                if (IsTreeEntryRunning(entry.Children[i])) return true;
+            }
+            return false;
+        }
+
+        private void ExpandRunningTreeNodes()
+        {
+            if (_nodeTree == null || runningTree == null) return;
+
+            for (int i = 0; i < _allTreeItems.Count; i++)
+            {
+                NodeTreeEntry entry = _allTreeItems[i];
+                if (!IsTreeEntryRunning(entry)) continue;
+
+                if (entry.Children.Count > 0 && !_nodeTree.IsExpanded(entry.TreeId))
+                    _nodeTree.SetExpanded(entry.TreeId, true);
+
+                for (NodeTreeEntry parent = entry.Parent;
+                    parent != null;
+                    parent = parent.Parent)
+                {
+                    if (!_nodeTree.IsExpanded(parent.TreeId))
+                        _nodeTree.SetExpanded(parent.TreeId, true);
+                }
+            }
+        }
+
+        private void RepaintNodeTree()
+        {
+            _nodeTreeContainer?.MarkDirtyRepaint();
+        }
+
+        private bool IsTreeEntryRunning(NodeTreeEntry entry)
+        {
+            if (entry.GraphNode is IBTNodeView nodeView)
+                return nodeView.IsTreeNodeRunning;
+            if (runningTree == null || !(entry.Data is BTNode)) return false;
+
+            var tree = ResolveRuntimeTree(entry.RuntimeTreePath);
+            var node = tree?.FindNode<BTNode>(entry.Data.guid);
+            if (node is BTSubTree subTree && subTree.runtimeNode != null)
+                node = subTree.runtimeNode;
+            return node != null && node.state == BTNode.State.Running;
+        }
+
+        private BTTree ResolveRuntimeTree(string[] runtimeTreePath)
+        {
+            var tree = runningTree;
+            if (runtimeTreePath == null) return tree;
+            for (int i = 0; tree != null && i < runtimeTreePath.Length; i++)
+                tree = tree.FindNode<BTSubTree>(runtimeTreePath[i])?.tree;
+            return tree;
         }
 
         private void SetNodeTreeVisible(bool visible)
         {
             if (_treePanel == null) return;
             if (visible && _treeDirty) RefreshNodeTree();
-            GraphWindowBridge.SetLeftSidebar(visible ? _treePanel : null);
+            _treePanel.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _treeResizeHandle.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!visible) return;
+
+            UpdateTreeResizeHandle(_treeWidth);
+            _treePanel.BringToFront();
+            _treeResizeHandle.BringToFront();
+        }
+
+        private void OnTreeResizeEnter(PointerEnterEvent evt)
+        {
+            _treeResizeHovered = true;
+            SetTreeResizeFeedback(true);
+        }
+
+        private void OnTreeResizeLeave(PointerLeaveEvent evt)
+        {
+            _treeResizeHovered = false;
+            if (!_treeResizeActive) SetTreeResizeFeedback(false);
+        }
+
+        private void OnTreeResizeDown(PointerDownEvent evt)
+        {
+            if (evt.button != 0) return;
+            _treeResizeActive = true;
+            _treeResizeStartX = evt.position.x;
+            _treeResizeStartWidth = _treePanel.resolvedStyle.width;
+            if (float.IsNaN(_treeResizeStartWidth))
+                _treeResizeStartWidth = _treeWidth;
+            SetTreeResizeFeedback(true);
+            _treeResizeHandle.CapturePointer(evt.pointerId);
+            evt.StopPropagation();
+        }
+
+        private void OnTreeResizeMove(PointerMoveEvent evt)
+        {
+            if (!_treeResizeActive ||
+                !_treeResizeHandle.HasPointerCapture(evt.pointerId)) return;
+
+            float width = _treeResizeStartWidth + evt.position.x - _treeResizeStartX;
+            float maxWidth = resolvedStyle.width - MinNodeTreeWidth;
+            if (!float.IsNaN(maxWidth) && maxWidth >= MinNodeTreeWidth)
+                width = Mathf.Min(width, maxWidth);
+            _treeWidth = Mathf.Max(MinNodeTreeWidth, width);
+            _treePanel.style.width = _treeWidth;
+            UpdateTreeResizeHandle(_treeWidth);
+            evt.StopPropagation();
+        }
+
+        private void OnTreeResizeUp(PointerUpEvent evt)
+        {
+            if (evt.button != 0) return;
+            _treeResizeActive = false;
+            if (_treeResizeHandle.HasPointerCapture(evt.pointerId))
+                _treeResizeHandle.ReleasePointer(evt.pointerId);
+            SaveTreeWidth();
+            SetTreeResizeFeedback(_treeResizeHovered);
+            evt.StopPropagation();
+        }
+
+        private void OnTreeResizeCaptureOut(PointerCaptureOutEvent evt)
+        {
+            _treeResizeActive = false;
+            SaveTreeWidth();
+            SetTreeResizeFeedback(_treeResizeHovered);
+        }
+
+        private void SaveTreeWidth()
+        {
+            if (_treePanel == null || float.IsNaN(_treeWidth) ||
+                float.IsInfinity(_treeWidth)) return;
+            EditorPrefs.SetFloat(NodeTreeWidthPrefKey, _treeWidth);
+        }
+
+        private void UpdateTreeResizeHandle(float treeWidth)
+        {
+            _treeResizeHandle.style.left = Mathf.Max(0, treeWidth - 2);
+        }
+
+        private void SetTreeResizeFeedback(bool highlighted)
+        {
+            if (_treeResizeIndicator != null)
+                _treeResizeIndicator.style.backgroundColor = highlighted
+                    ? Color.white
+                    : Color.clear;
+        }
+
+        private static StyleCursor CreateResizeHorizontalCursor()
+        {
+            var property = typeof(UnityEngine.UIElements.Cursor).GetProperty(
+                "defaultCursorId", System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic);
+            if (property == null) return new StyleCursor(StyleKeyword.Null);
+
+            object cursor = new UnityEngine.UIElements.Cursor();
+            property.SetValue(cursor, (int)MouseCursor.ResizeHorizontal);
+            return new StyleCursor((UnityEngine.UIElements.Cursor)cursor);
         }
 
         private GraphViewChange OnGraphViewChanged(GraphViewChange change)
@@ -420,7 +809,7 @@ namespace ActionEditor.Nodes.BT
         private void RefreshNodeTree()
         {
             _treeDirty = false;
-            _treeRoots.Clear();
+            _allTreeItems.Clear();
             _treeChildren.Clear();
             _treeItemIds.Clear();
             _reachableNodes.Clear();
@@ -428,7 +817,6 @@ namespace ActionEditor.Nodes.BT
             _subTreeAssetStack.Clear();
             if (!string.IsNullOrEmpty(App.assetPath))
                 _subTreeAssetStack.Add(App.assetPath);
-            _nextTreeItemId = 1;
 
             GraphNode root = null;
             var graphNodes = nodes;
@@ -463,65 +851,81 @@ namespace ActionEditor.Nodes.BT
             if (root != null)
             {
                 _reachableNodes.Add(root);
-                _treeRoots.Add(CreateGraphTreeItem(root));
+                AddGraphTreeItem(root, null, 0);
             }
 
+            bool hasRoot = root != null;
+            _emptyTreeLabel.style.display = hasRoot ? DisplayStyle.None : DisplayStyle.Flex;
+            _nodeTreeContainer.style.display = hasRoot ? DisplayStyle.Flex : DisplayStyle.None;
             _syncingTreeSelection = true;
-            _nodeTree.SetRootItems(_treeRoots);
-            _nodeTree.ExpandAll();
+            _nodeTree.Reload();
+            if (hasRoot && !_nodeTreeInitialized)
+            {
+                _nodeTree.ExpandAll();
+                _nodeTreeInitialized = true;
+            }
+            RestoreTreeSelection();
+            _syncingTreeSelection = false;
+            RepaintNodeTree();
+            _subTreePathHash = CalculateSubTreePathHash();
+        }
 
+        private void RestoreTreeSelection()
+        {
             GraphNode selected = null;
             for (int i = 0; i < selection.Count; i++)
             {
-                if (selection[i] is GraphNode node)
-                {
-                    selected = node;
-                    break;
-                }
+                if (!(selection[i] is GraphNode node)) continue;
+                selected = node;
+                break;
             }
+
             if (selected != null && _treeItemIds.TryGetValue(selected, out int id))
-                _nodeTree.SetSelectionById(id);
-            _syncingTreeSelection = false;
-            _subTreePathHash = CalculateSubTreePathHash();
+                _nodeTree.SetSelection(new[] { id },
+                    IMGUIControls.TreeViewSelectionOptions.RevealAndFrame);
+            else
+                _nodeTree.SetSelection(Array.Empty<int>());
         }
 
         private int CalculateSubTreePathHash()
         {
             int hash = 0;
-            foreach (var pair in _treeItemIds)
+            for (int i = 0; i < _allTreeItems.Count; i++)
             {
-                if (!(pair.Key.Data is BTSubTree subTree)) continue;
-                int itemHash = pair.Key.GUID.GetHashCode();
+                var entry = _allTreeItems[i];
+                if (entry.GraphNode == null || !(entry.Data is BTSubTree subTree)) continue;
+                int itemHash = entry.GraphNode.GUID.GetHashCode();
                 itemHash = itemHash * 397 ^ (subTree.path == null ? 0 : subTree.path.GetHashCode());
                 hash ^= itemHash;
             }
             return hash;
         }
 
-        private TreeViewItemData<NodeTreeEntry> CreateGraphTreeItem(GraphNode node)
+        private void AddGraphTreeItem(GraphNode node, NodeTreeEntry parent, int depth)
         {
-            int id = _nextTreeItemId++;
-            _treeItemIds.Add(node, id);
-            List<TreeViewItemData<NodeTreeEntry>> items = null;
+            string key = $"graph:{node.GUID}";
+            int treeId = GetTreeItemId(key);
+            var entry = new NodeTreeEntry(node, node.Data, null, null,
+                treeId, parent, depth, 0);
+            parent?.Children.Add(entry);
+            _allTreeItems.Add(entry);
+            _treeItemIds[node] = treeId;
             if (_treeChildren.TryGetValue(node, out var children))
             {
                 for (int i = 0; i < children.Count; i++)
                 {
                     var child = children[i];
                     if (!_reachableNodes.Add(child)) continue;
-                    if (items == null) items = new List<TreeViewItemData<NodeTreeEntry>>();
-                    items.Add(CreateGraphTreeItem(child));
+                    AddGraphTreeItem(child, entry, depth + 1);
                 }
             }
             if (node.Data is BTSubTree subTree)
-                AddSubTreeRootChildren(subTree.path, ref items);
-
-            var entry = new NodeTreeEntry(node, node.Data, null);
-            return new TreeViewItemData<NodeTreeEntry>(id, entry, items);
+                AddSubTreeRootChildren(subTree.path, depth + 1, 1, entry,
+                    new[] { node.Data.guid });
         }
 
-        private void AddSubTreeRootChildren(string path,
-            ref List<TreeViewItemData<NodeTreeEntry>> items)
+        private void AddSubTreeRootChildren(string path, int depth, int subTreeDepth,
+            NodeTreeEntry parent, string[] runtimeTreePath)
         {
             if (string.IsNullOrEmpty(path) || !_subTreeAssetStack.Add(path)) return;
             try
@@ -535,8 +939,8 @@ namespace ActionEditor.Nodes.BT
                 {
                     var child = children[i];
                     if (!reachable.Add(child)) continue;
-                    if (items == null) items = new List<TreeViewItemData<NodeTreeEntry>>();
-                    items.Add(CreateSubTreeItem(child, path, loaded, reachable));
+                    AddSubTreeItem(child, path, loaded, reachable, parent, depth,
+                        subTreeDepth, runtimeTreePath);
                 }
             }
             finally
@@ -545,26 +949,48 @@ namespace ActionEditor.Nodes.BT
             }
         }
 
-        private TreeViewItemData<NodeTreeEntry> CreateSubTreeItem(NodeData node, string path,
-            LoadedSubTree loaded, HashSet<NodeData> reachable)
+        private void AddSubTreeItem(NodeData node, string path, LoadedSubTree loaded,
+            HashSet<NodeData> reachable, NodeTreeEntry parent, int depth, int subTreeDepth,
+            string[] runtimeTreePath)
         {
-            List<TreeViewItemData<NodeTreeEntry>> items = null;
+            string route = runtimeTreePath == null
+                ? string.Empty
+                : string.Join("/", runtimeTreePath);
+            string key = $"sub:{route}:{node.guid}";
+            var entry = new NodeTreeEntry(null, node, path, runtimeTreePath,
+                GetTreeItemId(key), parent, depth, subTreeDepth);
+            parent?.Children.Add(entry);
+            _allTreeItems.Add(entry);
             if (loaded.Children.TryGetValue(node, out var children))
             {
                 for (int i = 0; i < children.Count; i++)
                 {
                     var child = children[i];
                     if (!reachable.Add(child)) continue;
-                    if (items == null) items = new List<TreeViewItemData<NodeTreeEntry>>();
-                    items.Add(CreateSubTreeItem(child, path, loaded, reachable));
+                    AddSubTreeItem(child, path, loaded, reachable, entry, depth + 1,
+                        subTreeDepth, runtimeTreePath);
                 }
             }
             if (node is BTSubTree subTree)
-                AddSubTreeRootChildren(subTree.path, ref items);
+                AddSubTreeRootChildren(subTree.path, depth + 1, subTreeDepth + 1, entry,
+                    AppendRuntimeTreePath(runtimeTreePath, node.guid));
+        }
 
-            int id = _nextTreeItemId++;
-            var entry = new NodeTreeEntry(null, node, path);
-            return new TreeViewItemData<NodeTreeEntry>(id, entry, items);
+        private static string[] AppendRuntimeTreePath(string[] path, string guid)
+        {
+            int count = path == null ? 0 : path.Length;
+            var result = new string[count + 1];
+            if (count > 0) Array.Copy(path, result, count);
+            result[count] = guid;
+            return result;
+        }
+
+        private int GetTreeItemId(string key)
+        {
+            if (_treeIdsByKey.TryGetValue(key, out int id)) return id;
+            id = _nextTreeId++;
+            _treeIdsByKey.Add(key, id);
+            return id;
         }
 
         private LoadedSubTree LoadSubTree(string path)
@@ -621,30 +1047,6 @@ namespace ActionEditor.Nodes.BT
             return result != 0 ? result : string.CompareOrdinal(a.GUID, b.GUID);
         }
 
-        private void OnTreeSelectionChanged(IEnumerable<object> items)
-        {
-            if (_syncingTreeSelection) return;
-            foreach (var item in items)
-            {
-                if (item is NodeTreeEntry entry)
-                {
-                    SelectTreeNode(entry);
-                    return;
-                }
-            }
-        }
-
-        private void OnTreeItemsChosen(IEnumerable<object> items)
-        {
-            foreach (var item in items)
-            {
-                if (!(item is NodeTreeEntry entry)) continue;
-                SelectTreeNode(entry);
-                if (entry.GraphNode != null) FocusGraphNode(entry.GraphNode);
-                return;
-            }
-        }
-
         private void SelectTreeNode(NodeTreeEntry entry)
         {
             _syncingTreeSelection = true;
@@ -652,7 +1054,7 @@ namespace ActionEditor.Nodes.BT
             _subTreeInspectorNode = entry.GraphNode == null ? entry.Data : null;
             if (entry.GraphNode != null) AddToSelection(entry.GraphNode);
             _syncingTreeSelection = false;
-            GraphWindowBridge.Repaint();
+            RepaintEditorWindow();
         }
 
         private void FocusGraphNode(GraphNode node)
@@ -664,7 +1066,7 @@ namespace ActionEditor.Nodes.BT
             UpdateViewTransform(position, scale);
         }
 
-        public bool DrawInspectorOverride()
+        protected override bool OnDrawInspector()
         {
             if (_subTreeInspectorNode == null) return false;
 
