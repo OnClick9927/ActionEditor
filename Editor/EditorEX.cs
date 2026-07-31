@@ -227,21 +227,74 @@ namespace ActionEditor
 
 
         [CustomPropertyDrawer(typeof(ReadOnlyAttribute))]
-        public class ReadOnlyPropertyDrawer : PropertyDrawer
-        {
-            public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
-            {
-                using (new EditorGUI.DisabledScope(true))
-                    EditorGUI.PropertyField(position, property, label);
-            }
-        }
         [CustomPropertyDrawer(typeof(NameAttribute))]
-        public class NamePropertyDrawer : PropertyDrawer
+        public class FieldAttributePropertyDrawer : PropertyDrawer
         {
+            private bool _initialized;
+            private bool _isReadOnly;
+            private bool _isCollectionField;
+            private GUIContent _nameLabel;
+
+            public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+            {
+                if (IsCollectionElement(property))
+                    return EditorGUI.GetPropertyHeight(property, label, true);
+                return EditorGUI.GetPropertyHeight(property, GetLabel(label), true);
+            }
+
             public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
             {
-                var value = this.attribute as NameAttribute;
-                EditorGUI.PropertyField(position, property, new GUIContent(value.name));
+                if (IsCollectionElement(property))
+                {
+                    EditorGUI.PropertyField(position, property, label, true);
+                    return;
+                }
+
+                using (new EditorGUI.DisabledScope(IsReadOnly()))
+                    EditorGUI.PropertyField(position, property, GetLabel(label), true);
+            }
+
+            private bool IsCollectionElement(SerializedProperty property)
+            {
+                Initialize();
+                return _isCollectionField && !property.isArray;
+            }
+
+            private bool IsReadOnly()
+            {
+                Initialize();
+                return _isReadOnly;
+            }
+
+            private GUIContent GetLabel(GUIContent label)
+            {
+                Initialize();
+                if (_nameLabel == null) return label;
+
+                _nameLabel.image = label == null ? null : label.image;
+                _nameLabel.tooltip = label == null ? null : label.tooltip;
+                return _nameLabel;
+            }
+
+            private void Initialize()
+            {
+                if (_initialized) return;
+
+                var nameAttribute = attribute as NameAttribute;
+                _isReadOnly = attribute is ReadOnlyAttribute;
+                if (fieldInfo != null)
+                {
+                    _isCollectionField = typeof(System.Collections.IList)
+                        .IsAssignableFrom(fieldInfo.FieldType);
+                    if (nameAttribute == null)
+                        nameAttribute = fieldInfo.GetCustomAttribute<NameAttribute>(true);
+                    if (!_isReadOnly)
+                        _isReadOnly = fieldInfo.IsDefined(typeof(ReadOnlyAttribute), true);
+                }
+
+                if (nameAttribute != null)
+                    _nameLabel = new GUIContent(nameAttribute.name);
+                _initialized = true;
             }
         }
 
@@ -265,6 +318,21 @@ namespace ActionEditor
         [CustomEditor(typeof(DrawerObject))]
         class DrawerObjectEditor : Editor
         {
+            private sealed class FieldDisplay
+            {
+                public readonly bool IsReadOnly;
+                public readonly GUIContent Name;
+
+                public FieldDisplay(bool isReadOnly, NameAttribute name)
+                {
+                    IsReadOnly = isReadOnly;
+                    if (name != null) Name = new GUIContent(name.name);
+                }
+            }
+
+            private static readonly Dictionary<Type, Dictionary<string, FieldDisplay>>
+                FieldDisplays = new Dictionary<Type, Dictionary<string, FieldDisplay>>();
+
             public static List<SerializedProperty> GetDirectChildProperties(SerializedProperty parentProp)
             {
                 List<SerializedProperty> childProps = new List<SerializedProperty>();
@@ -294,17 +362,62 @@ namespace ActionEditor
                 this.serializedObject.Update();
                 var p = this.serializedObject.FindProperty(nameof(DrawerObject.obj));
                 var children = GetDirectChildProperties(p);
+                var displays = GetFieldDisplays(((DrawerObject)target).obj?.GetType());
                 //scroll = GUILayout.BeginScrollView(scroll);
                 GUILayout.BeginVertical();
                 foreach (var item in children)
                 {
-                    EditorGUILayout.PropertyField(item);
+                    if (!displays.TryGetValue(item.name, out var display))
+                    {
+                        EditorGUILayout.PropertyField(item, true);
+                        continue;
+                    }
+
+                    using (new EditorGUI.DisabledScope(display.IsReadOnly))
+                    {
+                        if (display.Name == null)
+                            EditorGUILayout.PropertyField(item, true);
+                        else
+                        {
+                            display.Name.tooltip = item.tooltip;
+                            EditorGUILayout.PropertyField(item, display.Name, true);
+                        }
+                    }
                     //GUILayout.Space(2);
                 }
                 GUILayout.EndVertical();
                 //GUILayout.EndScrollView();
                 this.serializedObject.ApplyModifiedProperties();
             }
+
+            private static Dictionary<string, FieldDisplay> GetFieldDisplays(Type type)
+            {
+                if (type == null) return EmptyFieldDisplays;
+                if (FieldDisplays.TryGetValue(type, out var displays)) return displays;
+
+                displays = new Dictionary<string, FieldDisplay>();
+                for (var current = type; current != null; current = current.BaseType)
+                {
+                    var fields = current.GetFields(BindingFlags.Instance | BindingFlags.Public |
+                        BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                    for (int i = 0; i < fields.Length; i++)
+                    {
+                        var field = fields[i];
+                        if (displays.ContainsKey(field.Name)) continue;
+
+                        var name = field.GetCustomAttribute<NameAttribute>(true);
+                        bool isReadOnly = field.IsDefined(typeof(ReadOnlyAttribute), true);
+                        if (name != null || isReadOnly)
+                            displays.Add(field.Name, new FieldDisplay(isReadOnly, name));
+                    }
+                }
+
+                FieldDisplays.Add(type, displays);
+                return displays;
+            }
+
+            private static readonly Dictionary<string, FieldDisplay> EmptyFieldDisplays =
+                new Dictionary<string, FieldDisplay>();
         }
     }
 }
