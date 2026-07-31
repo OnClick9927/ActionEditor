@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -139,6 +140,10 @@ namespace ActionBuffer
                 throw new NotSupportedException(
                     $"Array type '{type}' has rank {rank}; only arrays up to rank five are supported.");
             }
+            if (typeof(ArrayList).IsAssignableFrom(type))
+                return CreateInstance(typeof(ArrayListConverter<>).MakeGenericType(type));
+            if (typeof(Hashtable).IsAssignableFrom(type))
+                return CreateInstance(typeof(HashtableConverter<>).MakeGenericType(type));
             if (type.IsGenericType)
             {
                 var definition = type.GetGenericTypeDefinition();
@@ -146,9 +151,8 @@ namespace ActionBuffer
                     return CreateInstance(
                         converterType.MakeGenericType(type.GetGenericArguments()));
             }
-            if (FindSupportedGenericAncestor(type) != null)
-                throw new NotSupportedException(
-                    $"Collection type '{type}' must be declared as a directly supported collection or interface.");
+            var collectionConverter = CreateConcreteCollectionConverter(type);
+            if (collectionConverter != null) return collectionConverter;
             if (typeof(Delegate).IsAssignableFrom(type))
                 return CreateInstance(typeof(DelegateConverter<>).MakeGenericType(type));
             if (type != typeof(ValueTuple) && type.IsValueType &&
@@ -161,24 +165,50 @@ namespace ActionBuffer
         private static BuffConverter CreateInstance(Type converterType) =>
             Activator.CreateInstance(converterType) as BuffConverter;
 
-        private static Type FindSupportedGenericAncestor(Type type)
+        private static BuffConverter CreateConcreteCollectionConverter(Type type)
         {
-            var interfaces = type.GetInterfaces();
-            for (int i = 0; i < interfaces.Length; i++)
+            if (type.IsAbstract || type.IsInterface) return null;
+
+            var ancestor = FindGenericAncestor(type, typeof(IDictionary<,>));
+            if (ancestor != null)
             {
-                var current = interfaces[i];
-                if (current.IsGenericType &&
-                    GenericConverterTypes.ContainsKey(current.GetGenericTypeDefinition()))
-                    return current.GetGenericTypeDefinition();
+                var arguments = ancestor.GetGenericArguments();
+                return CreateInstance(typeof(ConcreteDictionaryConverter<,,>).MakeGenericType(
+                    type, arguments[0], arguments[1]));
             }
-            for (var current = type.BaseType;
-                 current != null && current != typeof(object);
+            ancestor = FindGenericAncestor(type, typeof(ISet<>));
+            if (ancestor != null)
+                return CreateInstance(typeof(ConcreteSetConverter<,>).MakeGenericType(
+                    type, ancestor.GetGenericArguments()[0]));
+            ancestor = FindGenericAncestor(type, typeof(Stack<>));
+            if (ancestor != null)
+                return CreateInstance(typeof(ConcreteStackConverter<,>).MakeGenericType(
+                    type, ancestor.GetGenericArguments()[0]));
+            ancestor = FindGenericAncestor(type, typeof(Queue<>));
+            if (ancestor != null)
+                return CreateInstance(typeof(ConcreteSequenceConverter<,>).MakeGenericType(
+                    type, ancestor.GetGenericArguments()[0]));
+            ancestor = FindGenericAncestor(type, typeof(ICollection<>));
+            return ancestor == null
+                ? null
+                : CreateInstance(typeof(ConcreteSequenceConverter<,>).MakeGenericType(
+                    type, ancestor.GetGenericArguments()[0]));
+        }
+
+        private static Type FindGenericAncestor(Type type, Type definition)
+        {
+            for (var current = type; current != null && current != typeof(object);
                  current = current.BaseType)
             {
                 if (current.IsGenericType &&
-                    GenericConverterTypes.ContainsKey(current.GetGenericTypeDefinition()))
-                    return current.GetGenericTypeDefinition();
+                    current.GetGenericTypeDefinition() == definition)
+                    return current;
             }
+            var interfaces = type.GetInterfaces();
+            for (int i = 0; i < interfaces.Length; i++)
+                if (interfaces[i].IsGenericType &&
+                    interfaces[i].GetGenericTypeDefinition() == definition)
+                    return interfaces[i];
             return null;
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -51,6 +52,30 @@ namespace ActionBuffer
     internal interface ITypedEnumReader
     {
         T ReadEnumValue<T>() where T : struct, Enum;
+    }
+
+    internal interface IPolymorphicReader
+    {
+        bool TryReadPolymorphic(Type declaredType, out object value);
+    }
+
+    internal enum CollectionReadMode : byte
+    {
+        Sequence,
+        Set,
+        Stack,
+        Dictionary
+    }
+
+    internal interface ICollectionReader
+    {
+        TCollection ReadCollection<TCollection, T>(BuffConverter<T> converter,
+            CollectionReadMode mode) where TCollection : class, IEnumerable<T>;
+        TCollection ReadArrayList<TCollection>(BuffConverter<object> converter)
+            where TCollection : ArrayList;
+        TCollection ReadHashtable<TCollection>(
+            BuffConverter<KeyValuePair<object, object>> converter)
+            where TCollection : Hashtable;
     }
 
     public interface IReferenceResolver

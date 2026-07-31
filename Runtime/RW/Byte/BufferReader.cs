@@ -1,11 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 namespace ActionBuffer
 {
     public class BufferReader : IBufferReader, IObjectContextReader, IBuffSerializerContext,
-        ITypedEnumReader, IReferenceResolver
+        ITypedEnumReader, IReferenceResolver, IPolymorphicReader, ICollectionReader
     {
         private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
         private static readonly BuffConverter<string> MetadataConverter = new StringConverter();
@@ -261,6 +262,108 @@ namespace ActionBuffer
             }
         }
 
+        TCollection ICollectionReader.ReadCollection<TCollection, T>(
+            BuffConverter<T> converter, CollectionReadMode mode)
+        {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            EnterNode();
+            try
+            {
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (TCollection)GetExistingReference(
+                        header.ReferenceId, typeof(TCollection));
+                var result = CollectionFactory<TCollection>.Create(header.Count);
+                DefineCollectionReference(header.ReferenceId, result, typeof(TCollection));
+                if (mode != CollectionReadMode.Stack)
+                {
+                    for (int i = 0; i < header.Count; i++)
+                        CollectionPopulator<TCollection, T>.Add(
+                            result, ReadPrecounted(converter), mode);
+                    return result;
+                }
+
+                var values = ClassPool.GetList<T>(header.Count);
+                try
+                {
+                    for (int i = 0; i < header.Count; i++)
+                        values.Add(ReadPrecounted(converter));
+                    for (int i = values.Count - 1; i >= 0; i--)
+                        CollectionPopulator<TCollection, T>.Add(
+                            result, values[i], mode);
+                }
+                finally
+                {
+                    ClassPool.BackList(values);
+                }
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        TCollection ICollectionReader.ReadArrayList<TCollection>(
+            BuffConverter<object> converter)
+        {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            EnterNode();
+            try
+            {
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (TCollection)GetExistingReference(
+                        header.ReferenceId, typeof(TCollection));
+                var result = CollectionFactory<TCollection>.Create(header.Count);
+                DefineCollectionReference(header.ReferenceId, result, typeof(TCollection));
+                for (int i = 0; i < header.Count; i++)
+                    result.Add(ReadPrecounted(converter));
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
+        TCollection ICollectionReader.ReadHashtable<TCollection>(
+            BuffConverter<KeyValuePair<object, object>> converter)
+        {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            EnterNode();
+            try
+            {
+                var header = ReadCollectionHeader();
+                if (header.IsNull) return null;
+                if (header.IsReference)
+                    return (TCollection)GetExistingReference(
+                        header.ReferenceId, typeof(TCollection));
+                var result = CollectionFactory<TCollection>.Create(header.Count);
+                DefineCollectionReference(header.ReferenceId, result, typeof(TCollection));
+                for (int i = 0; i < header.Count; i++)
+                {
+                    var item = ReadPrecounted(converter);
+                    try
+                    {
+                        result.Add(item.Key, item.Value);
+                    }
+                    catch (ArgumentException exception)
+                    {
+                        throw new FormatException("Invalid or duplicate hashtable key.",
+                            exception);
+                    }
+                }
+                return result;
+            }
+            finally
+            {
+                ExitNode();
+            }
+        }
+
         public T[] ReadArray<T>(BuffConverter<T> converter)
         {
             if (converter == null) throw new ArgumentNullException(nameof(converter));
@@ -505,6 +608,9 @@ namespace ActionBuffer
 
         private CollectionHeader ReadCollectionHeader(bool readCount = true)
         {
+            if (!_suppressNodeCounting && metas == null &&
+                HasCollectionReferenceMetadata())
+                EnsureMetas();
             int referenceId = -1;
             if (_collectionReferences)
             {
@@ -534,6 +640,23 @@ namespace ActionBuffer
                     $"Collection count cannot exceed {_maxCollectionCount}.");
             if (readCount) CountNodes(count);
             return new CollectionHeader(count, referenceId, false, false);
+        }
+
+        private bool HasCollectionReferenceMetadata()
+        {
+            const string marker = BufferScan.ReferenceMetadata;
+            if (_buffer == null || _index < 0 || _limit - _index < marker.Length + 6)
+                return false;
+            int metaCount = _buffer[_index] | _buffer[_index + 1] << 8;
+            if (metaCount == 0) return false;
+            int length = _buffer[_index + 2] |
+                _buffer[_index + 3] << 8 |
+                _buffer[_index + 4] << 16 |
+                _buffer[_index + 5] << 24;
+            if (length != marker.Length) return false;
+            for (int i = 0; i < marker.Length; i++)
+                if (_buffer[_index + 6 + i] != marker[i]) return false;
+            return true;
         }
 
         public T? ReadNullable<T>(BuffConverter<T> converter) where T : struct
@@ -694,6 +817,36 @@ namespace ActionBuffer
                     _afterReadCallbacks.Clear();
                 ExitNode();
             }
+        }
+
+        bool IPolymorphicReader.TryReadPolymorphic(Type declaredType, out object value)
+        {
+            if (declaredType == null) throw new ArgumentNullException(nameof(declaredType));
+            EnsureMetas();
+            int payloadStart = _index;
+            int typeIndex = ReadInt32();
+            if (typeIndex < 0)
+            {
+                _index = payloadStart;
+                value = null;
+                return false;
+            }
+            if (typeIndex >= metas.Count)
+                throw new FormatException($"Invalid binary metadata index '{typeIndex}'.");
+
+            string typeName = metas[typeIndex];
+            string assemblyName = ReadMeta();
+            var actualType = BuffSerializer.ResolveSerializedType(
+                declaredType, typeName, assemblyName, _settings);
+            var converter = ConverterResolver.Get(actualType, _settings);
+            if (converter.UsesObjectLayout)
+            {
+                _index = payloadStart;
+                value = null;
+                return false;
+            }
+            value = converter.Read(this, actualType);
+            return true;
         }
 
         private T ReadNewObject<T>()

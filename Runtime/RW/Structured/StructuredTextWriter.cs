@@ -26,7 +26,8 @@ namespace ActionBuffer
         }
     }
 
-    public abstract class StructuredTextWriter : IBufferWriter, ITypedEnumWriter
+    public abstract class StructuredTextWriter : IBufferWriter, ITypedEnumWriter,
+        IPolymorphicWriter
     {
         private bool _typeInfo;
         private bool _initialized;
@@ -122,6 +123,26 @@ namespace ActionBuffer
                     field.Write(this, scan);
                     EndObjectField();
                 }
+                EndObjectValue();
+            }
+            finally
+            {
+                ExitValue();
+            }
+        }
+
+        void IPolymorphicWriter.WritePolymorphic(BufferScan scan)
+        {
+            if (scan == null) throw new ArgumentNullException(nameof(scan));
+            EnterValue();
+            try
+            {
+                var cached = scan.ReadPolymorphic();
+                BeginObjectValue(-1, false, cached.Type.FullName,
+                    cached.Type.Assembly.FullName, 1);
+                BeginObjectField(ObjectConverter<object>.PolymorphicValueField);
+                cached.Converter.Write(this, scan, cached.Value);
+                EndObjectField();
                 EndObjectValue();
             }
             finally

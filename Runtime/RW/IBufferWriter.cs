@@ -37,4 +37,9 @@ namespace ActionBuffer
     {
         void WriteEnumValue<T>(T value) where T : struct, Enum;
     }
+
+    internal interface IPolymorphicWriter
+    {
+        void WritePolymorphic(BufferScan scan);
+    }
 }

@@ -14,9 +14,13 @@ namespace ActionBuffer
             var converter = ConverterCache<T>.Get(scan);
             if (value is ISet<T>)
             {
-                scan.ScanEnumerable(value, converter, scan.DeterministicCollectionOrder
-                    ? DeterministicComparer<T>.Instance
-                    : null);
+                var comparer = DeterministicComparer<T>.Instance;
+                if (scan.DeterministicCollectionOrder && comparer == null)
+                    throw new NotSupportedException(
+                        $"Collection type '{value.GetType()}' cannot be ordered deterministically " +
+                        $"because values of type '{typeof(T)}' have no supported comparer.");
+                scan.ScanEnumerable(value, converter,
+                    scan.DeterministicCollectionOrder ? comparer : null);
                 return;
             }
             if (value is IDictionary)
@@ -26,8 +30,15 @@ namespace ActionBuffer
         }
 
         protected void ScanWithComparer(BufferScan scan, TCollection value,
-            IComparer<T> comparer) => scan.ScanEnumerable(value, ConverterCache<T>.Get(scan),
-            scan.DeterministicCollectionOrder ? comparer : null);
+            IComparer<T> comparer)
+        {
+            if (scan.DeterministicCollectionOrder && value != null && comparer == null)
+                throw new NotSupportedException(
+                    $"Collection type '{value.GetType()}' cannot be ordered deterministically " +
+                    $"because values of type '{typeof(T)}' have no supported comparer.");
+            scan.ScanEnumerable(value, ConverterCache<T>.Get(scan),
+                scan.DeterministicCollectionOrder ? comparer : null);
+        }
 
         protected override void OnWrite(IBufferWriter writer, BufferScan scan, TCollection value) =>
             writer.WriteIEnumerable(scan, ConverterCache<T>.Get(scan));
@@ -187,6 +198,17 @@ namespace ActionBuffer
         }
     }
 
+    internal static class CollectionOrderComparerGuard<T>
+    {
+        internal static void RequireDefault(IComparer<T> comparer, Type collectionType)
+        {
+            if (Equals(comparer, Comparer<T>.Default)) return;
+            throw new NotSupportedException(
+                $"Collection type '{collectionType}' uses a custom comparer. " +
+                "ActionBuffer serializes collection values only and cannot preserve comparer behavior.");
+        }
+    }
+
     internal sealed class HashSetConverter<T> : IEnumerableConverter<T, HashSet<T>>
     {
         protected override void OnScan(BufferScan scan, HashSet<T> value)
@@ -321,6 +343,237 @@ namespace ActionBuffer
                 if (typeof(IEqualityComparer<TKey>).IsAssignableFrom(fields[i].FieldType))
                     return fields[i];
             return null;
+        }
+    }
+
+    internal static class CollectionFactory<TCollection> where TCollection : class
+    {
+        private static readonly ConstructorInfo EmptyConstructor =
+            typeof(TCollection).GetConstructor(Type.EmptyTypes);
+        private static readonly ConstructorInfo CapacityConstructor =
+            typeof(TCollection).GetConstructor(new[] { typeof(int) });
+
+        internal static TCollection Create(int capacity)
+        {
+            if (EmptyConstructor != null)
+                return (TCollection)EmptyConstructor.Invoke(null);
+            if (CapacityConstructor != null)
+                return (TCollection)CapacityConstructor.Invoke(new object[] { capacity });
+            throw new NotSupportedException(
+                $"Collection type '{typeof(TCollection)}' requires a public parameterless " +
+                "or Int32 capacity constructor.");
+        }
+    }
+
+    internal static class CollectionPopulator<TCollection, T>
+        where TCollection : class, IEnumerable<T>
+    {
+        internal static void Add(TCollection result, T value, CollectionReadMode mode)
+        {
+            if (mode == CollectionReadMode.Set && result is ISet<T> set)
+            {
+                if (!set.Add(value)) throw new FormatException("Duplicate set value.");
+                return;
+            }
+            if (result is ICollection<T> collection)
+            {
+                try
+                {
+                    collection.Add(value);
+                }
+                catch (ArgumentException exception) when (
+                    mode == CollectionReadMode.Dictionary)
+                {
+                    throw new FormatException("Duplicate dictionary key.", exception);
+                }
+                return;
+            }
+            if (result is Queue<T> queue)
+            {
+                queue.Enqueue(value);
+                return;
+            }
+            if (result is Stack<T> stack)
+            {
+                stack.Push(value);
+                return;
+            }
+            throw new NotSupportedException(
+                $"Collection type '{typeof(TCollection)}' has no supported Add operation.");
+        }
+    }
+
+    internal sealed class ConcreteSequenceConverter<TCollection, T> :
+        IEnumerableConverter<T, TCollection> where TCollection : class, IEnumerable<T>
+    {
+        protected override TCollection OnRead(IBufferReader reader, Type type) =>
+            RequireReader(reader).ReadCollection<TCollection, T>(
+                ConverterCache<T>.Get(reader), CollectionReadMode.Sequence);
+
+        private static ICollectionReader RequireReader(IBufferReader reader) =>
+            reader as ICollectionReader ?? throw new NotSupportedException(
+                $"Reader '{reader.GetType()}' cannot create concrete collection types.");
+    }
+
+    internal sealed class ConcreteStackConverter<TCollection, T> :
+        IEnumerableConverter<T, TCollection> where TCollection : class, IEnumerable<T>
+    {
+        protected override TCollection OnRead(IBufferReader reader, Type type) =>
+            RequireReader(reader).ReadCollection<TCollection, T>(
+                ConverterCache<T>.Get(reader), CollectionReadMode.Stack);
+
+        private static ICollectionReader RequireReader(IBufferReader reader) =>
+            reader as ICollectionReader ?? throw new NotSupportedException(
+                $"Reader '{reader.GetType()}' cannot create concrete collection types.");
+    }
+
+    internal sealed class ConcreteSetConverter<TCollection, T> :
+        IEnumerableConverter<T, TCollection> where TCollection : class, IEnumerable<T>
+    {
+        protected override void OnScan(BufferScan scan, TCollection value)
+        {
+            if (value is HashSet<T> hashSet)
+                CollectionComparerGuard<T>.RequireDefault(hashSet.Comparer, value.GetType());
+            if (value is SortedSet<T> sortedSet)
+                CollectionOrderComparerGuard<T>.RequireDefault(
+                    sortedSet.Comparer, value.GetType());
+            ScanWithComparer(scan, value, DeterministicComparer<T>.Instance);
+        }
+
+        protected override TCollection OnRead(IBufferReader reader, Type type) =>
+            RequireReader(reader).ReadCollection<TCollection, T>(
+                ConverterCache<T>.Get(reader), CollectionReadMode.Set);
+
+        private static ICollectionReader RequireReader(IBufferReader reader) =>
+            reader as ICollectionReader ?? throw new NotSupportedException(
+                $"Reader '{reader.GetType()}' cannot create concrete collection types.");
+    }
+
+    internal sealed class ConcreteDictionaryConverter<TCollection, TKey, TValue> :
+        IEnumerableConverter<KeyValuePair<TKey, TValue>, TCollection>
+        where TCollection : class, IEnumerable<KeyValuePair<TKey, TValue>>
+    {
+        protected override void OnScan(BufferScan scan, TCollection value)
+        {
+            if (value is Dictionary<TKey, TValue> dictionary)
+                CollectionComparerGuard<TKey>.RequireDefault(
+                    dictionary.Comparer, value.GetType());
+            if (value is SortedDictionary<TKey, TValue> sortedDictionary)
+                CollectionOrderComparerGuard<TKey>.RequireDefault(
+                    sortedDictionary.Comparer, value.GetType());
+            if (value is ConcurrentDictionary<TKey, TValue> concurrentDictionary)
+                CollectionComparerGuard<TKey>.RequireDefault(
+                    ConcurrentDictionaryComparer<TKey, TValue>.Get(concurrentDictionary),
+                    value.GetType());
+            ScanWithComparer(scan, value,
+                KeyValueDeterministicComparer<TKey, TValue>.Instance);
+        }
+
+        protected override TCollection OnRead(IBufferReader reader, Type type) =>
+            RequireReader(reader).ReadCollection<TCollection, KeyValuePair<TKey, TValue>>(
+                ConverterCache<KeyValuePair<TKey, TValue>>.Get(reader),
+                CollectionReadMode.Dictionary);
+
+        private static ICollectionReader RequireReader(IBufferReader reader) =>
+            reader as ICollectionReader ?? throw new NotSupportedException(
+                $"Reader '{reader.GetType()}' cannot create concrete collection types.");
+    }
+
+    internal sealed class ArrayListConverter<TCollection> : BuffConverter<TCollection>
+        where TCollection : ArrayList
+    {
+        protected override void OnScan(BufferScan scan, TCollection value)
+        {
+            var converter = ConverterCache<object>.Get(scan);
+            if (value == null)
+            {
+                scan.ScanEnumerable<object>(null, converter);
+                return;
+            }
+            var values = ClassPool.GetList<object>(value.Count);
+            try
+            {
+                for (int i = 0; i < value.Count; i++) values.Add(value[i]);
+            }
+            catch
+            {
+                ClassPool.BackList(values);
+                throw;
+            }
+            scan.ScanEnumerable(values, converter, null, true, value, true);
+        }
+
+        protected override void OnWrite(IBufferWriter writer, BufferScan scan,
+            TCollection value) => writer.WriteIEnumerable(
+                scan, ConverterCache<object>.Get(scan));
+
+        protected override TCollection OnRead(IBufferReader reader, Type type) =>
+            (reader as ICollectionReader ?? throw new NotSupportedException(
+                $"Reader '{reader.GetType()}' cannot create concrete collection types."))
+            .ReadArrayList<TCollection>(ConverterCache<object>.Get(reader));
+    }
+
+    internal sealed class HashtableConverter<TCollection> : BuffConverter<TCollection>
+        where TCollection : Hashtable
+    {
+        protected override void OnScan(BufferScan scan, TCollection value)
+        {
+            var converter = ConverterCache<KeyValuePair<object, object>>.Get(scan);
+            if (value == null)
+            {
+                scan.ScanEnumerable<KeyValuePair<object, object>>(null, converter);
+                return;
+            }
+            HashtableComparerGuard.RequireDefault(value);
+            var comparer = KeyValueDeterministicComparer<object, object>.Instance;
+            if (scan.DeterministicCollectionOrder && comparer == null)
+                throw new NotSupportedException(
+                    $"Collection type '{value.GetType()}' cannot be ordered deterministically.");
+            var values = ClassPool.GetList<KeyValuePair<object, object>>(value.Count);
+            try
+            {
+                var enumerator = value.GetEnumerator();
+                while (enumerator.MoveNext())
+                    values.Add(new KeyValuePair<object, object>(
+                        enumerator.Key, enumerator.Value));
+            }
+            catch
+            {
+                ClassPool.BackList(values);
+                throw;
+            }
+            scan.ScanEnumerable(values, converter,
+                scan.DeterministicCollectionOrder ? comparer : null, true, value, true);
+        }
+
+        protected override void OnWrite(IBufferWriter writer, BufferScan scan,
+            TCollection value) => writer.WriteIEnumerable(
+                scan, ConverterCache<KeyValuePair<object, object>>.Get(scan));
+
+        protected override TCollection OnRead(IBufferReader reader, Type type) =>
+            (reader as ICollectionReader ?? throw new NotSupportedException(
+                $"Reader '{reader.GetType()}' cannot create concrete collection types."))
+            .ReadHashtable<TCollection>(
+                ConverterCache<KeyValuePair<object, object>>.Get(reader));
+    }
+
+    internal static class HashtableComparerGuard
+    {
+        private static readonly PropertyInfo EqualityComparerProperty =
+            typeof(Hashtable).GetProperty("EqualityComparer",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo EqualityComparerField =
+            typeof(Hashtable).GetField("_keycomparer",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+
+        internal static void RequireDefault(Hashtable value)
+        {
+            object comparer = EqualityComparerProperty?.GetValue(value, null) ??
+                EqualityComparerField?.GetValue(value);
+            if (comparer == null) return;
+            throw new NotSupportedException(
+                $"Collection type '{value.GetType()}' uses a custom comparer. " +
+                "ActionBuffer serializes collection values only and cannot preserve comparer behavior.");
         }
     }
 }
