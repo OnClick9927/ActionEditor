@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ActionUnity;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor.Experimental.GraphView;
@@ -25,6 +26,7 @@ namespace ActionEditor.Nodes
             c.RegisterCallback<ChangeEvent<Color>>((evt) =>
             {
                 SetColor(evt.newValue);
+                App.RequestUndoCommit("Change Group Color");
             });
 
             this.AddManipulator(new ContextualMenuManipulator(BuildContextualMenu));
@@ -54,6 +56,7 @@ namespace ActionEditor.Nodes
         {
             base.OnGroupRenamed(oldName, newName);
             data.description = newName;
+            App.RequestUndoCommit("Rename Group");
         }
 
         public void BuildContextualMenu(ContextualMenuPopulateEvent evt)
@@ -125,7 +128,7 @@ namespace ActionEditor.Nodes
         {
             scroll = GUILayout.BeginScrollView(scroll);
 
-            ActionEditor.EditorEX.CreateEditor(data).OnInspectorGUI();
+            EditorEX.CreateEditor(data).OnInspectorGUI();
             GUILayout.EndScrollView();
         }
     }

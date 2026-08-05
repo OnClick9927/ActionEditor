@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ActionUnity;
+using System;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -9,6 +10,9 @@ namespace ActionEditor.Nodes
     class PreferencesWindow : PopupWindowContent
     {
         private static Vector2 win_size = new Vector2(400, 400);
+        private static GUIStyle _titleStyle;
+        private static readonly string[] TagNames = Enum.GetNames(typeof(Tag));
+        private static System.Collections.Generic.List<string> _languageNames;
         public static void Show(Rect rect)
         {
 
@@ -24,17 +28,24 @@ namespace ActionEditor.Nodes
 
         public override void OnGUI(Rect rect)
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(Lan.ins.Preferences, new GUIStyle(EditorStyles.label)
+            if (_titleStyle == null)
             {
-                fontStyle = FontStyle.Bold,
-                fontSize = 22
-            });
+                _titleStyle = new GUIStyle(EditorStyles.label)
+                {
+                    fontStyle = FontStyle.Bold,
+                    fontSize = 22
+                };
+            }
+            if (_languageNames == null)
+                _languageNames = Lan.AllLanguages.Keys.ToList();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(Lan.ins.Preferences, _titleStyle);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button(Lan.ins.Save, GUILayout.Width(50)))
             {
                 Prefs.Save();
-                App.OnObjectPickerConfig(App.assetPath);
+                App.RebuildCurrentView();
             }
             GUILayout.EndHorizontal();
             GUILayout.Space(2);
@@ -43,7 +54,7 @@ namespace ActionEditor.Nodes
             Prefs.pickListType = (AssetPickListType)EditorGUILayout.EnumPopup(Lan.ins.AssetPickListType, Prefs.pickListType);
 
             var lan = EditorEX.CleanPopup<string>(Lan.ins.Language, Lan.Language,
-               Lan.AllLanguages.Keys.ToList());
+               _languageNames);
 
 
 
@@ -79,24 +90,32 @@ namespace ActionEditor.Nodes
 
 
             if (App.AssetNames.Length == 0) return;
-            tag = (Tag)GUILayout.Toolbar((int)tag, Enum.GetNames(typeof(Tag)));
-            assetIndex = GUILayout.Toolbar(assetIndex, App.AssetNames.ToArray());
+            tag = (Tag)GUILayout.Toolbar((int)tag, TagNames);
+            assetIndex = GUILayout.Toolbar(assetIndex, App.AssetNames);
             var assetType = App.AssetTypes[App.AssetNames[assetIndex]];
-            var temp = assetType;
-            assetNames.Clear();
-            while (temp != typeof(object))
+            if (_selectedAssetType != assetType)
             {
-                assetNames.Add(temp.FullName);
-                temp = temp.BaseType;
+                _selectedAssetType = assetType;
+                assetNames.Clear();
+                var temp = assetType;
+                while (temp != typeof(object))
+                {
+                    assetNames.Add(temp.FullName);
+                    temp = temp.BaseType;
+                }
             }
-            var nodes = Prefs.data.nodes.Where(x => x.attach != null && x.attach.Intersect(assetNames).Any());
 
         
             if(tag== Tag.Asset)
             {
             scroll = GUILayout.BeginScrollView(scroll);
-            foreach (var node in nodes)
-                node.color = EditorGUILayout.ColorField(EditorEX.GetTypeName(node.GetRealType()), node.color);
+            for (int i = 0; i < Prefs.data.nodes.Count; i++)
+            {
+                var node = Prefs.data.nodes[i];
+                if (!CanAttachToSelectedAsset(node.attach)) continue;
+                node.color = EditorGUILayout.ColorField(
+                    EditorEX.GetTypeName(node.GetRealType()), node.color);
+            }
             GUILayout.EndScrollView();
 
             }
@@ -123,6 +142,19 @@ namespace ActionEditor.Nodes
         }
 
         //private static GraphWindow window;
+        private bool CanAttachToSelectedAsset(System.Collections.Generic.List<string> attach)
+        {
+            if (attach == null) return false;
+            for (int i = 0; i < attach.Count; i++)
+            {
+                for (int j = 0; j < assetNames.Count; j++)
+                {
+                    if (attach[i] == assetNames[j]) return true;
+                }
+            }
+            return false;
+        }
+
         private Vector2 scroll;
         private Vector2 scroll2;
         private enum Tag { 
@@ -134,6 +166,7 @@ namespace ActionEditor.Nodes
             ;
 
         private int assetIndex;
+        private Type _selectedAssetType;
     }
 
 }
