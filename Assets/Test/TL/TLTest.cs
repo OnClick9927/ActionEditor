@@ -1,3 +1,4 @@
+using ActionUnity;
 using ActionBuffer;
 using ActionEditor;
 using System;
@@ -5,6 +6,7 @@ using System.Collections.Generic;
 using UnityEditor;
 
 using UnityEngine;
+using IconAttribute = ActionUnity.IconAttribute;
 
 [CustomActionView(typeof(TLAsset))]
 class TLAssetEditor : ActionEditor.ActonEditorView
@@ -90,7 +92,7 @@ class TLMoveClipEditor : ActionEditor.ClipEditorView
 
 
 
-[Attachable(typeof(TLActionTrack)), Name("�ƶ�")]
+[Attachable(typeof(TLActionTrack)), Name("移动", "在时间轴片段期间移动指定对象。")]
 
 public class TLMoveClip : Clip, ActionEditor.IResizeAble, ILengthMatchAble, ITLCLip
 {
@@ -126,12 +128,12 @@ public class TLMoveClip : Clip, ActionEditor.IResizeAble, ILengthMatchAble, ITLC
     }
 }
 
-[Attachable(typeof(TLSignalTrack)), Name("��־")]
+[Attachable(typeof(TLSignalTrack)), Name("日志", "在时间轴到达指定位置时输出日志。")]
 
 public class TLLogSignal : ActionEditor.ClipSignal, ITLCLip
 {
     public string message;
-    [Buffer, UnityEngine.SerializeField, Name("���")]
+    [Buffer, UnityEngine.SerializeField, Name("输出", "需要写入日志的测试文本。")]
     private string Test2;
     [Range(0, 1)] public float test;
     public override bool IsValid => !string.IsNullOrEmpty(message);
@@ -152,12 +154,12 @@ interface ITLCLip
 {
     void Update();
 }
-[Attachable(typeof(TLGroup)), Name("��Ϊ���"), ActionEditor.Icon(typeof(Transform))]
+[Attachable(typeof(TLGroup)), Name("行为轨道", "承载可持续执行的行为片段。"),Icon(typeof(Transform))]
 public class TLActionTrack : Track
 {
 
 }
-[Attachable(typeof(TLGroup)), Name("�źŹ��"), ActionEditor.Icon(typeof(Animation))]
+[Attachable(typeof(TLGroup)), Name("信号轨道", "承载在指定时刻触发的信号片段。"), Icon(typeof(Animation))]
 public class TLSignalTrack : Track
 {
 

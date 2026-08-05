@@ -1,6 +1,8 @@
+using ActionUnity;
+
 namespace ActionEditor.Nodes.BT
 {
-    [Name("ִ���ж�"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Action), Icon("PerformInterrupt")]
+    [Name("执行中断", "按标识触发对应的行为树中断。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Action), Icon("PerformInterrupt")]
 
     public class BTPerformInterrupt : BTAction
     {

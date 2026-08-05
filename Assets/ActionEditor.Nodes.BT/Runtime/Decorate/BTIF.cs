@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
+using ActionUnity;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("IF"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("IF")]
+    [Name("IF", "根据第一个条件子节点的结果决定是否执行后续子节点。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("IF")]
     public class BTIF : BTDecorateMuti
     {
         public bool conditionTrue = true;
@@ -12,9 +14,9 @@ namespace ActionEditor.Nodes.BT
         internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
             base.Init(blackboard, parent, tree);
-            if (children.Count != 2)
+            if (ChildCount != 2)
                 throw new System.Exception("BTIF children must be two");
-            var first = children[0];
+            var first = ChildAt(0);
             if (!(first is BTCondition))
                 throw new System.Exception("BTIF first child must be BTCondition");
         }
@@ -50,6 +52,20 @@ namespace ActionEditor.Nodes.BT
             else
                 src = state;
             return true;
+        }
+
+        protected override void OnCollectStatus(List<int> values)
+        {
+            values.Add(eveFirst ? 1 : 0);
+        }
+
+        protected override void OnReadStatus(List<int> values, ref int index)
+        {
+            int value = ReadStatusValue(values, ref index);
+            if (value != 0 && value != 1)
+                throw new ArgumentException("Invalid IF runtime status",
+                    nameof(values));
+            eveFirst = value != 0;
         }
     }
 }

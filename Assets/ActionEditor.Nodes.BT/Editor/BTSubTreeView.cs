@@ -66,12 +66,12 @@ namespace ActionEditor.Nodes.BT
             this.GeneratePort(Direction.Input, typeof(BTNode));
             RegisterCallback<PointerDownEvent>((evt) =>
             {
-                // 检查点击次数是否为 2
+                // 妫�鏌ョ偣鍑绘鏁版槸鍚︿负 2
                 if (evt.clickCount == 2)
                 {
                     App.OnObjectPickerConfig(this.data.path);
                     //this.data.path
-                    // 在这里执行你的双击逻辑
+                    // 鍦ㄨ繖閲屾墽琛屼綘鐨勫弻鍑婚�昏緫
                 }
             });
         }

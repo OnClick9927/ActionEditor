@@ -1,3 +1,4 @@
+using ActionUnity;
 using ActionBuffer;
 using System;
 using System.Collections.Generic;
@@ -51,13 +52,20 @@ namespace ActionEditor.Nodes.BT
 
     class BTWaitTime : BTAction
     {
+        [System.Runtime.InteropServices.StructLayout(
+            System.Runtime.InteropServices.LayoutKind.Explicit)]
+        private struct FloatStatusValue
+        {
+            [System.Runtime.InteropServices.FieldOffset(0)] public float Float;
+            [System.Runtime.InteropServices.FieldOffset(0)] public int Int;
+        }
+
         protected override void OnAbort()
         {
             Debug.Log($"{GetType()} OnAbort");
         }
         public virtual float time { get; }
         private float end;
-
 
         protected override void OnStart()
         {
@@ -70,6 +78,19 @@ namespace ActionEditor.Nodes.BT
         protected override State OnUpdate()
         {
             return end > Time.time ? State.Running : State.Success;
+        }
+
+        protected override void OnCollectStatus(List<int> values)
+        {
+            values.Add(new FloatStatusValue { Float = end }.Int);
+        }
+
+        protected override void OnReadStatus(List<int> values, ref int index)
+        {
+            end = new FloatStatusValue
+            {
+                Int = ReadStatusValue(values, ref index)
+            }.Float;
         }
     }
     public class BTTest : MonoBehaviour

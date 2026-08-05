@@ -61,6 +61,15 @@ namespace ActionEditor
             }
         }
 
+        internal void Invalidate()
+        {
+            timePointers = null;
+            unsortedStartTimePointers = null;
+            preInitialized = false;
+            previousTime = 0;
+            currentTime = 0;
+        }
+
         public void Sample()
         {
             Sample(currentTime);

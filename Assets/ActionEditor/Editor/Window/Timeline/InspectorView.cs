@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ActionUnity;
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEditor;
@@ -43,7 +44,10 @@ namespace ActionEditor
             change = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndScrollView();
             if (change)
+            {
                 AppInternal.Refresh();
+                AppInternal.RequestInspectorUndoCommit("Edit Timeline Inspector");
+            }
 
         }
         GUIStyle _style;

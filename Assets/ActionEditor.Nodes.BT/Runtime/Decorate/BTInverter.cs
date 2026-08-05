@@ -1,6 +1,8 @@
+using ActionUnity;
+
 namespace ActionEditor.Nodes.BT
 {
-    [ Name("ȡ��"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Inverter")]
+    [Name("取反", "交换子节点的成功与失败结果。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Inverter")]
 
     public class BTInverter : BTDecorateSingle
     {

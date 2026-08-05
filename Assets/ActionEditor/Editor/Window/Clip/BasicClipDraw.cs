@@ -1,4 +1,5 @@
-﻿using UnityEditor;
+﻿using ActionUnity;
+using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
@@ -20,6 +21,10 @@ namespace ActionEditor
         protected Clip _clip;
         private float _overlapIn;
         private float _overlapOut;
+        private System.Type _nameType;
+        private GUIContent _nameContent;
+        private Vector2 _nameSize;
+        private static GUIContent _errorContent;
 
         public void Draw(EditorWindow window, Rect trackRect, Rect trackRightRect, Clip clip, bool select, bool copy)
         {
@@ -160,14 +165,21 @@ namespace ActionEditor
         protected virtual void DrawName()
         {
             GUI.color = Color.white;
-            var text = _clip.GetTypeName();
-            var size = GUI.skin.label.CalcSize(new GUIContent(text));
-            if (ClipRect.width > size.x)
+            System.Type type = _clip.GetType();
+            if (_nameType != type || _nameContent == null)
             {
-                var showY = TrackRect.y + (ClipRect.height - Styles.ClipBottomRectHeight) * 0.5f - size.y * 0.5f;
-                var showX = StartPosX + ClipRect.width * 0.5f - size.x * 0.5f;
-                var stampRect = new Rect(showX, showY, size.x, size.y);
-                GUI.Box(stampRect, text, NameStyle);
+                _nameType = type;
+                _nameContent = new GUIContent(EditorEX.GetTypeName(type),
+                    EditorEX.GetTypeTooltip(type));
+                _nameSize = GUI.skin.label.CalcSize(_nameContent);
+            }
+            if (ClipRect.width > _nameSize.x)
+            {
+                var showY = TrackRect.y + (ClipRect.height - Styles.ClipBottomRectHeight) *
+                    0.5f - _nameSize.y * 0.5f;
+                var showX = StartPosX + ClipRect.width * 0.5f - _nameSize.x * 0.5f;
+                var stampRect = new Rect(showX, showY, _nameSize.x, _nameSize.y);
+                GUI.Box(stampRect, _nameContent, NameStyle);
             }
         }
 
@@ -177,7 +189,10 @@ namespace ActionEditor
             //EditorGUIUtility.TrIconContent("console.erroricon");
             //GUI.color = Color.red.WithAlpha(0.2f);
             var rect = new Rect(ClipRect.position, new Vector2(ClipRect.height, ClipRect.height));
-            GUI.Label(rect, EditorGUIUtility.TrIconContent("console.erroricon", Lan.ins.ClipInvalid));
+            if (_errorContent == null)
+                _errorContent = EditorGUIUtility.TrIconContent("console.erroricon");
+            _errorContent.tooltip = Lan.ins.ClipInvalid;
+            GUI.Label(rect, _errorContent);
             //GUI.DrawTexture(, EditorGUIUtility.TrIconContent("console.erroricon").image);
         }
 

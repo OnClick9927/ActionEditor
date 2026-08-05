@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ActionUnity;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -86,6 +87,7 @@ namespace ActionEditor.Nodes
             //this.title = NodeName;
             this.titleContainer.Clear();
             label = new Label() { text = NodeName };
+            label.tooltip = EditorEX.GetTypeTooltip(Data.GetType());
 
             label.style.fontSize = 25;
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
@@ -116,21 +118,41 @@ namespace ActionEditor.Nodes
             this.Add(inspector);
         }
         private IMGUIContainer inspector;
+        private float _minimumNodeWidth;
+        private float _inspectorMinWidth = float.NaN;
         private void _inspector()
         {
-            style.minWidth = 100 + label.MeasureTextSize(this.NodeName, 0,
-                MeasureMode.Undefined, 0,
-                MeasureMode.Undefined).x;
+            if (_minimumNodeWidth <= 0)
+            {
+                _minimumNodeWidth = 100 + label.MeasureTextSize(this.NodeName, 0,
+                    MeasureMode.Undefined, 0, MeasureMode.Undefined).x;
+                style.minWidth = _minimumNodeWidth;
+            }
             if (!App.window.showInspector)
             {
-                inspector.style.minWidth = 0;
+                SetInspectorMinWidth(0);
                 return;
             }
-            inspector.style.minWidth = GraphWindow.sp_width - 80;
+            SetInspectorMinWidth(GraphWindow.sp_width - 80);
 
+            float previousLabelWidth = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth -= 80;
-            this.OnInspectorGUI();
-            EditorGUIUtility.labelWidth += 80;
+            try
+            {
+                this.OnInspectorGUI();
+            }
+            finally
+            {
+                EditorGUIUtility.labelWidth = previousLabelWidth;
+            }
+
+        }
+
+        private void SetInspectorMinWidth(float width)
+        {
+            if (Mathf.Approximately(_inspectorMinWidth, width)) return;
+            _inspectorMinWidth = width;
+            inspector.style.minWidth = width;
 
         }
 
@@ -244,7 +266,7 @@ namespace ActionEditor.Nodes
         private Vector2 scroll;
         protected void DrawDefaultInspector()
         {
-            ActionEditor.EditorEX.CreateEditor(Data).OnInspectorGUI();
+            EditorEX.CreateEditor(Data).OnInspectorGUI();
         }
 
         public virtual void OnUpdate()

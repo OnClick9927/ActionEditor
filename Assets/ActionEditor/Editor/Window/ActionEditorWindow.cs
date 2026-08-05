@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using ActionUnity;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Callbacks;
@@ -14,7 +15,7 @@ namespace ActionEditor
             var path = AssetDatabase.GetAssetPath(instanceID);
             if (path.EndsWith(Asset.FileEx))
             {
-                AppInternal.OnObjectPickerConfig(path);
+                if (!AppInternal.OnObjectPickerConfig(path)) return true;
                 if (AppInternal.AssetData != null)
                 {
                     OpenDirectorWindow();
@@ -50,6 +51,7 @@ namespace ActionEditor
         void OnDisable()
         {
             AppInternal.Window = null;
+            AppInternal.ShutdownUndo();
         }
         private void Update()
         {
@@ -85,12 +87,11 @@ namespace ActionEditor
             new List<ViewBase>();
 
 
-        internal T CreateView<T>() where T : ViewBase, new()
+        internal T CreateView<T>(bool registerForUpdate = true) where T : ViewBase, new()
         {
             var cls = new T();
             cls.Init(this);
-            if (!_views.Contains(cls))
-                _views.Add(cls);
+            if (registerForUpdate) _views.Add(cls);
             return cls;
         }
 

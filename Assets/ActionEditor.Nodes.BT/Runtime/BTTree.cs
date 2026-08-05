@@ -1,8 +1,9 @@
+using ActionUnity;
 using System;
 using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("��Ϊ��")]
+    [System.Serializable, Name("行为树", "可运行行为树的图数据与运行时容器。")]
     public abstract class BTTree : GraphAsset
     {
         [System.Serializable]
@@ -18,8 +19,8 @@ namespace ActionEditor.Nodes.BT
             get { return _instance; }
             private set
             {
-                if (_instance != value)
-                    _instance = value;
+                if (ReferenceEquals(_instance, value)) return;
+                _instance = value;
                 onInstanceChanged?.Invoke(value);
             }
 
@@ -27,10 +28,18 @@ namespace ActionEditor.Nodes.BT
         public void SetAsInstance() => instance = this;
         public static void ClearInstance() => instance = null;
         protected abstract Blackboard blackboard { get; }
-        public Blackboard Blackboard => parent == null ? blackboard : parent.blackboard;
-        [Name("����?")] public bool IsSubTree;
-        public BTTree parent { get; private set; }
-        public BTRoot root { get; private set; }
+        public Blackboard Blackboard => _parent == null ? blackboard : _parent.blackboard;
+        [Name("子树?", "标记当前资源是否只能作为其他行为树的子树。")]
+        public bool IsSubTree;
+        [System.NonSerialized] private BTTree _parent;
+        [System.NonSerialized] private BTRoot _root;
+        [System.NonSerialized] private List<BTTree> _subs = new List<BTTree>();
+        [System.NonSerialized] private IReadOnlyList<BTTree> _subView;
+
+        public BTTree parent => _parent;
+        public BTRoot root => _root;
+        public IReadOnlyList<BTTree> subs =>
+            _subView ?? (_subView = _subs.AsReadOnly());
 
 #if UNITY_5_3_OR_NEWER
         [UnityEngine.HideInInspector]
@@ -47,26 +56,25 @@ namespace ActionEditor.Nodes.BT
 
         [System.NonSerialized] private List<BTComposite> abort_composites;
         [System.NonSerialized] private Dictionary<string, BTInterrupt> interrupts;
-        [System.NonSerialized] private Dictionary<int, int> semaphore_value;
+        [System.NonSerialized] private int[] semaphore_value;
+        [System.NonSerialized] private int[] semaphore_limits;
         [System.NonSerialized] private Dictionary<string, List<BTRecEventCondition>> eve_map;
 
         internal void ReleaseSemaphore(int index)
         {
-            var value = semaphore_value.TryGetValue(index, out var result) ? result : 0;
-            value--;
-            if (value < 0)
-                value = 0;
-            semaphore_value[index] = value;
+            if (semaphore_value[index] > 0)
+                semaphore_value[index]--;
         }
 
         internal bool WaitSemaphore(int index)
         {
-            var value = semaphore_value.TryGetValue(index, out var result) ? result : 0;
-            var cfg = semaphores[index];
-            if (value >= cfg.max) return false;
-            semaphore_value[index] = result + 1;
+            if (semaphore_value[index] >= semaphore_limits[index]) return false;
+            semaphore_value[index]++;
             return true;
         }
+
+        internal bool IsValidSemaphore(int index) =>
+            semaphore_value != null && index >= 0 && index < semaphore_value.Length;
         internal void AddSpecialNode(BTNode node)
         {
             if (node is BTComposite composite)
@@ -90,16 +98,15 @@ namespace ActionEditor.Nodes.BT
                 list.Add(rec);
             }
         }
-        [System.NonSerialized] public List<BTTree> subs = new List<BTTree>();
-
         public T FindRuntimeTreeNode<T>(string guid) where T : NodeData
         {
             var result = this.FindNode<T>(guid);
             if (result != null) return result;
-            for (int i = 0; i < subs.Count; i++)
+            if (_subs == null) return null;
+            for (int i = 0; i < _subs.Count; i++)
             {
-                var sub = subs[i];
-                result = sub.FindNode<T>(guid);
+                var sub = _subs[i];
+                result = sub.FindRuntimeTreeNode<T>(guid);
                 if (result != null)
                     return result;
             }
@@ -120,8 +127,9 @@ namespace ActionEditor.Nodes.BT
             }
 
 
-            return root.Update();
+            return _root.Update();
         }
+
         public bool Abort(string flag)
         {
             if (interrupts.TryGetValue(flag, out var interrupt))
@@ -131,14 +139,14 @@ namespace ActionEditor.Nodes.BT
             }
             return false;
         }
-        public void Abort() => root.Abort();
+        public void Abort() => _root.Abort();
         public bool PushEvent(string eve)
         {
             if (!eve_map.TryGetValue(eve, out var list)) return false;
             for (int i = 0; i < list.Count; i++)
             {
                 var rec = list[i];
-                rec.recEve = true;
+                rec.ReceiveEvent();
             }
             return true;
         }
@@ -148,21 +156,65 @@ namespace ActionEditor.Nodes.BT
         }
         public void PrepareForRuntime(Func<string, BTTree> loader)
         {
-            subs.Clear();
+            _parent = null;
+            PrepareForRuntime(loader, new HashSet<string>(StringComparer.Ordinal));
+        }
+
+        private void PrepareForRuntime(Func<string, BTTree> loader,
+            HashSet<string> loadingSubTreePaths)
+        {
+            if (_subs == null)
+            {
+                _subs = new List<BTTree>();
+                _subView = null;
+            }
+            _subs.Clear();
+            _root = null;
+            ResetRuntimeLinks();
             base.PrepareForRuntime();
             for (int i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
 
+                if (node is BTRoot nodeRoot)
+                {
+                    if (_root != null && !ReferenceEquals(_root, nodeRoot))
+                        throw new InvalidOperationException(
+                            $"{GetType()} contains more than one root node");
+                    _root = nodeRoot;
+                }
+
                 if (node is BTSubTree sub)
                 {
                     if (loader == null)
                         throw new Exception($"{nameof(loader)}  can not be null");
-                    var tree = loader.Invoke(sub.path);
-                    tree.parent = this;
-                    tree.PrepareForRuntime(loader);
-                    sub.tree = tree;
-                    subs.Add(tree);
+                    if (string.IsNullOrEmpty(sub.path))
+                        throw new InvalidOperationException(
+                            $"{sub.GetType()} has no subtree path");
+                    if (!loadingSubTreePaths.Add(sub.path))
+                        throw new InvalidOperationException(
+                            $"Circular subtree reference detected at '{sub.path}'");
+                    try
+                    {
+                        var tree = loader.Invoke(sub.path);
+                        if (tree == null)
+                            throw new InvalidOperationException(
+                                $"Could not load subtree '{sub.path}'");
+                        if (ReferenceEquals(tree, this))
+                            throw new InvalidOperationException(
+                                $"A behavior tree cannot contain itself: '{sub.path}'");
+                        if (!tree.IsSubTree || tree.GetType() != GetType())
+                            throw new InvalidOperationException(
+                                $"Invalid subtree '{sub.path}' for {GetType()}");
+                        tree._parent = this;
+                        tree.PrepareForRuntime(loader, loadingSubTreePaths);
+                        sub.SetRuntimeTree(tree);
+                        _subs.Add(tree);
+                    }
+                    finally
+                    {
+                        loadingSubTreePaths.Remove(sub.path);
+                    }
                 }
                 if (node.outPorts.Count == 1)
                 {
@@ -170,30 +222,31 @@ namespace ActionEditor.Nodes.BT
 
                     if (node is BTRoot root)
                     {
-                        this.root = root;
                         if (connections.Count == 1)
-                            root.child = connections[0].input.node as BTNode;
+                            root.SetRuntimeChild(connections[0].input.node as BTNode);
                     }
                     else if (node is BTDecorateSingle decorate)
                     {
                         if (connections.Count == 1)
-                            decorate.child = connections[0].input.node as BTNode;
+                            decorate.SetRuntimeChild(connections[0].input.node as BTNode);
                     }
                     else if (node is BTDecorateMuti decorate_muti)
                     {
-                        decorate_muti.children = new List<BTNode>();
+                        var children = new List<BTNode>(connections.Count);
                         for (int j = 0; j < connections.Count; j++)
                         {
-                            decorate_muti.children.Add(connections[j].input.node as BTNode);
+                            children.Add(connections[j].input.node as BTNode);
                         }
+                        decorate_muti.SetRuntimeChildren(children);
                     }
                     else if (node is BTComposite composite)
                     {
-                        composite.children = new List<BTNode>();
+                        var children = new List<BTNode>(connections.Count);
                         for (int j = 0; j < connections.Count; j++)
                         {
-                            composite.children.Add(connections[j].input.node as BTNode);
+                            children.Add(connections[j].input.node as BTNode);
                         }
+                        composite.SetRuntimeChildren(children);
                     }
 
                 }
@@ -205,39 +258,43 @@ namespace ActionEditor.Nodes.BT
                 {
                     if (root.child is BTSubTree tree)
                     {
-                        root.child = tree.tree.root.child;
-                        tree.runtimeNode = root.child;
+                        BTNode runtimeNode = tree.tree.root.child;
+                        root.SetRuntimeChild(runtimeNode);
+                        tree.SetRuntimeNode(runtimeNode);
                     }
                 }
                 else if (node is BTDecorateSingle decorate)
                 {
                     if (decorate.child is BTSubTree tree)
                     {
-                        decorate.child = tree.tree.root.child;
-                        tree.runtimeNode = decorate.child;
+                        BTNode runtimeNode = tree.tree.root.child;
+                        decorate.SetRuntimeChild(runtimeNode);
+                        tree.SetRuntimeNode(runtimeNode);
                     }
                 }
                 else if (node is BTDecorateMuti decorate_muti)
                 {
-                    for (int j = 0; j < decorate_muti.children.Count; j++)
+                    for (int j = 0; j < decorate_muti.RuntimeChildrenCount; j++)
                     {
-                        var child = decorate_muti.children[i];
+                        var child = decorate_muti.GetRuntimeChildAt(j);
                         if (child is BTSubTree tree)
                         {
-                            decorate_muti.children[j] = tree.tree.root.child;
-                            tree.runtimeNode = decorate_muti.children[j];
+                            BTNode runtimeNode = tree.tree.root.child;
+                            decorate_muti.ReplaceRuntimeChild(j, runtimeNode);
+                            tree.SetRuntimeNode(runtimeNode);
                         }
                     }
                 }
                 else if (node is BTComposite composite)
                 {
-                    for (int j = 0; j < composite.children.Count; j++)
+                    for (int j = 0; j < composite.RuntimeChildrenCount; j++)
                     {
-                        var child = composite.children[j];
+                        var child = composite.GetRuntimeChildAt(j);
                         if (child is BTSubTree tree)
                         {
-                            composite.children[j] = tree.tree.root.child;
-                            tree.runtimeNode = composite.children[j];
+                            BTNode runtimeNode = tree.tree.root.child;
+                            composite.ReplaceRuntimeChild(j, runtimeNode);
+                            tree.SetRuntimeNode(runtimeNode);
 
                         }
                     }
@@ -245,15 +302,135 @@ namespace ActionEditor.Nodes.BT
 
             }
 
+            if (_root == null || _root.child == null)
+                throw new InvalidOperationException(
+                    $"{GetType()} requires one connected root node");
+            ValidateRuntimeTree(_root);
+
             if (!IsSubTree)
             {
                 eve_map = new();
                 interrupts = new();
-                semaphore_value = new();
-
                 abort_composites = new();
-                root.Init(blackboard, null, this);
+                InitializeSemaphores();
+                Blackboard runtimeBlackboard = blackboard;
+                if (runtimeBlackboard == null)
+                    throw new Exception($"{GetType()} {nameof(blackboard)} is Null");
+                _root.Init(runtimeBlackboard, null, this);
             }
+        }
+
+        public List<int> CollectStatus(List<int> destination = null)
+        {
+            EnsureRuntimePrepared();
+            destination = destination ?? new List<int>();
+            destination.Clear();
+            _root.CollectRuntimeStatus(destination);
+            for (int i = 0; i < semaphore_value.Length; i++)
+                destination.Add(semaphore_value[i]);
+            return destination;
+        }
+
+        public void ReadStatus(List<int> source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            EnsureRuntimePrepared();
+            int index = 0;
+            _root.ReadRuntimeStatus(source, ref index);
+            int semaphoreOffset = index;
+            for (int i = 0; i < semaphore_value.Length; i++)
+            {
+                int value = ReadStatusValue(source, ref index);
+                if (value < 0 || value > semaphore_limits[i])
+                    throw new ArgumentException(
+                        $"Invalid runtime value for semaphore {i}",
+                        nameof(source));
+            }
+            if (index != source.Count)
+                throw new ArgumentException(
+                    "Runtime status contains extra values", nameof(source));
+
+            for (int i = 0; i < semaphore_value.Length; i++)
+                semaphore_value[i] = source[semaphoreOffset + i];
+        }
+
+        private void InitializeSemaphores()
+        {
+            if (semaphores == null) semaphores = new List<Semaphore>();
+            int count = semaphores.Count;
+            semaphore_value = new int[count];
+            semaphore_limits = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                Semaphore semaphore = semaphores[i];
+                if (semaphore == null || semaphore.max <= 0)
+                    throw new InvalidOperationException(
+                        $"Semaphore {i} must have a positive maximum");
+                semaphore_limits[i] = semaphore.max;
+            }
+        }
+
+        private void ResetRuntimeLinks()
+        {
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                NodeData node = nodes[i];
+                (node.inPorts as List<PortData>)?.Clear();
+                (node.outPorts as List<PortData>)?.Clear();
+
+                if (node is BTRoot rootNode)
+                    rootNode.SetRuntimeChild(null);
+                else if (node is BTDecorateSingle single)
+                    single.SetRuntimeChild(null);
+                else if (node is BTDecorateMuti multi)
+                    multi.SetRuntimeChildren(null);
+                else if (node is BTComposite composite)
+                    composite.SetRuntimeChildren(null);
+
+                if (node is BTSubTree subTree)
+                    subTree.ResetRuntimeData();
+            }
+        }
+
+        private static void ValidateRuntimeTree(BTNode runtimeRoot)
+        {
+            var visited = new HashSet<BTNode>();
+            var pending = new Stack<BTNode>();
+            pending.Push(runtimeRoot);
+            while (pending.Count > 0)
+            {
+                BTNode node = pending.Pop();
+                if (!visited.Add(node))
+                    throw new InvalidOperationException(
+                        $"Behavior tree contains a cycle or shared node: {node.GetType()}");
+
+                int childCount = node.RuntimeChildrenCount;
+                for (int i = childCount - 1; i >= 0; i--)
+                {
+                    BTNode child = node.GetRuntimeChildAt(i);
+                    if (child == null)
+                        throw new InvalidOperationException(
+                            $"{node.GetType()} runtime child {i} is null");
+                    pending.Push(child);
+                }
+            }
+        }
+
+        private void EnsureRuntimePrepared()
+        {
+            if (_root == null || semaphore_value == null || semaphore_limits == null)
+                throw new InvalidOperationException(
+                    "PrepareForRuntime must be called before accessing status");
+        }
+
+        private static int ReadStatusValue(List<int> values, ref int index)
+        {
+            if (index >= values.Count)
+                throw new ArgumentException(
+                    "Runtime status does not contain enough values",
+                    nameof(values));
+            return values[index++];
         }
     }
 }

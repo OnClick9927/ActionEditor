@@ -1,4 +1,5 @@
-﻿using UnityEditor;
+﻿using ActionUnity;
+using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
@@ -14,6 +15,14 @@ namespace ActionEditor
     class TimelinePointerView : ViewBase, IPointerClickHandler,
        IPointerDragHandler, IDragBeginHandler, IDragEndHandler
     {
+        private static readonly float[] TimeStepModulos =
+        {
+            0.01f, 0.1f, 0.5f, 1, 5, 10, 50, 100, 500, 1000, 5000,
+            10000, 50000, 100000, 250000, 500000
+        };
+        private static GUIContent _animationEventIcon;
+        private readonly GUIContent _textContent = new GUIContent();
+
         public Asset asset => AppInternal.AssetData;
 
         private Rect _playPointerHandler;
@@ -53,15 +62,13 @@ namespace ActionEditor
 
             var timeInfoInterval = 1000000f;
             var lowMod = 0.01f;
-            var modulos = new[]
-                { 0.01f, 0.1f, 0.5f, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000, 250000, 500000 };
-            for (var i = 0; i < modulos.Length; i++)
+            for (var i = 0; i < TimeStepModulos.Length; i++)
             {
-                var count = asset.ViewTime() / modulos[i];
+                var count = asset.ViewTime() / TimeStepModulos[i];
                 if (width / count > 50)
                 {
-                    timeInfoInterval = modulos[i];
-                    lowMod = i > 0 ? modulos[i - 1] : lowMod;
+                    timeInfoInterval = TimeStepModulos[i];
+                    lowMod = i > 0 ? TimeStepModulos[i - 1] : lowMod;
                     break;
                 }
             }
@@ -88,11 +95,10 @@ namespace ActionEditor
                 var rounded = Mathf.Round(i * 10) / 10;
                 if (posX > Position.width) continue;
                 GUI.DrawTexture(new Rect(posX, Position.y + (Styles.HeaderHeight - 12), 1, 12), Styles.WhiteTexture);
-                var text = rounded.ToString("0.00");
-
-                var size = GUI.skin.label.CalcSize(new GUIContent(text));
+                _textContent.text = rounded.ToString("0.00");
+                var size = GUI.skin.label.CalcSize(_textContent);
                 var stampRect = new Rect(posX, 0, size.x, size.y);
-                GUI.Box(stampRect, rounded.ToString("0.00"), GUI.skin.label);
+                GUI.Box(stampRect, _textContent, GUI.skin.label);
             }
         }
 
@@ -122,7 +128,10 @@ namespace ActionEditor
 
                 var matrix = GUI.matrix;
                 GUIUtility.ScaleAroundPivot(new Vector2(6, 1.5f), _playPointerHandler.center);
-                GUI.DrawTexture(_playPointerHandler, EditorGUIUtility.IconContent("AnimationWindowEvent Icon").image);
+                if (_animationEventIcon == null)
+                    _animationEventIcon = EditorGUIUtility.IconContent(
+                        "AnimationWindowEvent Icon");
+                GUI.DrawTexture(_playPointerHandler, _animationEventIcon.image);
                 GUI.matrix = matrix;
             }
 
@@ -200,8 +209,8 @@ namespace ActionEditor
                 EditorEX.DrawDashedLine(x, Position.y, Position.y + Position.height, color);
             }
 
-            var text = time.ToString("0.00");
-            var size = EditorStyles.whiteLargeLabel.CalcSize(new GUIContent(text));
+            _textContent.text = time.ToString("0.00");
+            var size = EditorStyles.whiteLargeLabel.CalcSize(_textContent);
             var width = size.x + 5;
 
             var showX = x - width * 0.5f;
@@ -210,7 +219,7 @@ namespace ActionEditor
 
             //GUI.DrawTexture(new Rect(showX, Position.y, width, 18), Styles.BackgroundTexture);
             var stampRect = new Rect(showX + 2, Position.height - size.y * 2, size.x, size.y);
-            GUI.Box(stampRect, text, EditorStyles.whiteLargeLabel);
+            GUI.Box(stampRect, _textContent, EditorStyles.whiteLargeLabel);
         }
 
         #endregion

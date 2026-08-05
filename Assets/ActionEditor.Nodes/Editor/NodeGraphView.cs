@@ -1,3 +1,4 @@
+using ActionUnity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -137,7 +138,7 @@ namespace ActionEditor.Nodes
                 {
                     Texture tx = EditorEX.GetIcon(node.type) ?? EditorGUIUtility.TrIconContent("sv_icon_dot0_pix16_gizmo").image;
                     var entry = new SearchTreeEntry(new GUIContent(node.name,
-                    tx))
+                        tx, EditorEX.GetTypeTooltip(node.type)))
                     {
                         level = node.depth,
                         userData = node.type
@@ -193,6 +194,7 @@ namespace ActionEditor.Nodes
         public new List<GraphNode> nodes => base.nodes.OfType<GraphNode>().ToList();
         public List<GraphConnection> connections => base.edges.ToList().ConvertAll(x => x as GraphConnection);
         public List<GraphGroup> groups => graphElements.ToList().Where(x => x is GraphGroup).Cast<GraphGroup>().ToList();
+        public List<GraphComment> comments => graphElements.OfType<GraphComment>().ToList();
         public List<GraphNode> selectedNodes { get { return selection.Where(x => x is GraphNode).Select(x => x as GraphNode).ToList(); } }
 
 
@@ -202,15 +204,15 @@ namespace ActionEditor.Nodes
             if (styleSheet != null) styleSheets.Add(styleSheet);
             SetupZoom(ContentZoomer.DefaultMinScale, ContentZoomer.DefaultMaxScale);//zoom     
 
-            //拖拽背景
+            // Drag the graph background.
             this.AddManipulator(new ContentDragger());
-            //拖拽节点
+            // Drag selected nodes.
             this.AddManipulator(new SelectionDragger());
 
             this.AddManipulator(new RectangleSelector());
             this.AddManipulator(new FreehandSelector());
 
-            //背景 这个需要在 uss/styleSheet 中定义GridBackground类来描述类型
+            // GridBackground appearance is defined in the USS style sheet.
             var grid = new GridBackground();
             Insert(0, grid);
             grid.StretchToParentSize();
@@ -239,6 +241,15 @@ namespace ActionEditor.Nodes
         private DropdownMenuAction.Status DeleteSelectionStutas(DropdownMenuAction arg)
         {
             return selection.Count > 0 ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled;
+        }
+
+        private DropdownMenuAction.Status DuplicateSelectionStatus(
+            DropdownMenuAction arg)
+        {
+            return selection.Any(x => x is GraphNode || x is GraphGroup ||
+                x is GraphComment)
+                ? DropdownMenuAction.Status.Normal
+                : DropdownMenuAction.Status.Disabled;
         }
         public override List<Port> GetCompatiblePorts(Port startPort, NodeAdapter nodeAdapter)
         {
@@ -275,8 +286,8 @@ namespace ActionEditor.Nodes
             if (target == null)
             {
                 EditorEX.DrawPingScript(graph.GetType());
-                var title = EditorEX.GetTypeName(graph.GetType());
-                EditorGUILayout.LabelField(title, _style, GUILayout.Height(30));
+                EditorGUILayout.LabelField(EditorEX.GetTypeContent(graph.GetType()),
+                    _style, GUILayout.Height(30));
                 this.OnInspectorGUI();
                 return;
             }
@@ -288,8 +299,8 @@ namespace ActionEditor.Nodes
 
                     var dataType = node.Data.GetType();
                     EditorEX.DrawPingScript(dataType);
-                    var title = EditorEX.GetTypeName(dataType);
-                    EditorGUILayout.LabelField(title, _style, GUILayout.Height(30));
+                    EditorGUILayout.LabelField(EditorEX.GetTypeContent(dataType),
+                        _style, GUILayout.Height(30));
                     node.OnInspectorGUI();
                 }
                 ;
@@ -302,6 +313,12 @@ namespace ActionEditor.Nodes
                     group.OnInspectorGUI();
                 }
                 ;
+                if (target is GraphComment comment)
+                {
+                    EditorGUILayout.LabelField("娉ㄩ噴", _style,
+                        GUILayout.Height(30));
+                    comment.OnInspectorGUI();
+                }
             }
 
 
@@ -317,13 +334,14 @@ namespace ActionEditor.Nodes
         {
             minimap = new MiniMap();
             //minimap.anchored = true;
-            minimap.style.backgroundColor = new Color(0.1f, 0.1f, 0.1f, 0.8f); // 背景色（半透明）
+            minimap.style.backgroundColor = new Color(0.1f, 0.1f, 0.1f, 0.8f);
 
             minimap.style.position = Position.Absolute;
             minimap.style.height = minimap.style.width = 200;
             minimap.style.top = 0;
             minimap.style.right = 0;
             minimap.contentContainer.Clear();
+            minimap.visible = App.window != null && App.window.showMiniMap;
 
             this.Add(minimap);
         }
@@ -337,14 +355,37 @@ namespace ActionEditor.Nodes
             root.RegisterCallback<MouseMoveEvent>(OnDragging);
             root.RegisterCallback<MouseUpEvent>(OnDragEnd);
             root.RegisterCallback<MouseCaptureOutEvent>(OnDragEnd);
-            this.RegisterCallback<KeyDownEvent>(KeyDownCallback);
+            focusable = true;
+            this.RegisterCallback<KeyDownEvent>(KeyDownCallback,
+                TrickleDown.TrickleDown);
         }
         protected virtual void KeyDownCallback(KeyDownEvent evt)
         {
+            if (IsTextInput(evt.target as VisualElement)) return;
+
+            if (!evt.commandKey && !evt.ctrlKey && !evt.altKey &&
+                !evt.shiftKey && evt.keyCode == KeyCode.F)
+            {
+                FrameSelection();
+                evt.StopImmediatePropagation();
+                return;
+            }
+
             if (evt.commandKey || evt.ctrlKey)
             {
                 switch (evt.keyCode)
                 {
+                    case KeyCode.Z:
+                        if (evt.shiftKey)
+                            App.PerformRedo();
+                        else
+                            App.PerformUndo();
+                        evt.StopImmediatePropagation();
+                        break;
+                    case KeyCode.Y:
+                        App.PerformRedo();
+                        evt.StopImmediatePropagation();
+                        break;
                     case KeyCode.A:
                         {
                         App.SelectAll();
@@ -369,6 +410,16 @@ namespace ActionEditor.Nodes
 
         }
 
+        private bool IsTextInput(VisualElement target)
+        {
+            while (target != null && target != this)
+            {
+                if (target is TextField) return true;
+                target = target.parent;
+            }
+            return false;
+        }
+
         public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
         {
             if (evt.target is Edge con)
@@ -386,6 +437,19 @@ namespace ActionEditor.Nodes
                     OpenSearchPop(null, x.eventInfo.mousePosition + position.position);
 
                 }, DropdownMenuAction.AlwaysEnabled);
+                evt.menu.AppendAction("Create Comment", (x) =>
+                {
+                    var mousePosition = root.ChangeCoordinatesTo(root.parent,
+                        x.eventInfo.mousePosition);
+                    var graphMousePosition = contentViewContainer.WorldToLocal(
+                        mousePosition);
+                    var comment = App.CreateComment();
+                    comment.SetPosition(new Rect(graphMousePosition,
+                        comment.GetPosition().size));
+                    ClearSelection();
+                    AddToSelection(comment);
+                    comment.FocusContent();
+                }, DropdownMenuAction.AlwaysEnabled);
                 evt.menu.AppendAction("Create Group", (x) =>
                 {
 
@@ -401,6 +465,13 @@ namespace ActionEditor.Nodes
 
 
             }
+            evt.menu.AppendAction("Duplicate Selection", x => App.Duplicate(),
+                DuplicateSelectionStatus);
+            evt.menu.AppendAction("Frame Selection", x => FrameSelection(),
+                DeleteSelectionStutas);
+            evt.menu.AppendAction("Select All", x => App.SelectAll(),
+                DropdownMenuAction.AlwaysEnabled);
+            evt.menu.AppendSeparator();
             evt.menu.AppendAction("Delete Selection", (x) =>
             {
                 this.DeleteSelection();
@@ -417,11 +488,17 @@ namespace ActionEditor.Nodes
         protected abstract List<Type> FitterNodeTypes(List<Type> src, GraphElement element);
 
         Vector2 scroll;
+        internal Vector2 InspectorScrollPosition
+        {
+            get => scroll;
+            set => scroll = value;
+        }
+
         protected virtual void OnInspectorGUI()
         {
             scroll = GUILayout.BeginScrollView(scroll);
 
-            ActionEditor.EditorEX.CreateEditor(this.graph).OnInspectorGUI();
+            EditorEX.CreateEditor(this.graph).OnInspectorGUI();
             GUILayout.EndScrollView();
         }
         public virtual void Update()

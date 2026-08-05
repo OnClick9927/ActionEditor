@@ -1,14 +1,16 @@
 using static ActionEditor.Nodes.BT.BTComposite;
+using ActionUnity;
+
 namespace ActionEditor.Nodes.BT
 {
-    [Name("�ж�"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Interrupt")]
+    [Name("中断", "为运行中的分支注册可按标识触发的中断。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Interrupt")]
 
     public class BTInterrupt : BTDecorateSingle
     {
 
         public AbortType abortType;
-        bool abortLower;
-        bool abortSelf;
+        private bool abortLower;
+        private bool abortSelf;
         private BTComposite CompositeParent;
         [ReadOnly] public string flag;
 
@@ -16,6 +18,7 @@ namespace ActionEditor.Nodes.BT
         {
 
             base.Init(blackboard, parent, tree);
+            CompositeParent = null;
             abortLower = abortType == AbortType.Both || abortType == AbortType.LowerPriority;
             abortSelf = abortType == AbortType.Both || abortType == AbortType.Self;
             if (abortLower)

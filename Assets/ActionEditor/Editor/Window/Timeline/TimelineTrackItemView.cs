@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using ActionUnity;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -16,11 +17,14 @@ namespace ActionEditor
         private TimelineTrackItemRightView _rightView;
 
         protected static GUIStyle NameStyle;
+        private static GUIContent _lockContent;
+        private static GUIContent _inactiveContent;
 
         public void SetData(ISegment asset)
         {
             Data = asset;
-            _rightView = Window.CreateView<TimelineTrackItemRightView>();
+            if (_rightView == null)
+                _rightView = Window.CreateView<TimelineTrackItemRightView>(false);
             _rightView.SetData(Data);
         }
 
@@ -131,20 +135,29 @@ namespace ActionEditor
 
                 if (Data.IsLocked)
                 {
+                    if (_lockContent == null)
+                        _lockContent = EditorGUIUtility.TrIconContent("InspectorLock");
                     GUILayout.Space(2);
-                    if (GUI.Button(EditorGUILayout.GetControlRect(GUILayout.Width(16)), EditorGUIUtility.TrIconContent("InspectorLock"), GUIStyle.none))
+                    if (GUI.Button(EditorGUILayout.GetControlRect(GUILayout.Width(16)),
+                            _lockContent, GUIStyle.none))
                     {
                         Data.IsLocked = !Data.IsLocked;
+                        AppInternal.CommitUndo("Toggle Timeline Lock");
                         Event.current.Use();
                     }
                 }
 
                 if (!Data.IsActive)
                 {
+                    if (_inactiveContent == null)
+                        _inactiveContent = EditorGUIUtility.TrIconContent(
+                            "animationvisibilitytoggleoff");
                     GUILayout.Space(2);
-                    if (GUI.Button(EditorGUILayout.GetControlRect(GUILayout.Width(16)), EditorGUIUtility.TrIconContent("animationvisibilitytoggleoff"), GUIStyle.none))
+                    if (GUI.Button(EditorGUILayout.GetControlRect(GUILayout.Width(16)),
+                            _inactiveContent, GUIStyle.none))
                     {
                         Data.IsActive = !Data.IsActive;
+                        AppInternal.CommitUndo("Toggle Timeline Active");
                         Event.current.Use();
                     }
                 }
@@ -239,6 +252,7 @@ namespace ActionEditor
                         var track = group.AddTrack(info.type);
                         AppInternal.Select(track);
                         AppInternal.Refresh();
+                        AppInternal.CommitUndo("Add Track");
                     });
                 }
                 else
@@ -320,12 +334,14 @@ namespace ActionEditor
         {
             Data.IsLocked = !Data.IsLocked;
             AppInternal.Refresh();
+            AppInternal.CommitUndo("Toggle Timeline Lock");
         }
 
         private void ActiveContextMenuCmd()
         {
             Data.IsActive = !Data.IsActive;
             AppInternal.Refresh();
+            AppInternal.CommitUndo("Toggle Timeline Active");
         }
 
         private void DeleteContextMenu()
@@ -351,6 +367,7 @@ namespace ActionEditor
             }
 
             AppInternal.Refresh();
+            AppInternal.CommitUndo("Delete Timeline Item");
         }
 
     }
@@ -511,8 +528,12 @@ namespace ActionEditor
                 {
                     var info = metaInfo;
                     var tName = info.name;
-                    menu.AddItem(new GUIContent(tName), false,
-                        () => { track.AddClip(info.type, cursorTime); });
+                    menu.AddItem(new GUIContent(tName), false, () =>
+                    {
+                        track.AddClip(info.type, cursorTime);
+                        AppInternal.Refresh();
+                        AppInternal.CommitUndo("Add Clip");
+                    });
                 }
 
                 if (AppInternal.CopyAsset != null && AppInternal.CopyAsset is Clip copyClip)
@@ -553,13 +574,19 @@ namespace ActionEditor
             {
                 if (clip.Parent is Track track) track.DeleteClip(clip);
                 AppInternal.Refresh();
+                AppInternal.CommitUndo("Delete Clip");
             });
             if (clip is ILengthMatchAble subContainable && subContainable.MatchAbleLength > 0)
             {
                 //menu.AddSeparator("");
                 //menu.AddItem(new GUIContent(Lan.ins.MatchPreviousLoop), false,
                 //    subContainable.TryMatchPreviousSubClipLoop);
-                menu.AddItem(new GUIContent(Lan.ins.MatchClipLength), false, subContainable.TryMatchSubClipLength);
+                menu.AddItem(new GUIContent(Lan.ins.MatchClipLength), false, () =>
+                {
+                    subContainable.TryMatchSubClipLength();
+                    AppInternal.Refresh();
+                    AppInternal.CommitUndo("Match Clip Length");
+                });
                 //menu.AddItem(new GUIContent(Lan.ins.MatchNextLoop), false, subContainable.TryMatchNextSubClipLoop);
             }
 

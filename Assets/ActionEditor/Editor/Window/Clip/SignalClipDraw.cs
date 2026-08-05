@@ -1,10 +1,13 @@
-﻿using UnityEditor;
+﻿using ActionUnity;
+using UnityEditor;
 using UnityEngine;
 
 namespace ActionEditor
 {
     public class SignalClipDraw : BasicClipDraw
     {
+        private GUIContent _eventContent;
+
         protected override void OnDraw()
         {
 
@@ -22,7 +25,10 @@ namespace ActionEditor
             //    EditorGUIUtility.TrIconContent("AnimationWindowEvent Icon").image,
             //    ScaleMode.StretchToFill,false,1,_clip.GetColor(),100,100);
             //GUIUtility.ScaleAroundPivot(new Vector2(3, 1.5f), ClipRect.center);
-            EditorGUI.LabelField(ClipRect, EditorGUIUtility.TrIconContent("AnimationWindowEvent Icon", _clip.GetTypeName()));
+            if (_eventContent == null)
+                _eventContent = EditorGUIUtility.TrIconContent(
+                    "AnimationWindowEvent Icon", _clip.GetTypeName());
+            EditorGUI.LabelField(ClipRect, _eventContent);
             //GUI.matrix = matrix;
             GUI.color = Color.white;
 

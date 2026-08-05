@@ -1,4 +1,5 @@
-﻿using ActionBuffer;
+﻿using ActionUnity;
+using ActionBuffer;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,12 +9,38 @@ using UnityEngine;
 
 namespace ActionEditor
 {
-
     [InitializeOnLoad]
     static partial class AppInternal
     {
+        private sealed class UndoHistoryEntry
+        {
+            internal string Name;
+            internal byte[] Data;
+            internal DateTime CreatedAt;
+            internal TimelineSelectionPath[] Selection;
+            internal float CurrentTime;
+        }
+
+        private struct TimelineSelectionPath
+        {
+            internal byte Level;
+            internal int GroupIndex;
+            internal int TrackIndex;
+            internal int ClipIndex;
+        }
+
+        private const int MaxUndoHistoryCount = 100;
+
         const string key = "ActionEditor.APP";
-        public static string assetPath => EditorPrefs.GetString(key);
+        private static string _assetPath;
+        public static string assetPath
+        {
+            get
+            {
+                if (_assetPath == null) _assetPath = EditorPrefs.GetString(key);
+                return _assetPath;
+            }
+        }
         static AppInternal()
         {
             Prefs.Valid();
@@ -23,6 +50,24 @@ namespace ActionEditor
 
         private static Asset _asset;
         public static Asset AssetData => _asset;
+        private static bool _restoringUndo;
+        private static bool _inspectorUndoPending;
+        private static double _inspectorUndoDeadline;
+        private static string _inspectorUndoName;
+        private static readonly List<UndoHistoryEntry> _undoHistory =
+            new List<UndoHistoryEntry>();
+        private static int _undoHistoryIndex = -1;
+        private static byte[] _savedData;
+
+        internal static bool IsDirty { get; private set; }
+        internal static int UndoHistoryCount => _undoHistory.Count;
+        internal static int CurrentUndoIndex => _undoHistoryIndex;
+
+        internal static string GetUndoHistoryName(int index) =>
+            _undoHistory[index].Name;
+
+        internal static string GetUndoHistoryTime(int index) =>
+            _undoHistory[index].CreatedAt.ToString("HH:mm:ss");
 
         public static EditorWindow _window;
         public static EditorWindow Window
@@ -30,9 +75,8 @@ namespace ActionEditor
             get { return _window; }
             set
             {
-                OnObjectPickerConfig(assetPath);
-
                 _window = value;
+                if (_window != null) OnObjectPickerConfig(assetPath);
             }
         }
 
@@ -40,31 +84,347 @@ namespace ActionEditor
 
         public static float Width;
 
-        public static void OnObjectPickerConfig(string path)
+        public static bool OnObjectPickerConfig(string path)
         {
-            _asset = null;
-            EditorPrefs.SetString(key, string.Empty);
-
-            AppInternal.Refresh();
-            if (!File.Exists(path)) return;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return false;
+            if (path == assetPath && _asset != null && _undoHistory.Count > 0)
+                return true;
+            if (!ConfirmAssetSwitch()) return false;
             var text = File.ReadAllBytes(path);
             try
             {
                 var asset = Asset.FromBytes(typeof(Asset), text);
                 asset.Validate();
+                ActonEditorView.ClearEditorCache();
                 _asset = asset;
                 if (Window && asset != null)
                     Window.titleContent = new GUIContent(EditorEX.GetTypeName(asset));
             }
             catch (Exception e)
             {
-                _asset = null;
                 UnityEngine.Debug.LogException(e);
+                return false;
+            }
+            _assetPath = path;
+            EditorPrefs.SetString(key, path);
+            AssetPlayer.Inst.Invalidate();
+            CopyAsset = null;
+            Select();
+            AppInternal.Refresh();
+            ResetUndo();
+            return true;
+        }
+
+        private static bool ConfirmAssetSwitch()
+        {
+            FlushPendingUndo();
+            if (!IsDirty || _asset == null) return true;
+            string fileName = Path.GetFileName(assetPath);
+            int result = EditorUtility.DisplayDialogComplex(
+                "Unsaved Changes",
+                $"Save changes to \"{fileName}\" before opening another file?",
+                "Save", "Cancel", "Don't Save");
+            if (result == 1) return false;
+            if (result == 0) SaveAsset();
+            return true;
+        }
+
+        internal static void ShutdownUndo()
+        {
+            EditorApplication.update -= FlushInspectorUndo;
+            _inspectorUndoPending = false;
+            _undoHistory.Clear();
+            _undoHistoryIndex = -1;
+            _savedData = null;
+            IsDirty = false;
+        }
+
+        private static void ResetUndo()
+        {
+            EditorApplication.update -= FlushInspectorUndo;
+            _inspectorUndoPending = false;
+            byte[] data = _asset == null ? null : _asset.ToBytes();
+            _undoHistory.Clear();
+            if (_asset != null)
+            {
+                _undoHistory.Add(CreateUndoEntry("Initial State", data));
+                _undoHistoryIndex = 0;
+            }
+            else
+            {
+                _undoHistoryIndex = -1;
+            }
+            _savedData = data == null
+                ? null
+                : (byte[])data.Clone();
+            SetDirty(false);
+        }
+
+        internal static void RequestInspectorUndoCommit(string name)
+        {
+            if (_restoringUndo || _asset == null) return;
+            _inspectorUndoName = name;
+            _inspectorUndoDeadline = EditorApplication.timeSinceStartup + 0.2;
+            if (_inspectorUndoPending) return;
+            _inspectorUndoPending = true;
+            EditorApplication.update += FlushInspectorUndo;
+        }
+
+        private static void FlushInspectorUndo()
+        {
+            if (EditorApplication.timeSinceStartup < _inspectorUndoDeadline) return;
+            EditorApplication.update -= FlushInspectorUndo;
+            _inspectorUndoPending = false;
+            CommitUndo(_inspectorUndoName);
+        }
+
+        private static void FlushPendingUndo()
+        {
+            if (!_inspectorUndoPending) return;
+            EditorApplication.update -= FlushInspectorUndo;
+            _inspectorUndoPending = false;
+            CommitUndo(_inspectorUndoName);
+        }
+
+        internal static void CommitUndo(string name)
+        {
+            if (_restoringUndo || _asset == null) return;
+            byte[] data = _asset.ToBytes();
+            if (_undoHistoryIndex >= 0 &&
+                BytesEqual(_undoHistory[_undoHistoryIndex].Data, data))
+            {
+                CaptureTimelineContext(_undoHistory[_undoHistoryIndex]);
                 return;
             }
-            EditorPrefs.SetString(key, path);
-            AppInternal.Refresh();
 
+            string undoName = string.IsNullOrEmpty(name) ? "Edit Timeline" : name;
+            RemoveRedoHistory();
+            _undoHistory.Add(CreateUndoEntry(undoName, data));
+            _undoHistoryIndex = _undoHistory.Count - 1;
+            TrimUndoHistory();
+            UpdateDirty(data);
+        }
+
+        internal static void PerformUndo()
+        {
+            FlushPendingUndo();
+            UpdateCurrentUndoContext();
+            RestoreUndoHistoryCore(_undoHistoryIndex - 1);
+        }
+
+        internal static void PerformRedo()
+        {
+            FlushPendingUndo();
+            UpdateCurrentUndoContext();
+            RestoreUndoHistoryCore(_undoHistoryIndex + 1);
+        }
+
+        internal static void FlushUndoHistory()
+        {
+            FlushPendingUndo();
+            UpdateCurrentUndoContext();
+        }
+
+        internal static void RestoreUndoHistory(int index)
+        {
+            FlushPendingUndo();
+            UpdateCurrentUndoContext();
+            RestoreUndoHistoryCore(index);
+        }
+
+        private static void RestoreUndoHistoryCore(int index)
+        {
+            if (index < 0 || index >= _undoHistory.Count ||
+                index == _undoHistoryIndex)
+                return;
+
+            UndoHistoryEntry entry = _undoHistory[index];
+            byte[] data = entry.Data;
+            if (data == null) return;
+            _restoringUndo = true;
+            try
+            {
+                _asset = Asset.FromBytes(typeof(Asset), data);
+                _asset.Validate();
+                ActonEditorView.ClearEditorCache();
+                AssetPlayer.Inst.Invalidate();
+                CopyAsset = null;
+                Select();
+                Refresh();
+                RestoreTimelineContext(entry);
+                _undoHistoryIndex = index;
+                UpdateDirty(data);
+                if (Window != null)
+                {
+                    Window.titleContent = new GUIContent(EditorEX.GetTypeName(_asset));
+                    Window.Repaint();
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+            }
+            finally
+            {
+                _restoringUndo = false;
+            }
+        }
+
+        internal static void ClearUndoHistory()
+        {
+            FlushPendingUndo();
+            if (_asset == null) return;
+            byte[] data = _asset.ToBytes();
+            _undoHistory.Clear();
+            _undoHistory.Add(CreateUndoEntry("Current State", data));
+            _undoHistoryIndex = 0;
+            UpdateDirty(data);
+            Window?.Repaint();
+        }
+
+        private static UndoHistoryEntry CreateUndoEntry(string name, byte[] data)
+        {
+            var entry = new UndoHistoryEntry
+            {
+                Name = name,
+                Data = data,
+                CreatedAt = DateTime.Now
+            };
+            CaptureTimelineContext(entry);
+            return entry;
+        }
+
+        private static void CaptureTimelineContext(UndoHistoryEntry entry)
+        {
+            if (entry == null || _asset == null) return;
+            var selection = new List<TimelineSelectionPath>(_selectList.Count);
+            for (int i = 0; i < _selectList.Count; i++)
+            {
+                ISegment segment = _selectList[i];
+                if (segment is Group group)
+                {
+                    int groupIndex = _asset.groups.IndexOf(group);
+                    if (groupIndex >= 0)
+                        selection.Add(new TimelineSelectionPath
+                        {
+                            Level = 0,
+                            GroupIndex = groupIndex
+                        });
+                }
+                else if (segment is Track track && track.Parent is Group parentGroup)
+                {
+                    int groupIndex = _asset.groups.IndexOf(parentGroup);
+                    int trackIndex = parentGroup.Tracks.IndexOf(track);
+                    if (groupIndex >= 0 && trackIndex >= 0)
+                        selection.Add(new TimelineSelectionPath
+                        {
+                            Level = 1,
+                            GroupIndex = groupIndex,
+                            TrackIndex = trackIndex
+                        });
+                }
+                else if (segment is Clip clip && clip.Parent is Track parentTrack &&
+                         parentTrack.Parent is Group clipGroup)
+                {
+                    int groupIndex = _asset.groups.IndexOf(clipGroup);
+                    int trackIndex = clipGroup.Tracks.IndexOf(parentTrack);
+                    int clipIndex = parentTrack.Clips.IndexOf(clip);
+                    if (groupIndex >= 0 && trackIndex >= 0 && clipIndex >= 0)
+                        selection.Add(new TimelineSelectionPath
+                        {
+                            Level = 2,
+                            GroupIndex = groupIndex,
+                            TrackIndex = trackIndex,
+                            ClipIndex = clipIndex
+                        });
+                }
+            }
+            entry.Selection = selection.ToArray();
+            entry.CurrentTime = AssetPlayer.Inst.CurrentTime;
+        }
+
+        private static void UpdateCurrentUndoContext()
+        {
+            if (_undoHistoryIndex < 0 || _undoHistoryIndex >= _undoHistory.Count)
+                return;
+            CaptureTimelineContext(_undoHistory[_undoHistoryIndex]);
+        }
+
+        private static void RestoreTimelineContext(UndoHistoryEntry entry)
+        {
+            if (_asset == null || entry == null) return;
+            var selection = new List<ISegment>();
+            if (entry.Selection != null)
+            {
+                for (int i = 0; i < entry.Selection.Length; i++)
+                {
+                    TimelineSelectionPath path = entry.Selection[i];
+                    if (path.GroupIndex < 0 || path.GroupIndex >= _asset.groups.Count)
+                        continue;
+                    Group group = _asset.groups[path.GroupIndex];
+                    if (path.Level == 0)
+                    {
+                        selection.Add(group);
+                        continue;
+                    }
+                    if (path.TrackIndex < 0 || path.TrackIndex >= group.Tracks.Count)
+                        continue;
+                    Track track = group.Tracks[path.TrackIndex];
+                    if (path.Level == 1)
+                    {
+                        selection.Add(track);
+                        continue;
+                    }
+                    if (path.ClipIndex >= 0 && path.ClipIndex < track.Clips.Count)
+                        selection.Add(track.Clips[path.ClipIndex]);
+                }
+            }
+            Select(selection.ToArray());
+            AssetPlayer.Inst.CurrentTime = entry.CurrentTime;
+        }
+
+        private static bool BytesEqual(byte[] left, byte[] right)
+        {
+            if (ReferenceEquals(left, right)) return true;
+            if (left == null || right == null || left.Length != right.Length) return false;
+            for (int i = 0; i < left.Length; i++)
+            {
+                if (left[i] != right[i]) return false;
+            }
+            return true;
+        }
+
+        private static void RemoveRedoHistory()
+        {
+            int firstRedoIndex = _undoHistoryIndex + 1;
+            if (firstRedoIndex < _undoHistory.Count)
+                _undoHistory.RemoveRange(firstRedoIndex,
+                    _undoHistory.Count - firstRedoIndex);
+        }
+
+        private static void TrimUndoHistory()
+        {
+            int removeCount = _undoHistory.Count - MaxUndoHistoryCount;
+            if (removeCount <= 0) return;
+
+            int removableCount = Math.Min(removeCount, _undoHistory.Count - 1);
+            if (removableCount <= 0) return;
+            _undoHistory.RemoveRange(1, removableCount);
+            if (_undoHistoryIndex > 0)
+                _undoHistoryIndex = Math.Max(1,
+                    _undoHistoryIndex - removableCount);
+        }
+
+        private static void UpdateDirty(byte[] data)
+        {
+            SetDirty(!BytesEqual(_savedData, data));
+        }
+
+        private static void SetDirty(bool value)
+        {
+            if (IsDirty == value) return;
+            IsDirty = value;
+            Window?.Repaint();
         }
 
         public static void SaveAsset()
@@ -73,7 +433,10 @@ namespace ActionEditor
             var path = assetPath;
             if (string.IsNullOrEmpty(path)) return;
             OnSave?.Invoke();
-            System.IO.File.WriteAllBytes(path, AssetData.ToBytes());
+            byte[] data = AssetData.ToBytes();
+            System.IO.File.WriteAllBytes(path, data);
+            _savedData = data;
+            SetDirty(false);
             var text = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             EditorUtility.SetDirty(text);
@@ -109,12 +472,17 @@ namespace ActionEditor
         public static DateTime LastSaveTime => _lastSaveTime;
 
         private static DateTime _lastSaveTime = DateTime.Now;
+        private static double _nextAutoSaveCheck;
 
 
         public static void TryAutoSave()
         {
+            double currentTime = EditorApplication.timeSinceStartup;
+            if (currentTime < _nextAutoSaveCheck) return;
+            _nextAutoSaveCheck = currentTime + 1;
+
             var timespan = DateTime.Now - _lastSaveTime;
-            if (timespan.Seconds > Prefs.autoSaveSeconds)
+            if (timespan.TotalSeconds > Prefs.autoSaveSeconds)
             {
                 AutoSave();
             }
@@ -166,6 +534,7 @@ namespace ActionEditor
 
             track.AddClip(clip);
             AppInternal.Select(clip);
+            CommitUndo("Paste Clip");
             //CopyAsset = null;
         }
         static void AddCopyTrackToGroup(Group group)
@@ -178,7 +547,10 @@ namespace ActionEditor
 
 
             if (group.CanAddTrack(track))
+            {
                 group.AddTrack(track);
+                CommitUndo("Paste Track");
+            }
             AppInternal.Select(track);
             //CopyAsset = null;
 
@@ -341,7 +713,8 @@ namespace ActionEditor
 
             _editorPreviousTime = Time.realtimeSinceStartup;
 
-            _player.Sample();
+            if (Math.Abs(_player.CurrentTime - _player.previousTime) > 0.00001f)
+                _player.Sample();
 
             if (!IsPlay) return;
 
@@ -384,9 +757,23 @@ namespace ActionEditor
         internal static void KeyBoardEvent(Event eve)
         {
             if (AssetData == null) return;
-            if (eve.control && eve.type == EventType.KeyDown)
+            if (EditorGUIUtility.editingTextField) return;
+            if ((eve.control || eve.command) && eve.type == EventType.KeyDown)
             {
-                if (eve.keyCode == KeyCode.S)
+                if (eve.keyCode == KeyCode.Z)
+                {
+                    if (eve.shift)
+                        PerformRedo();
+                    else
+                        PerformUndo();
+                    eve.Use();
+                }
+                else if (eve.keyCode == KeyCode.Y)
+                {
+                    PerformRedo();
+                    eve.Use();
+                }
+                else if (eve.keyCode == KeyCode.S)
                 {
                     if (eve.shift)
                         SaveAs();
@@ -479,6 +866,7 @@ namespace ActionEditor
                 }
                 AppInternal.Select();
                 AppInternal.Refresh();
+                if (ss.Length > 0) CommitUndo("Delete Timeline Items");
                 eve.Use();
             }
             #endregion

@@ -1,26 +1,31 @@
+using System.Collections.Generic;
+using ActionUnity;
+
 namespace ActionEditor.Nodes.BT
 {
-    [Name("ѡ��"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Selector")]
+    [Name("选择", "按顺序执行子节点，直到某个子节点成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Selector")]
 
     public class BTSelector : BTComposite
     {
-        public int current { get; protected set; }
+        [System.NonSerialized] private int _current;
+        public int current => _current;
+
         protected override void OnStart()
         {
             base.OnStart();
-            current = 0;
+            _current = 0;
         }
         protected override void OnAbort()
         {
             base.OnAbort();
-            current = 0;
+            _current = 0;
         }
         protected override State OnUpdate()
         {
-            for (int i = current; i < children.Count; i++)
+            for (int i = _current; i < ChildCount; i++)
             {
-                current = i;
-                var child = children[i];
+                _current = i;
+                var child = ChildAt(i);
                 switch (child.Update())
                 {
                     case State.Success:
@@ -32,6 +37,20 @@ namespace ActionEditor.Nodes.BT
                 }
             }
             return State.Failure;
+        }
+
+        protected override void OnCollectStatus(List<int> values)
+        {
+            values.Add(_current);
+        }
+
+        protected override void OnReadStatus(List<int> values, ref int index)
+        {
+            int value = ReadStatusValue(values, ref index);
+            if (value < 0 || value > System.Math.Max(0, ChildCount - 1))
+                throw new System.ArgumentException(
+                    "Invalid selector runtime status", nameof(values));
+            _current = value;
         }
     }
 }

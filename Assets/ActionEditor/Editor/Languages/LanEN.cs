@@ -1,6 +1,8 @@
-﻿namespace ActionEditor
+﻿using ActionUnity;
+
+namespace ActionEditor
 {
-    [Name("English")]
+    [Name("English", "使用英文显示编辑器界面。")]
     class LanEN : ILanguages
     {
         public string Language => "Language";
