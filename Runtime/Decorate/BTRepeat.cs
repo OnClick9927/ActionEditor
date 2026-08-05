@@ -1,6 +1,8 @@
+using ActionUnity;
+
 namespace ActionEditor.Nodes.BT
 {
-    [ Name("�ظ�"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Repeater")]
+    [Name("重复", "根据子节点结果持续重新执行子节点。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Repeater")]
 
     public class BTRepeat : BTDecorateSingle
     {

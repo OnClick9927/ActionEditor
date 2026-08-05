@@ -10,6 +10,10 @@ namespace ActionEditor.Nodes.BT
     class ParallelView : BTCompositeView<BTParallel> { }
     public class BTCompositeView<T> : BTNodeView<T> where T : BTComposite, new()
     {
+        private static Texture2D _abortSelfIcon;
+        private static Texture2D _abortLowerPriorityIcon;
+        private static Texture2D _abortBothIcon;
+
         public override void OnCreated(NodeGraphView view)
         {
             base.OnCreated(view);
@@ -24,25 +28,34 @@ namespace ActionEditor.Nodes.BT
 
         private void DrawAbort()
         {
-            string icon = string.Empty;
+            Texture2D icon = null;
             switch (this.data.abortType)
             {
                 case BTComposite.AbortType.None:
                     break;
                 case BTComposite.AbortType.Self:
-                    icon = "ConditionalAbortLowerPriorityIcon";
+                    if (_abortSelfIcon == null)
+                        _abortSelfIcon = Resources.Load<Texture2D>(
+                            "ConditionalAbortLowerPriorityIcon");
+                    icon = _abortSelfIcon;
                     break;
                 case BTComposite.AbortType.LowerPriority:
-                    icon = "ConditionalAbortSelfIcon";
+                    if (_abortLowerPriorityIcon == null)
+                        _abortLowerPriorityIcon = Resources.Load<Texture2D>(
+                            "ConditionalAbortSelfIcon");
+                    icon = _abortLowerPriorityIcon;
                     break;
                 case BTComposite.AbortType.Both:
-                    icon = "ConditionalAbortBothIcon";
+                    if (_abortBothIcon == null)
+                        _abortBothIcon = Resources.Load<Texture2D>(
+                            "ConditionalAbortBothIcon");
+                    icon = _abortBothIcon;
                     break;
                 default:
                     break;
             }
-            if (!string.IsNullOrEmpty(icon))
-                GUILayout.Box(Resources.Load<Texture2D>(icon), EditorStyles.iconButton);
+            if (icon != null)
+                GUILayout.Box(icon, EditorStyles.iconButton);
 
         }
     }

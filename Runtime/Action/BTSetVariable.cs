@@ -1,8 +1,9 @@
+using ActionUnity;
 using System;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("���ò���"), Attachable(typeof(BT.BTTree)), Node(BTNodeTypes.Action)]
+    [Name("设置参数", "修改黑板中指定参数的值。"), Attachable(typeof(BT.BTTree)), Node(BTNodeTypes.Action), Icon("Action")]
 
     public class BTSetVariable : BTAction
     {
@@ -16,6 +17,16 @@ namespace ActionEditor.Nodes.BT
         {
             Set, Add, Minus, Multiply, Divide, Not, Remainder, Power, Abs, Round, Floor, Ceil, Max, Min
         }
+
+        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        {
+            base.Init(blackboard, parent, tree);
+            Type fieldType = blackboard.GetValueType(fieldName);
+            if (!BTVariableCondition.IsVariableType(fieldType, variableType))
+                throw new InvalidOperationException(
+                    $"{GetType()} cannot use Blackboard field '{fieldName}' as {variableType}");
+        }
+
         private float CalcFloat(float value)
         {
             switch (setType)
@@ -39,7 +50,7 @@ namespace ActionEditor.Nodes.BT
                 case SetVariableType.Ceil:
                     return (float)Math.Ceiling(value);
                 case SetVariableType.Floor:
-                    return (float)Math.Ceiling(value);
+                    return (float)Math.Floor(value);
                 case SetVariableType.Abs:
                     return (float)Math.Abs(value);
                 case SetVariableType.Max:
@@ -53,7 +64,6 @@ namespace ActionEditor.Nodes.BT
         }
         protected override State OnUpdate()
         {
-            var _value = blackboard.GetValue(fieldName);
             switch (variableType)
             {
                 case BTVariableCondition.VariableType.Bool:
@@ -61,18 +71,23 @@ namespace ActionEditor.Nodes.BT
                         if (setType == SetVariableType.Set)
                             blackboard.SetValue(fieldName, boolValue);
                         else if (setType == SetVariableType.Not)
-                            blackboard.SetValue(fieldName, !((bool)_value));
+                            blackboard.SetValue(fieldName,
+                                !(bool)blackboard.GetValue(fieldName));
                     }
                     break;
                 case BTVariableCondition.VariableType.Int:
                     {
-                        var value = CalcFloat((float)_value);
+                        var value = setType == SetVariableType.Set
+                            ? floatValue
+                            : CalcFloat((int)blackboard.GetValue(fieldName));
                         blackboard.SetValue(fieldName, (int)value);
                     }
                     break;
                 case BTVariableCondition.VariableType.FLoat:
                     {
-                        var value = CalcFloat((float)_value);
+                        var value = setType == SetVariableType.Set
+                            ? floatValue
+                            : CalcFloat((float)blackboard.GetValue(fieldName));
                         blackboard.SetValue(fieldName, value);
                     }
                     break;

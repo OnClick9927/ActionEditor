@@ -1,3 +1,4 @@
+using ActionUnity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,6 +24,7 @@ namespace ActionEditor.Nodes.BT
             public readonly GraphNode GraphNode;
             public readonly NodeData Data;
             public readonly string SourcePath;
+            public readonly GUIContent Tooltip;
             public readonly string[] RuntimeTreePath;
             public readonly int TreeId;
             public readonly NodeTreeEntry Parent;
@@ -37,6 +39,12 @@ namespace ActionEditor.Nodes.BT
                 GraphNode = graphNode;
                 Data = data;
                 SourcePath = sourcePath;
+                string tooltip = EditorEX.GetTypeTooltip(data?.GetType());
+                if (!string.IsNullOrEmpty(sourcePath))
+                    tooltip = string.IsNullOrEmpty(tooltip)
+                        ? sourcePath
+                        : tooltip + "\n" + sourcePath;
+                Tooltip = new GUIContent(string.Empty, tooltip);
                 RuntimeTreePath = runtimeTreePath;
                 TreeId = treeId;
                 Parent = parent;
@@ -161,6 +169,7 @@ namespace ActionEditor.Nodes.BT
                             args.rowRect.xMax - SubTreeMarkerWidth);
                     GUI.Label(labelRect, displayName,
                         GetNodeLabelStyle(args.selected && args.focused));
+                    GUI.Label(args.rowRect, entry.Tooltip, GUIStyle.none);
                 }
 
                 if (running)
@@ -181,8 +190,6 @@ namespace ActionEditor.Nodes.BT
                     args.rowRect.y, SubTreeMarkerWidth, args.rowRect.height);
                 GUI.Label(markerRect, GetSubTreeDepthLabel(entry.SubTreeDepth),
                     GetSubTreeMarkerStyle());
-                GUI.Label(args.rowRect, new GUIContent(string.Empty, entry.SourcePath),
-                    GUIStyle.none);
             }
 
             private static GUIStyle GetNodeLabelStyle(bool selected)
@@ -302,6 +309,8 @@ namespace ActionEditor.Nodes.BT
         private readonly Dictionary<string, int> _treeIdsByKey =
             new Dictionary<string, int>();
         private readonly HashSet<GraphNode> _reachableNodes = new HashSet<GraphNode>();
+        private readonly HashSet<int> _runningTreeItemIds = new HashSet<int>();
+        private readonly HashSet<int> _nextRunningTreeItemIds = new HashSet<int>();
         private readonly Dictionary<string, LoadedSubTree> _loadedSubTrees =
             new Dictionary<string, LoadedSubTree>();
         private readonly HashSet<string> _subTreeAssetStack = new HashSet<string>();
@@ -325,9 +334,21 @@ namespace ActionEditor.Nodes.BT
         private bool _nodeTreeInitialized;
         private int _nextTreeId = 1;
         private int _subTreePathHash;
+        private double _nextSubTreePathCheck;
 
         private static int _Runing_BlackBoard = -1;
         private static float _height = -1;
+        private static GUIStyle _blackboardHeaderStyle;
+        private static GUIContent _blackboardPlayContent;
+        private static GUIContent _treeToolbarContent;
+        private static readonly GUIContent[] BlackboardRunningContents =
+        {
+            new GUIContent("BlackBord ."),
+            new GUIContent("BlackBord .."),
+            new GUIContent("BlackBord ...")
+        };
+        private static readonly GUIContent[] BlackboardWaitContents =
+            new GUIContent[10];
         private static bool Runing_BlackBoard
         {
             get
@@ -368,6 +389,16 @@ namespace ActionEditor.Nodes.BT
         }
         internal static void DrawBlackBord(BTTreeView<T> view, float maxheight)
         {
+            if (_blackboardHeaderStyle == null)
+            {
+                _blackboardHeaderStyle = new GUIStyle(EditorStyles.largeLabel)
+                {
+                    fontSize = 20,
+                    fontStyle = FontStyle.Bold
+                };
+                _blackboardPlayContent = EditorGUIUtility.IconContent("PlayButton");
+            }
+
             var run = Runing_BlackBoard && view.runningTree != null;
             var blackboard = run ? view.runningTree.Blackboard : view.graph.Blackboard;
 
@@ -381,24 +412,22 @@ namespace ActionEditor.Nodes.BT
                 var value = EditorApplication.timeSinceStartup - Mathf.FloorToInt((float)EditorApplication.timeSinceStartup);
                 value = value / 0.1;
                 var index = Mathf.Max(Mathf.FloorToInt((float)value), 0);
-                if (GUI.Button(_rect, EditorGUIUtility.IconContent($"WaitSpin0{index}"), EditorStyles.toolbarButton))
+                index %= BlackboardWaitContents.Length;
+                if (BlackboardWaitContents[index] == null)
+                    BlackboardWaitContents[index] = EditorGUIUtility.IconContent(
+                        $"WaitSpin0{index}");
+                if (GUI.Button(_rect, BlackboardWaitContents[index],
+                        EditorStyles.toolbarButton))
                 {
                     Runing_BlackBoard = false;
                 }
-                string temp = ".";
-                for (int i = 0; i < index % 3; i++)
-                    temp += ".";
-
-                EditorGUI.LabelField(rect, $"BlackBord {temp}", new GUIStyle(EditorStyles.largeLabel)
-                {
-                    fontSize = 20,
-                    fontStyle = FontStyle.Bold
-                });
+                EditorGUI.LabelField(rect, BlackboardRunningContents[index % 3],
+                    _blackboardHeaderStyle);
 
             }
             else
             {
-                if (GUI.Button(_rect, EditorGUIUtility.IconContent("PlayButton"), EditorStyles.toolbarButton))
+                if (GUI.Button(_rect, _blackboardPlayContent, EditorStyles.toolbarButton))
                 {
                     if (BTTree.instance != null)
                     {
@@ -408,11 +437,7 @@ namespace ActionEditor.Nodes.BT
                         }
                     }
                 }
-                EditorGUI.LabelField(rect, "BlackBord", new GUIStyle(EditorStyles.largeLabel)
-                {
-                    fontSize = 20,
-                    fontStyle = FontStyle.Bold
-                });
+                EditorGUI.LabelField(rect, "BlackBord", _blackboardHeaderStyle);
             }
 
 
@@ -444,7 +469,7 @@ namespace ActionEditor.Nodes.BT
 
             scroll = GUILayout.BeginScrollView(scroll);
 
-            var editor = ActionEditor.EditorEX.CreateEditor(this.graph);
+            var editor = EditorEX.CreateEditor(this.graph);
             editor.OnInspectorGUI();
             using (new EditorGUI.DisabledScope(this.graph.IsSubTree))
             {
@@ -461,11 +486,13 @@ namespace ActionEditor.Nodes.BT
             GUILayout.Space(2);
         }
 
-        public override void OnHeaderGUI()
+        protected override void OnHeaderToolsGUI()
         {
-            base.OnHeaderGUI();
-            var content = EditorGUIUtility.TrIconContent("d_UnityEditor.HierarchyWindow", "Tree");
-            bool show = GUILayout.Toggle(_showNodeTree, content, EditorStyles.toolbarButton);
+            if (_treeToolbarContent == null)
+                _treeToolbarContent = EditorGUIUtility.TrIconContent(
+                    "d_UnityEditor.HierarchyWindow", "Tree");
+            bool show = GUILayout.Toggle(_showNodeTree, _treeToolbarContent,
+                EditorStyles.toolbarButton);
             if (show == _showNodeTree) return;
 
             _showNodeTree = show;
@@ -490,8 +517,13 @@ namespace ActionEditor.Nodes.BT
 
         public override void Update()
         {
-            if (_showNodeTree && !_treeDirty && CalculateSubTreePathHash() != _subTreePathHash)
-                ScheduleNodeTreeRefresh();
+            if (_showNodeTree && !_treeDirty &&
+                EditorApplication.timeSinceStartup >= _nextSubTreePathCheck)
+            {
+                _nextSubTreePathCheck = EditorApplication.timeSinceStartup + 0.25;
+                if (CalculateSubTreePathHash() != _subTreePathHash)
+                    ScheduleNodeTreeRefresh();
+            }
             if (_subTreeInspectorNode != null && selection.Count > 0)
             {
                 _subTreeInspectorNode = null;
@@ -499,10 +531,11 @@ namespace ActionEditor.Nodes.BT
             }
             if (_showNodeTree)
             {
+                bool runningChanged = RefreshRunningTreeItems();
                 ExpandRunningTreeNodes();
-                RepaintNodeTree();
+                if (runningChanged) RepaintNodeTree();
             }
-            base.Update();
+            UpdateConnectionFlows();
         }
 
         public override void Load(GraphAsset data)
@@ -549,6 +582,7 @@ namespace ActionEditor.Nodes.BT
                 if (nodes[i] is IBTNodeView node)
                     node.OnBTTreeChanged(tree);
             }
+            RefreshRunningTreeItems();
             RepaintNodeTree();
         }
         protected virtual void OnBTTreeChanged(BTTree tree)
@@ -696,6 +730,31 @@ namespace ActionEditor.Nodes.BT
         }
 
         private bool IsTreeEntryRunning(NodeTreeEntry entry)
+        {
+            return _runningTreeItemIds.Contains(entry.TreeId);
+        }
+
+        private bool RefreshRunningTreeItems()
+        {
+            _nextRunningTreeItemIds.Clear();
+
+            if (runningTree != null)
+            {
+                for (int i = 0; i < _allTreeItems.Count; i++)
+                {
+                    NodeTreeEntry entry = _allTreeItems[i];
+                    if (QueryTreeEntryRunning(entry))
+                        _nextRunningTreeItemIds.Add(entry.TreeId);
+                }
+            }
+
+            if (_runningTreeItemIds.SetEquals(_nextRunningTreeItemIds)) return false;
+            _runningTreeItemIds.Clear();
+            _runningTreeItemIds.UnionWith(_nextRunningTreeItemIds);
+            return true;
+        }
+
+        private bool QueryTreeEntryRunning(NodeTreeEntry entry)
         {
             if (entry.GraphNode is IBTNodeView nodeView)
                 return nodeView.IsTreeNodeRunning;
@@ -899,6 +958,7 @@ namespace ActionEditor.Nodes.BT
             }
             RestoreTreeSelection();
             _syncingTreeSelection = false;
+            RefreshRunningTreeItems();
             RepaintNodeTree();
             _subTreePathHash = CalculateSubTreePathHash();
         }

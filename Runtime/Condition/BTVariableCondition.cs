@@ -1,6 +1,9 @@
+using ActionUnity;
+using System;
+
 namespace ActionEditor.Nodes.BT
 {
-    [Name("�����Ƚ�"), Attachable(typeof(BT.BTTree)), Node(BTNodeTypes.Condition)]
+    [Name("参数比较", "将黑板参数与配置值进行比较。"), Attachable(typeof(BT.BTTree)), Node(BTNodeTypes.Condition), Icon("Conditional")]
     public class BTVariableCondition : BTCondition
     {
         public enum CompareType
@@ -20,6 +23,28 @@ namespace ActionEditor.Nodes.BT
         public bool boolValue { get { return intValue == 1; } set { intValue = value ? 1 : 0; } }
         public int intValue;
         public float floatValue;
+
+        internal static bool IsVariableType(Type type, VariableType variableType)
+        {
+            if (type == null) return false;
+            switch (variableType)
+            {
+                case VariableType.Bool: return type == typeof(bool);
+                case VariableType.Int: return type == typeof(int);
+                case VariableType.FLoat: return type == typeof(float);
+                case VariableType.Enum: return type.IsEnum;
+                default: return false;
+            }
+        }
+
+        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        {
+            base.Init(blackboard, parent, tree);
+            Type fieldType = blackboard.GetValueType(fieldName);
+            if (!IsVariableType(fieldType, variableType))
+                throw new InvalidOperationException(
+                    $"{GetType()} cannot use Blackboard field '{fieldName}' as {variableType}");
+        }
 
         private bool CompareInt(int value)
         {
@@ -57,6 +82,7 @@ namespace ActionEditor.Nodes.BT
                     var value = (bool)_value;
                     return CompareInt(value ? 1 : 0);
                 case VariableType.Enum:
+                    return CompareInt(Convert.ToInt32(_value));
                 case VariableType.Int:
                     return CompareInt((int)_value);
                 case VariableType.FLoat:

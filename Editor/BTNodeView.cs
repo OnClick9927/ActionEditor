@@ -51,7 +51,8 @@ namespace ActionEditor.Nodes.BT
 
         protected virtual bool IsRunning()
         {
-            return runningNode != null && runningNode.state == BTNode.State.Running;
+            return runningNode != null &&
+                runningNode.state == BTNode.State.Running;
         }
         public override void OnUpdate()
         {

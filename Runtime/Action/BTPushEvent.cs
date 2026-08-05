@@ -1,6 +1,8 @@
+using ActionUnity;
+
 namespace ActionEditor.Nodes.BT
 {
-    [Name("�����¼�"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Action), Icon("EventSend")]
+    [Name("发送事件", "向行为树发送一次命名事件。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Action), Icon("EventSend")]
     public class BTPushEvent : BTAction
     {
         [ReadOnly]public string eventName;

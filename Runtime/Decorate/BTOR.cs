@@ -1,14 +1,16 @@
+using ActionUnity;
+
 namespace ActionEditor.Nodes.BT
 {
-    [Name("��"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("OR")]
+    [Name("或", "依次检查条件，任一条件成功时返回成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("OR")]
     public class BTOR : BTDecorateMuti
     {
         internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {
             base.Init(blackboard, parent, tree);
-            for (int i = 0; i < children.Count; i++)
+            for (int i = 0; i < ChildCount; i++)
             {
-                var child = children[i];
+                var child = ChildAt(i);
                 if (!(child is BTCondition))
                 {
                     throw new System.Exception("BTOR children must be BTCondition");
