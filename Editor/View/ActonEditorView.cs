@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ActionUnity;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
@@ -12,6 +13,12 @@ namespace ActionEditor
         private static bool _initHeadersDic = false;
         private static readonly Dictionary<Type, Type> editorTypes = new Dictionary<Type, Type>();
         private static Dictionary<IAction, ActonEditorView> editor_ins = new Dictionary<IAction, ActonEditorView>();
+
+        internal static void ClearEditorCache()
+        {
+            editor_ins.Clear();
+        }
+
         public static ActonEditorView GetEditor(IAction asset)
         {
             if (asset == null) return null;

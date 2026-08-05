@@ -93,6 +93,7 @@ namespace ActionEditor
                 if (hasRect)
                 {
                     _havePointerDown = true;
+                    _dragStartPos = _eventData._event.mousePosition;
                     if (this is IPointerDownHandler pointerDownHandler)
                     {
                         pointerDownHandler.OnPointerDown(_eventData);

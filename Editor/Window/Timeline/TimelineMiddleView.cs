@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using ActionUnity;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -14,6 +15,7 @@ namespace ActionEditor
         #region Static
 
         private static readonly List<TimelineTrackItemView> _itemViews = new List<TimelineTrackItemView>();
+        private static readonly List<ISegment> VisibleItems = new List<ISegment>();
 
         public static TimelineTrackItemView GetItem(Vector2 pos)
         {
@@ -45,6 +47,7 @@ namespace ActionEditor
 
         protected override void OnInit()
         {
+            _itemViews.Clear();
             ResetViews();
         }
 
@@ -60,24 +63,31 @@ namespace ActionEditor
 
         private void ResetViews()
         {
-            void AddView(ISegment data)
+            VisibleItems.Clear();
+            if (asset == null)
             {
-                var view = Window.CreateView<TimelineTrackItemView>();
-                view.SetData(data);
-                _itemViews.Add(view);
+                _itemViews.Clear();
+                return;
             }
-
-            _itemViews.Clear();
-            if (asset == null) return;
             foreach (var group in asset.groups)
             {
-                AddView(group);
+                VisibleItems.Add(group);
                 if (group.isCollapsed) continue;
                 foreach (var track in group.Tracks)
                 {
-                    AddView(track);
+                    VisibleItems.Add(track);
                 }
             }
+
+            for (int i = 0; i < VisibleItems.Count; i++)
+            {
+                if (i >= _itemViews.Count)
+                    _itemViews.Add(Window.CreateView<TimelineTrackItemView>(false));
+                _itemViews[i].SetData(VisibleItems[i]);
+            }
+            if (_itemViews.Count > VisibleItems.Count)
+                _itemViews.RemoveRange(VisibleItems.Count,
+                    _itemViews.Count - VisibleItems.Count);
         }
 
 
@@ -165,6 +175,7 @@ namespace ActionEditor
                                 {
                                     asset.AddGroup(typeMetaInfo.type,EditorEX.GetTypeName(typeMetaInfo.type));
                                     AppInternal.Refresh();
+                                    AppInternal.CommitUndo("Add Group");
                                 });
                         }
 
@@ -203,7 +214,7 @@ namespace ActionEditor
 
         public void OnDragEnd(PointerEventData eventData)
         {
-            if (emptyRect.Contains(eventData.MousePosition) || !eventData.IsLeft()) return;
+            if (!eventData.IsLeft()) return;
 
             ItemDragger.OnEndDrag(eventData);
         }

@@ -96,6 +96,7 @@ namespace ActionEditor
         private static void CacheDragClipInfo()
         {
             DragItems.Clear();
+            _dragBeginStartTime.Clear();
             foreach (var select in AppInternal.SelectItems)
             {
                 if (select is Clip clip)
@@ -230,6 +231,7 @@ namespace ActionEditor
             }
 
             DragType = ItemDragType.None;
+            AppInternal.CommitUndo("Drag Timeline Items");
             eventData.StopPropagation();
         }
 
@@ -246,6 +248,7 @@ namespace ActionEditor
         {
             TryResetTracks();
             NowDragClips.Clear();
+            DragOffsetDictionary.Clear();
             if (selectItems == null || selectItems.Length < 1) return;
             foreach (var item in selectItems)
             {
@@ -286,21 +289,22 @@ namespace ActionEditor
             var asset = AppInternal.AssetData;
             var nowPos = eventData.MousePosition;
             //缓存拖动需要的信息 cache drag result 
-            List<float> subTimes = new List<float>();
+            float maxOffset = float.NegativeInfinity;
             foreach (var clipItem in NowDragClips)
             {
                 if (DragOffsetDictionary.TryGetValue(clipItem, out var offsetTime))
                 {
                     var cursorTime = asset.SnapTime(asset.PosToTime(nowPos.x, AppInternal.Width) - offsetTime);
                     cursorTime = CheckMagnetSnapTime(cursorTime, clipItem.Length);
-                    subTimes.Add(asset.SnapTime(cursorTime - clipItem.StartTime));
+                    float offset = asset.SnapTime(cursorTime - clipItem.StartTime);
+                    if (offset > maxOffset) maxOffset = offset;
                 }
             }
 
-            var max = subTimes.Max();
+            if (float.IsNegativeInfinity(maxOffset)) return;
             foreach (var clipItem in NowDragClips)
             {
-                var newTime = asset.SnapTime(clipItem.StartTime + max);
+                var newTime = asset.SnapTime(clipItem.StartTime + maxOffset);
                 clipItem.StartTime = newTime;
             }
 
@@ -508,15 +512,16 @@ namespace ActionEditor
 
         #region Magnet Snap
 
-        private static float[] magnetSnapTimesCache;
+        private static readonly List<float> MagnetSnapTimesCache = new List<float>();
+        private static readonly HashSet<float> MagnetSnapTimeSet = new HashSet<float>();
         private static float magnetSnapInterval;
 
 
         public static bool HasMagnetSnapTime(float time)
         {
-            if (magnetSnapTimesCache == null) return false;
-            foreach (var t in magnetSnapTimesCache)
+            for (int i = 0; i < MagnetSnapTimesCache.Count; i++)
             {
+                float t = MagnetSnapTimesCache[i];
                 if (Math.Abs(t - time) < 0.00001f)
                 {
                     return true;
@@ -528,12 +533,11 @@ namespace ActionEditor
 
         private static void CacheMagnetSnapInfo(ISegment[] selectItems)
         {
-            var result = new List<float>
-            {
-                0,
-                AssetPlayer.Inst.Length,
-                AssetPlayer.Inst.CurrentTime
-            };
+            MagnetSnapTimesCache.Clear();
+            MagnetSnapTimeSet.Clear();
+            AddMagnetSnapTime(0);
+            AddMagnetSnapTime(AssetPlayer.Inst.Length);
+            AddMagnetSnapTime(AssetPlayer.Inst.CurrentTime);
 
             if (selectItems.Length > 0)
             {
@@ -544,21 +548,25 @@ namespace ActionEditor
                     foreach (var clip in track.Clips)
                     {
                         if (selectItems.Contains(clip)) continue;
-                        result.Add(clip.StartTime);
-                        result.Add(clip.EndTime);
+                        AddMagnetSnapTime(clip.StartTime);
+                        AddMagnetSnapTime(clip.EndTime);
                     }
                 }
             }
 
             magnetSnapInterval = AppInternal.AssetData.ViewTime() * 0.01f;
-            magnetSnapTimesCache = result.Distinct().ToArray();
-            // Debug.LogError($"缓存磁吸结果={magnetSnapTimesCache.Length}");
+            // Debug.LogError($"缓存磁吸结果={MagnetSnapTimesCache.Count}");
+        }
+
+        private static void AddMagnetSnapTime(float time)
+        {
+            if (MagnetSnapTimeSet.Add(time)) MagnetSnapTimesCache.Add(time);
         }
 
 
         private static float MagnetSnapTime(float time)
         {
-            if (magnetSnapTimesCache == null)
+            if (MagnetSnapTimesCache.Count == 0)
             {
                 return -1;
             }
@@ -566,8 +574,9 @@ namespace ActionEditor
             var bestDistance = float.PositiveInfinity;
             var bestTime = float.PositiveInfinity;
 
-            foreach (var snapTime in magnetSnapTimesCache)
+            for (int i = 0; i < MagnetSnapTimesCache.Count; i++)
             {
+                float snapTime = MagnetSnapTimesCache[i];
                 var distance = Mathf.Abs(snapTime - time);
                 if (!(distance < bestDistance)) continue;
                 bestDistance = distance;

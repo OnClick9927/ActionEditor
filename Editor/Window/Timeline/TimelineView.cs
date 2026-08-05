@@ -37,11 +37,6 @@ namespace ActionEditor
         static float TimelineRightWidth;
         public override void OnDraw()
         {
-            var bottom_rect = new Rect(Position.x,
-Position.yMax - Styles.BottomHeight,
-Position.width - _inspector_width,
-Styles.BottomHeight);
-            GUI.Box(bottom_rect, "", EditorStyles.helpBox);
             var leftWidth = Styles.TimelineLeftWidth;
             var spit_rect = new Rect(0, Styles.PlayControlHeight, Position.width, Position.height - Styles.PlayControlHeight);
 
@@ -53,10 +48,23 @@ Styles.BottomHeight);
 
             _inspector_width = Position.width - _splitter_inspector.OnSplit(spit_rect, Position.width - _inspector_width);
 
+            var leftOffset = Styles.TimelineLeftWidth + Styles.SplitterWidth +
+                Styles.RightGapWidth;
+            TimelineRightWidth = Mathf.Max(1,
+                Position.width - leftOffset - _inspector_width);
+            AppInternal.Width = TimelineRightWidth;
+            _pointerRect = new Rect(leftOffset, Styles.HeaderHeight,
+                TimelineRightWidth, Position.height - 5 - Styles.HeaderHeight -
+                Styles.BottomHeight);
+
+            var bottom_rect = new Rect(Position.x,
+                Position.yMax - Styles.BottomHeight,
+                Position.width - _inspector_width,
+                Styles.BottomHeight);
+            GUI.Box(bottom_rect, "", EditorStyles.helpBox);
 
 
-
-            if (asset != null)
+            if (asset != null && Event.current.type == EventType.Layout)
                 asset.Validate();
 
 
@@ -70,7 +78,6 @@ Styles.BottomHeight);
 
 
             //return;
-            AppInternal.Width = TimelineRightWidth;
             DoZoomAndPan();
             ItemDragger.OnCheck();
 
@@ -95,12 +102,7 @@ Styles.BottomHeight);
             _inspector.OnGUI(inspector_rect);
             GUILayout.EndArea();
 
-            var leftOffset = Styles.TimelineLeftWidth + Styles.SplitterWidth + Styles.RightGapWidth;
-            TimelineRightWidth = Position.width - leftOffset - _inspector_width;
-
-            var pointerRect = new Rect(leftOffset, Styles.HeaderHeight, TimelineRightWidth,
-                Position.height - 5 - Styles.HeaderHeight - Styles.BottomHeight);
-            _pointerRect = pointerRect;
+            var pointerRect = _pointerRect;
             GUILayout.BeginArea(pointerRect);
             _pointerView.OnGUI(new Rect(0, 0, pointerRect.width, pointerRect.height));
             GUILayout.EndArea();
@@ -128,12 +130,36 @@ Styles.BottomHeight);
 
         private bool _isMouseButton2Down;
         private float _lastZoomX;
+        private const float MinViewDuration = 0.25f;
+        private const float MaxViewDuration = 240f;
 
         public void DoZoomAndPan()
         {
             var e = Event.current;
+            if (asset == null)
+            {
+                _isMouseButton2Down = false;
+                return;
+            }
 
-            if (!_pointerRect.Contains(e.mousePosition)) return;
+            if (_isMouseButton2Down && e.type == EventType.MouseLeaveWindow)
+            {
+                _isMouseButton2Down = false;
+                Window.Repaint();
+                return;
+            }
+
+            if (_isMouseButton2Down && e.button == 2 &&
+                e.rawType == EventType.MouseUp)
+            {
+                _isMouseButton2Down = false;
+                Window.Repaint();
+                e.Use();
+                return;
+            }
+
+            bool containsPointer = _pointerRect.Contains(e.mousePosition);
+            if (!_isMouseButton2Down && !containsPointer) return;
 
             // var ev = Event.current;
             // if (ev.button == 2)
@@ -148,76 +174,68 @@ Styles.BottomHeight);
                 _isMouseButton2Down = true;
                 _lastZoomX = e.mousePosition.x;
                 Window.Repaint();
-            }
-
-            if (e.button == 2 && e.rawType == EventType.MouseUp)
-            {
-                _isMouseButton2Down = false;
-                _lastZoomX = e.mousePosition.x;
-                Window.Repaint();
-            }
-
-            if (e.type == EventType.ScrollWheel)
-            {
-                var delta = e.delta.y;
-                if (delta > 0)
-                {
-                    delta = 3;
-                }
-                else if (delta < 0)
-                {
-                    delta = -3;
-                }
-
-                var t = Mathf.Abs(delta * 25) / Position.width * asset.ViewTime();
-
-                var maxAdd = delta > 0 ? t : -t;
-
-                if (maxAdd > 0 && asset.ViewTimeMax - asset.ViewTimeMin > 240)
-                {
-                    Debug.Log("Exceed maximum range!");
-                    return;
-                }
-
-                asset.ViewTimeMax += maxAdd;
-
-                Window.Repaint();
-
                 e.Use();
+                return;
+            }
+
+            if (containsPointer && e.type == EventType.ScrollWheel)
+            {
+                float viewDuration = asset.ViewTime();
+                float zoom = Mathf.Exp(e.delta.y * 0.04f);
+                float nextDuration = Mathf.Clamp(viewDuration * zoom,
+                    MinViewDuration, MaxViewDuration);
+                float pointerRatio = Mathf.Clamp01(
+                    (e.mousePosition.x - _pointerRect.x) /
+                    Mathf.Max(1, _pointerRect.width));
+                float pointerTime = Mathf.Lerp(asset.ViewTimeMin,
+                    asset.ViewTimeMax, pointerRatio);
+                float nextMin = pointerTime - nextDuration * pointerRatio;
+                float nextMax = nextMin + nextDuration;
+                if (nextMin < 0)
+                {
+                    nextMax -= nextMin;
+                    nextMin = 0;
+                }
+                SetViewRange(nextMin, nextMax);
+
+                Window.Repaint();
+                e.Use();
+                return;
             }
 
             if (_isMouseButton2Down)
             {
                 var rect = new Rect(_pointerRect);
-                rect.y += Styles.HeaderHeight;
-                rect.height -= Styles.HeaderHeight;
                 EditorGUIUtility.AddCursorRect(rect, MouseCursor.Pan);
 
-                if (e.type == EventType.MouseDrag || e.type == EventType.MouseDown || e.type == EventType.MouseUp)
+                if (e.button == 2 && e.type == EventType.MouseDrag)
                 {
-                    var offset = e.mousePosition.x - _lastZoomX;
-                    var t = Mathf.Abs(offset) / AppInternal.Width * asset.ViewTime();
-
-                    var min = asset.ViewTimeMin + (offset > 0 ? -t : t);
-                    var max = asset.ViewTimeMax + (offset > 0 ? -t : t);
-                    // var minTime = 0;
-                    // var minTime = asset.PosToTime(4, App.Width) * -1;
-                    if (min >= 0)
-                    {
-                        asset.ViewTimeMin = min;
-                        asset.ViewTimeMax = max;
-                    }
-                    else if (min < 0 && asset.ViewTimeMin > 0)
-                    {
-                        asset.ViewTimeMin = 0;
-                        asset.ViewTimeMax = max + 0;
-                    }
-
+                    float offset = e.mousePosition.x - _lastZoomX;
+                    float duration = asset.ViewTime();
+                    float timeOffset = -offset /
+                        Mathf.Max(1, _pointerRect.width) * duration;
+                    float nextMin = Mathf.Max(0,
+                        asset.ViewTimeMin + timeOffset);
+                    SetViewRange(nextMin, nextMin + duration);
                     _lastZoomX = e.mousePosition.x;
 
                     e.Use();
                     Window.Repaint();
                 }
+            }
+        }
+
+        private void SetViewRange(float min, float max)
+        {
+            if (min <= asset.ViewTimeMin)
+            {
+                asset.ViewTimeMin = min;
+                asset.ViewTimeMax = max;
+            }
+            else
+            {
+                asset.ViewTimeMax = max;
+                asset.ViewTimeMin = min;
             }
         }
 

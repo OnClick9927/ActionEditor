@@ -1,4 +1,5 @@
-﻿using ActionBuffer;
+﻿using ActionUnity;
+using ActionBuffer;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,6 +13,12 @@ namespace ActionEditor
         //private static Rect _myRect;
         //private bool firstPass = true;
         private static Vector2 win_size = new Vector2(400, 400);
+        private static GUIStyle _titleStyle;
+        private static List<string> _languageNames;
+        private static readonly List<float> SnapIntervalOptions =
+            new List<float>(Prefs.snapIntervals);
+        private static readonly List<int> FrameRateOptions =
+            new List<int>(Prefs.frameRates);
         public static void Show(Rect rect)
         {
 
@@ -66,13 +73,19 @@ namespace ActionEditor
         }
         public override void OnGUI(Rect rect)
         {
+            if (_titleStyle == null)
+            {
+                _titleStyle = new GUIStyle(EditorStyles.label)
+                {
+                    fontStyle = FontStyle.Bold,
+                    fontSize = 22
+                };
+            }
+            if (_languageNames == null)
+                _languageNames = Lan.AllLanguages.Keys.ToList();
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label(Lan.ins.Preferences, new GUIStyle(EditorStyles.label)
-            {
-                fontStyle = FontStyle.Bold,
-                fontSize = 22
-            });
+            GUILayout.Label(Lan.ins.Preferences, _titleStyle);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button(Lan.ins.Save, GUILayout.Width(50)))
             {
@@ -82,7 +95,7 @@ namespace ActionEditor
             GUILayout.Space(2);
 
             var lan = EditorEX.CleanPopup<string>(Lan.ins.Language, Lan.Language,
-                Lan.AllLanguages.Keys.ToList());
+                _languageNames);
 
 
 
@@ -98,12 +111,12 @@ namespace ActionEditor
             if (Prefs.timeStepMode == Prefs.TimeStepMode.Seconds)
             {
                 Prefs.SnapInterval = EditorEX.CleanPopup<float>(Lan.ins.SnapInterval, Prefs.SnapInterval,
-                    Prefs.snapIntervals.ToList());
+                    SnapIntervalOptions);
             }
             else
             {
                 Prefs.FrameRate = EditorEX.CleanPopup<int>(Lan.ins.FrameRate, Prefs.FrameRate,
-                    Prefs.frameRates.ToList());
+                    FrameRateOptions);
             }
 
 
@@ -137,7 +150,10 @@ namespace ActionEditor
             if (AppInternal.AssetNames.Count == 0) return;
             scroll = GUILayout.BeginScrollView(scroll);
 
-            assetIndex = GUILayout.Toolbar(assetIndex, AppInternal.AssetNames.ToArray());
+            if (_assetTypeNames == null ||
+                _assetTypeNames.Length != AppInternal.AssetNames.Count)
+                _assetTypeNames = AppInternal.AssetNames.ToArray();
+            assetIndex = GUILayout.Toolbar(assetIndex, _assetTypeNames);
             var temp = AppInternal.AssetTypes[AppInternal.AssetNames[assetIndex]];
 
 
@@ -148,10 +164,10 @@ namespace ActionEditor
                 GUILayout.BeginVertical(EditorStyles.helpBox);
                 track.color = EditorGUILayout.ColorField(EditorEX.GetTypeName(track.GetRealType()), track.color);
                 GUI.Label(GUILayoutUtility.GetLastRect(), "", EditorStyles.helpBox);
-                var clips = Prefs.data.clips.FindAll(x => x.attach != null && x.attach.Contains(track.type));
-
-                foreach (var clip in clips)
+                for (int i = 0; i < Prefs.data.clips.Count; i++)
                 {
+                    var clip = Prefs.data.clips[i];
+                    if (clip.attach == null || !clip.attach.Contains(track.type)) continue;
                     GUILayout.BeginHorizontal();
                     GUILayout.Space(30);
                     clip.color = EditorGUILayout.ColorField(EditorEX.GetTypeName(clip.GetRealType()), clip.color);
@@ -172,6 +188,7 @@ namespace ActionEditor
         }
 
         private static ActionEditorWindow window;
+        private string[] _assetTypeNames;
         private Vector2 scroll;
         private int assetIndex;
     }

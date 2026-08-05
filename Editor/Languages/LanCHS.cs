@@ -1,6 +1,8 @@
-﻿namespace ActionEditor
+﻿using ActionUnity;
+
+namespace ActionEditor
 {
-    [Name("简体中文")]
+    [Name("简体中文", "使用简体中文显示编辑器界面。")]
      class LanCHS : ILanguages
     {
         string ILanguages.Language => "语言";
