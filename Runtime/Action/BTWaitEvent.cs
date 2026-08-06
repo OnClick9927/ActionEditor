@@ -4,8 +4,9 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("等待事件", "进入后持续返回运行中，直到所属行为树收到指定命名事件；事件只消费一次，消费后当前执行返回成功。"),
-     Attachable(typeof(BTTree)), Node(BTNodeTypes.Action), Icon("Event")]
+    [TypeInfoBox("进入后持续返回运行中，直到所属行为树收到指定命名事件；事件只消费一次，消费后当前执行返回成功。")]
+    [Name("等待事件"),
+     Attachable(typeof(BTTree)), Node(BTNodeTypes.Action), Icon("WaitEvent")]
     public sealed class BTWaitEvent : BTAction, IBTEventReceiver
     {
         [Name("事件名称", "需要监听的精确事件键；接收标记会写入状态快照，保证恢复后仍保持事件是否已经到达。")]

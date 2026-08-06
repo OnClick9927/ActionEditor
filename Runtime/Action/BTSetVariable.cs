@@ -3,9 +3,10 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("设置参数", "设置或修改指定黑板字段。整数运算统一采用 unchecked 溢出规则，字符串使用 Ordinal 语义，decimal 不经过浮点转换；只有显式选择 float 或 double 字段时才进入非帧同步浮点路径。"),
+    [TypeInfoBox("设置或修改指定黑板字段。整数运算统一采用 unchecked 溢出规则，字符串使用 Ordinal 语义，decimal 不经过浮点转换；只有显式选择 float 或 double 字段时才进入非帧同步浮点路径。")]
+    [Name("设置参数"),
      Attachable(typeof(BTTree)), Node(BTNodeTypes.Action), Icon("Action")]
-    public class BTSetVariable : BTAction
+    public class BTSetVariable : BTAction, IBTInspectorContext
     {
         public enum SetVariableType
         {
@@ -24,32 +25,45 @@ namespace ActionEditor.Nodes.BT
         }
 
         [Name("参数名称", "选择需要写入的黑板公开字段。行为树初始化时会检查字段仍然存在、记录类型与真实字段类型完全一致，并拒绝不适用于该类型的运算。")]
+        [ValueDropdown(nameof(InspectorFields))]
         public string fieldName;
         [Name("参数类型", "由编辑器依据黑板字段自动记录。布尔支持设置和取反，枚举与字符支持设置，字符串支持设置和追加，各数值类型支持其安全且有明确语义的运算。")]
+        [ReadOnly]
         public BTVariableCondition.VariableType variableType;
         [Name("运算方式", "Set 直接覆盖；其余操作先读取字段当前值再计算。整数加减乘、幂和取负使用 unchecked 补码回绕，保证相同输入得到相同位结果。")]
+        [ValueDropdown(nameof(InspectorOperations))]
         public SetVariableType setType;
         [Name("32 位有符号操作数", "供 int、sbyte、byte、short、ushort 使用，同时兼容旧资源中的布尔值和 32 位枚举值。编辑器会按目标字段范围限制输入。")]
+        [ShowIf(nameof(ShowIntInspectorValue))]
         public int intValue;
         [Name("32 位无符号操作数", "供 uint 字段使用，覆盖完整无符号 32 位范围。所有 uint 运算直接在无符号整数域中执行，不经过浮点数。")]
+        [ShowIf(nameof(ShowUIntInspectorValue))]
         public uint uintValue;
         [Name("64 位有符号操作数", "供 long 字段使用。加减乘和整数幂在溢出时按 unchecked 规则回绕，long.MinValue 除以 -1 也固定回绕为 long.MinValue。")]
+        [ShowIf(nameof(ShowLongInspectorValue))]
         public long longValue;
         [Name("64 位无符号操作数", "供 ulong 字段使用，保留完整 64 位无符号精度。运算不经过 decimal、double 或有符号中间结果。")]
+        [ShowIf(nameof(ShowULongInspectorValue))]
         public ulong ulongValue;
         [Name("单精度操作数", "供 float 字段使用。允许常规浮点四则、余数、幂和最值运算，但不承诺跨 CPU 或跨运行时的帧同步一致性。")]
+        [ShowIf(nameof(ShowFloatInspectorValue))]
         public float floatValue;
         [Name("双精度操作数", "供 double 字段使用。保留双精度范围和 C# 浮点特殊值语义，仅应在不要求跨平台帧同步的行为树中使用。")]
+        [ShowIf(nameof(ShowDoubleInspectorValue))]
         public double doubleValue;
         [Name("十进制操作数", "供 decimal 字段使用。支持设置、四则、余数、取负、绝对值和最值；decimal 溢出会抛出异常，不做静默回绕。")]
+        [ShowIf(nameof(ShowDecimalInspectorValue))]
         public decimal decimalValue;
         [Name("字符操作数", "供 char 字段的 Set 操作使用，按一个 UTF-16 码元保存；该节点不执行字符算术或本地化转换。")]
+        [ShowIf(nameof(ShowCharInspectorValue))]
         public char charValue;
         [Name("文本或枚举操作数", "string 字段使用此值执行设置或追加；枚举保存名称或 Flags 组合名称并按目标枚举类型解析，避免大底层值被截断。")]
+        [ShowIf(nameof(ShowStringInspectorValue))]
         public string stringValue;
 
         [NonSerialized] private Type runtimeFieldType;
         [NonSerialized] private object runtimeEnumValue;
+        [NonSerialized] private Type inspectorBlackboardType;
 
         public bool boolValue
         {
@@ -376,5 +390,72 @@ namespace ActionEditor.Nodes.BT
             }
             return result;
         }
+
+        void IBTInspectorContext.SetInspectorBlackboard(Type blackboardType)
+        {
+            inspectorBlackboardType = blackboardType;
+            Type fieldType = BTInspectorVariableUtility.GetFieldType(
+                blackboardType, fieldName);
+            BTVariableCondition.VariableType next =
+                BTVariableCondition.GetVariableType(fieldType);
+            if (next != BTVariableCondition.VariableType.None)
+                variableType = next;
+            if (!SupportsOperation(variableType, setType))
+            {
+                foreach (SetVariableType operation in
+                    Enum.GetValues(typeof(SetVariableType)))
+                {
+                    if (!SupportsOperation(variableType, operation)) continue;
+                    setType = operation;
+                    break;
+                }
+            }
+        }
+
+        private ValueDropdownList<string> InspectorFields =>
+            BTInspectorVariableUtility.GetFields(inspectorBlackboardType);
+
+        private ValueDropdownList<SetVariableType> InspectorOperations
+        {
+            get
+            {
+                var result = new ValueDropdownList<SetVariableType>();
+                foreach (SetVariableType operation in
+                    Enum.GetValues(typeof(SetVariableType)))
+                    if (SupportsOperation(variableType, operation))
+                        result.Add(operation.ToString(), operation);
+                return result;
+            }
+        }
+
+        private bool InspectorNeedsOperand =>
+            setType != SetVariableType.Not &&
+            setType != SetVariableType.Negate &&
+            setType != SetVariableType.Absolute;
+        private bool ShowIntInspectorValue => InspectorNeedsOperand &&
+            (variableType == BTVariableCondition.VariableType.Bool ||
+             variableType == BTVariableCondition.VariableType.Enum ||
+             variableType == BTVariableCondition.VariableType.SByte ||
+             variableType == BTVariableCondition.VariableType.Byte ||
+             variableType == BTVariableCondition.VariableType.Short ||
+             variableType == BTVariableCondition.VariableType.UShort ||
+             variableType == BTVariableCondition.VariableType.Int);
+        private bool ShowUIntInspectorValue => InspectorNeedsOperand &&
+            variableType == BTVariableCondition.VariableType.UInt;
+        private bool ShowLongInspectorValue => InspectorNeedsOperand &&
+            variableType == BTVariableCondition.VariableType.Long;
+        private bool ShowULongInspectorValue => InspectorNeedsOperand &&
+            variableType == BTVariableCondition.VariableType.ULong;
+        private bool ShowFloatInspectorValue => InspectorNeedsOperand &&
+            variableType == BTVariableCondition.VariableType.Float;
+        private bool ShowDoubleInspectorValue => InspectorNeedsOperand &&
+            variableType == BTVariableCondition.VariableType.Double;
+        private bool ShowDecimalInspectorValue => InspectorNeedsOperand &&
+            variableType == BTVariableCondition.VariableType.Decimal;
+        private bool ShowCharInspectorValue => InspectorNeedsOperand &&
+            variableType == BTVariableCondition.VariableType.Char;
+        private bool ShowStringInspectorValue => InspectorNeedsOperand &&
+            (variableType == BTVariableCondition.VariableType.String ||
+             variableType == BTVariableCondition.VariableType.Enum);
     }
 }

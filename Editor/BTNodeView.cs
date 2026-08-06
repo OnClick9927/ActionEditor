@@ -88,6 +88,14 @@ namespace ActionEditor.Nodes.BT
                 runningNode = tree.FindRuntimeTreeNode<BTNode>(this.GUID);
             }
         }
+
+        public override void OnInspectorGUI()
+        {
+            if (data is IBTInspectorContext context)
+                context.SetInspectorBlackboard(
+                    (App.asset as BTTree)?.Blackboard?.GetType());
+            base.OnInspectorGUI();
+        }
     }
 
 }

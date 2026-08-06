@@ -2,7 +2,8 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("重复", "根据配置决定子节点成功或失败后是否立即重新进入；只要需要重启就保持运行中，否则透传子节点最终结果。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Repeater")]
+    [TypeInfoBox("根据配置决定子节点成功或失败后是否立即重新进入；只要需要重启就保持运行中，否则透传子节点最终结果。")]
+    [Name("重复"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Repeater")]
 
     public class BTRepeat : BTDecorateSingle
     {

@@ -3,7 +3,8 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("序列", "按固定顺序执行子节点；成功后推进到下一项，运行中时保存当前位置，任一失败立即失败，全部成功后才返回成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Sequence")]
+    [TypeInfoBox("按固定顺序执行子节点；成功后推进到下一项，运行中时保存当前位置，任一失败立即失败，全部成功后才返回成功。")]
+    [Name("序列"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Sequence")]
     public class BTSequence : BTComposite
     {
         [System.NonSerialized] private int _current;

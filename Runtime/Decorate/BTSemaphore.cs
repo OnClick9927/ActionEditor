@@ -4,7 +4,8 @@ using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("信号量", "进入唯一子分支前申请行为树整数信号量，结束或中止时归还，用于确定性限制可同时运行的分支数量。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Semaphore")]
+    [TypeInfoBox("进入唯一子分支前申请行为树整数信号量，结束或中止时归还，用于确定性限制可同时运行的分支数量。")]
+    [Name("信号量"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Semaphore")]
     public class BTSemaphore : BTDecorateSingle
     {
         [Name("等待空位", "信号量达到上限时，开启会保持运行中并在后续 Tick 重试申请；关闭则不进入子节点并立即失败。")]

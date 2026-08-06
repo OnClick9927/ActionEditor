@@ -2,7 +2,8 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("子树", "加载并执行另一份同类型行为树资源，共享父树黑板；初始化会拒绝缺失、类型不符或形成循环引用的子树。"), Attachable(typeof(BTTree)), Icon("sub")]
+    [TypeInfoBox("加载并执行另一份同类型行为树资源，共享父树黑板；初始化会拒绝缺失、类型不符或形成循环引用的子树。")]
+    [System.Serializable, Name("子树"), Attachable(typeof(BTTree)), Icon("sub")]
     public class BTSubTree : BTNode
     {
         [ReadOnly, Name("子树资源", "加载器用于定位子树资源的路径键；该路径由编辑器选择资源时写入，运行时只读取且必须能唯一加载目标树。")]

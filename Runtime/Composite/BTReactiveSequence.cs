@@ -4,8 +4,9 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("响应序列", "每个 Tick 都从第一个前置子节点重新求值；任一前置项不再成功时，会中止此前运行的后续分支并返回对应状态。"),
-     Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("Sequence")]
+    [TypeInfoBox("每个 Tick 都从第一个前置子节点重新求值；任一前置项不再成功时，会中止此前运行的后续分支并返回对应状态。")]
+    [Name("响应序列"),
+     Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("ReactiveSequence")]
     public sealed class BTReactiveSequence : BTComposite
     {
         [NonSerialized] private int runningIndex;

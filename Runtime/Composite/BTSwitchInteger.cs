@@ -4,8 +4,9 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("整数分支", "读取黑板 int 或枚举字段，将其整数值直接映射为子节点索引；选择变化时会中止此前仍在运行的旧分支。"),
-     Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("Selector")]
+    [TypeInfoBox("读取黑板 int 或枚举字段，将其整数值直接映射为子节点索引；选择变化时会中止此前仍在运行的旧分支。")]
+    [Name("整数分支"),
+     Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("SwitchInteger")]
     public sealed class BTSwitchInteger : BTComposite
     {
         public enum InvalidIndexResult

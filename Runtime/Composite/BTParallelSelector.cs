@@ -3,7 +3,8 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("并行选择", "每个 Tick 按固定顺序更新所有未完成分支；任一分支成功时中止其他运行分支并成功，仅当全部分支失败时返回失败。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("ParallelSelector")]
+    [TypeInfoBox("每个 Tick 按固定顺序更新所有未完成分支；任一分支成功时中止其他运行分支并成功，仅当全部分支失败时返回失败。")]
+    [Name("并行选择"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("ParallelSelector")]
 
     public class BTParallelSelector : BTComposite
     {

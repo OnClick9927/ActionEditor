@@ -2,7 +2,8 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("与", "按固定顺序求值所有条件子节点；遇到失败立即失败，遇到运行中立即返回运行中，只有全部成功时才成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("And")]
+    [TypeInfoBox("按固定顺序求值所有条件子节点；遇到失败立即失败，遇到运行中立即返回运行中，只有全部成功时才成功。")]
+    [Name("与"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("And")]
     public class BTAnd : BTDecorateMuti
     {
         internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)

@@ -4,7 +4,8 @@ using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("延迟 Tick", "进入后先按行为树 Update 次数等待，延迟结束才开始执行唯一子节点；不读取真实时间，适用于确定性帧同步。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Repeater")]
+    [TypeInfoBox("进入后先按行为树 Update 次数等待，延迟结束才开始执行唯一子节点；不读取真实时间，适用于确定性帧同步。")]
+    [Name("延迟 Tick"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("DelayTicks")]
     public class BTDelayTicks : BTDecorateSingle
     {
         [Name("延迟 Tick 数", "开始更新子节点前必须经过的逻辑 Tick 数；当前等待计数会写入状态快照，中止时按节点规则重置。")]

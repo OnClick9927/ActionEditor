@@ -4,7 +4,8 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("重复次数", "按固定次数完整执行唯一子节点；已完成次数写入状态快照，达到总次数后返回最后一次结果或成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Repeater")]
+    [TypeInfoBox("按固定次数完整执行唯一子节点；已完成次数写入状态快照，达到总次数后返回最后一次结果或成功。")]
+    [Name("重复次数"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("RepeatCount")]
     public class BTRepeatCount : BTDecorateSingle
     {
         [Name("重复次数", "一次进入期间要求子节点结束的总次数，必须为正数；运行中断后是否保留由节点的状态恢复流程决定。")]
