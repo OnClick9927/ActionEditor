@@ -2,7 +2,8 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("根节点", "行为树唯一的运行入口，每次 Update 都从这里转发到唯一子节点；缺少连接或存在多个根节点会在准备运行时直接报错。"), Attachable(typeof(BTTree)), Icon("Entry")]
+    [TypeInfoBox("行为树唯一的运行入口，每次 Update 都从这里转发到唯一子节点；缺少连接或存在多个根节点会在准备运行时直接报错。")]
+    [System.Serializable, Name("根节点"), Attachable(typeof(BTTree)), Icon("Entry")]
     public class BTRoot : BTNode
     {
         [System.NonSerialized] private BTNode _child;

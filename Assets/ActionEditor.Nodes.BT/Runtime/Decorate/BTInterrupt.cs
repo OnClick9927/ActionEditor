@@ -3,7 +3,8 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("中断", "把唯一子分支登记为可外部触发的中断目标；收到匹配标识后按配置范围中止正在运行的节点。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Interrupt")]
+    [TypeInfoBox("把唯一子分支登记为可外部触发的中断目标；收到匹配标识后按配置范围中止正在运行的节点。")]
+    [Name("中断"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Interrupt")]
 
     public class BTInterrupt : BTDecorateSingle
     {

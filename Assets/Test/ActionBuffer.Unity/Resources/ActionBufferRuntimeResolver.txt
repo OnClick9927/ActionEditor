@@ -1,0 +1,1 @@
+ActionBuffer runtime resolver test asset.

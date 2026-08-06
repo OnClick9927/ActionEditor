@@ -3,7 +3,8 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("选择", "按固定顺序寻找可成功的子节点；失败时继续下一个，运行中时记住当前位置并在下一 Tick 续跑，任一成功即成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Selector")]
+    [TypeInfoBox("按固定顺序寻找可成功的子节点；失败时继续下一个，运行中时记住当前位置并在下一 Tick 续跑，任一成功即成功。")]
+    [Name("选择"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Selector")]
 
     public class BTSelector : BTComposite
     {

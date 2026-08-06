@@ -92,7 +92,8 @@ class TLMoveClipEditor : ActionEditor.ClipEditorView
 
 
 
-[Attachable(typeof(TLActionTrack)), Name("移动", "在时间轴片段期间移动指定对象。")]
+[TypeInfoBox("在时间轴片段期间移动指定对象。")]
+[Attachable(typeof(TLActionTrack)), Name("移动")]
 
 public class TLMoveClip : Clip, ActionEditor.IResizeAble, ILengthMatchAble, ITLCLip
 {
@@ -128,7 +129,8 @@ public class TLMoveClip : Clip, ActionEditor.IResizeAble, ILengthMatchAble, ITLC
     }
 }
 
-[Attachable(typeof(TLSignalTrack)), Name("日志", "在时间轴到达指定位置时输出日志。")]
+[TypeInfoBox("在时间轴到达指定位置时输出日志。")]
+[Attachable(typeof(TLSignalTrack)), Name("日志")]
 
 public class TLLogSignal : ActionEditor.ClipSignal, ITLCLip
 {
@@ -154,12 +156,14 @@ interface ITLCLip
 {
     void Update();
 }
-[Attachable(typeof(TLGroup)), Name("行为轨道", "承载可持续执行的行为片段。"),Icon(typeof(Transform))]
+[TypeInfoBox("承载可持续执行的行为片段。")]
+[Attachable(typeof(TLGroup)), Name("行为轨道"), Icon(typeof(Transform))]
 public class TLActionTrack : Track
 {
 
 }
-[Attachable(typeof(TLGroup)), Name("信号轨道", "承载在指定时刻触发的信号片段。"), Icon(typeof(Animation))]
+[TypeInfoBox("承载在指定时刻触发的信号片段。")]
+[Attachable(typeof(TLGroup)), Name("信号轨道"), Icon(typeof(Animation))]
 public class TLSignalTrack : Track
 {
 

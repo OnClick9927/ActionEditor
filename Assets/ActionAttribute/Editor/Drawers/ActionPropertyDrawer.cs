@@ -119,7 +119,9 @@ namespace ActionAttribute
             if (!ShouldShow(property)) return 0;
 
             GUIContent fieldLabel = GetLabel(label);
-            float width = Mathf.Max(1, EditorGUIUtility.currentViewWidth - 40);
+            float width = Event.current == null
+                ? 320
+                : Mathf.Max(1, EditorGUIUtility.currentViewWidth - 40);
             float spacing = EditorGUIUtility.standardVerticalSpacing;
             float height = propertySpace?.before ?? 0;
 

@@ -4,7 +4,8 @@ using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("超时 Tick", "限制唯一子节点可持续运行的行为树 Update 次数；超出上限时主动中止子节点并失败，不依赖真实时间。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Failure")]
+    [TypeInfoBox("限制唯一子节点可持续运行的行为树 Update 次数；超出上限时主动中止子节点并失败，不依赖真实时间。")]
+    [Name("超时 Tick"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("TimeoutTicks")]
     public class BTTimeoutTicks : BTDecorateSingle
     {
         [Name("超时 Tick 数", "子节点保持运行中状态时允许消耗的最大逻辑 Tick 数，必须为正数；已消耗计数会写入状态快照。")]

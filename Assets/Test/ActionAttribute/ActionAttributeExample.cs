@@ -4,14 +4,13 @@ using ActionAttribute;
 using UnityEngine;
 
 [TypeInfoBox("该组件集中展示 ActionAttribute Inspector Attribute 的组合用法。")]
-[HideMonoScript]
 public sealed class ActionAttributeExample : MonoBehaviour
 {
     private enum ExampleMode
     {
-        [EnumName("基础模式")] Basic,
-        [EnumName("高级模式")] Advanced,
-        [EnumName("调试模式")] Debug
+        [Name("基础模式", "使用基础配置。")] Basic,
+        [Name("高级模式", "显示并使用高级配置。")] Advanced,
+        [Name("调试模式", "启用调试用途的配置。")] Debug
     }
 
     [Flags]
@@ -29,7 +28,7 @@ public sealed class ActionAttributeExample : MonoBehaviour
     [SerializeField] private bool showAdvanced = true;
 
     [EnumSearch]
-    [Name("工作模式", "使用可搜索下拉框选择模式，枚举成员通过 EnumName 提供中文显示名。")]
+    [Name("工作模式", "使用可搜索下拉框选择模式，枚举成员通过 Name 提供中文显示名。")]
     [SerializeField] private ExampleMode mode;
 
     [ShowIf(nameof(mode), ExampleMode.Advanced)]
@@ -59,11 +58,12 @@ public sealed class ActionAttributeExample : MonoBehaviour
     [MinValue(1), MaxValue(20)]
     [Name("队伍人数", "修改后限制在一到二十之间。")]
     [SerializeField] private int teamSize = 4;
+    public int GG0;
 
     [ProgressBar(0, 100, "任务进度")]
     [Name("进度", "在数值字段下方显示进度条。")]
     [SerializeField] private int progress = 35;
-
+    public int GG;
     [ValidateInput(nameof(IsPositiveEven), "数值必须是正偶数。")]
     [Name("正偶数", "通过指定方法动态校验输入值。")]
     [SerializeField] private int positiveEven = 2;
@@ -80,6 +80,39 @@ public sealed class ActionAttributeExample : MonoBehaviour
     [ResizableTextArea(3, 10)]
     [Name("自适应文本框", "文本框高度会根据内容自动变化。")]
     [SerializeField] private string resizableTextArea;
+
+    [PasswordField]
+    [Name("访问口令", "以掩码形式编辑字符串，序列化数据仍保存原始文本。")]
+    [SerializeField] private string accessToken;
+
+    [Placeholder("请输入简短标识")]
+    [MaxLength(12)]
+    [Name("短标识", "空值时显示占位提示，输入内容最多保留十二个字符。")]
+    [SerializeField] private string shortIdentifier;
+
+    [Step(5)]
+    [Name("网格数值", "修改后自动吸附到最接近的五的倍数。")]
+    [SerializeField] private int gridValue = 10;
+
+    [Slider(0, 10)]
+    [Name("滑杆数值", "使用滑杆编辑并限制在指定的数值范围内。")]
+    [SerializeField] private float sliderValue = 4.5f;
+
+    [EulerAngles]
+    [Name("欧拉旋转", "以三个欧拉角分量编辑底层 Quaternion 字段。")]
+    [SerializeField] private Quaternion eulerRotation = Quaternion.identity;
+
+    [ColorPalette("#E85D5D", "#F2C14E", "#55B88A", "#4B8FD8", "#A779D8")]
+    [Name("颜色板", "保留完整颜色编辑器，并可从下方预设颜色中快速选择。")]
+    [SerializeField] private Color paletteColor = Color.white;
+
+    [AssetPath(typeof(Texture2D))]
+    [Name("纹理路径", "通过项目资源选择器保存纹理的 Assets 相对路径。")]
+    [SerializeField] private string texturePath;
+
+    [AssetGuid(typeof(Texture2D))]
+    [Name("纹理 GUID", "通过项目资源选择器保存纹理的稳定 GUID，移动资源后仍可解析。")]
+    [SerializeField] private string textureGuid;
 
     [HelpBox("该引用用于演示必填校验。", InspectorMessageType.Info)]
     [Required("必须指定目标对象。")]

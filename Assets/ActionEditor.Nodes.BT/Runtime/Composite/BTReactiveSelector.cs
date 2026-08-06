@@ -4,8 +4,9 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("响应选择", "每个 Tick 都从第一个高优先级子节点重新求值；高优先级分支变为可运行或成功时，会中止此前运行的低优先级分支。"),
-     Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("Selector")]
+    [TypeInfoBox("每个 Tick 都从第一个高优先级子节点重新求值；高优先级分支变为可运行或成功时，会中止此前运行的低优先级分支。")]
+    [Name("响应选择"),
+     Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("ReactiveSelector")]
     public sealed class BTReactiveSelector : BTComposite
     {
         [NonSerialized] private int runningIndex;

@@ -19,11 +19,9 @@ public sealed class ActionBufferUnityExample : MonoBehaviour
     [ContextMenu("Verify ActionBuffer Unity References")]
     private void VerifyReferences()
     {
-        var registry = new UnityObjectRegistry();
-        if (texture != null) registry.Register("texture", texture);
-        if (sceneObject != null) registry.Register("scene", sceneObject);
-
-        BuffSettings settings = UnityObjectSerialization.CreateSettings(registry);
+        // The same settings instance keeps scene/runtime references alive for
+        // the complete write/read operation in a Player.
+        BuffSettings settings = UnityObjectSerialization.CreateRuntimeSettings();
         var source = new Payload
         {
             anyObject = texture != null

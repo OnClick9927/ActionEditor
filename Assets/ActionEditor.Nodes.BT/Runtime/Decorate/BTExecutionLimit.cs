@@ -4,8 +4,9 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("执行上限", "限制整个行为树运行会话中唯一子节点可完整结束的累计次数；计数不会因节点重新进入而清零，并包含在状态快照中。"),
-     Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Repeater")]
+    [TypeInfoBox("限制整个行为树运行会话中唯一子节点可完整结束的累计次数；计数不会因节点重新进入而清零，并包含在状态快照中。")]
+    [Name("执行上限"),
+     Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("ExecutionLimit")]
     public sealed class BTExecutionLimit : BTDecorateSingle
     {
         public enum LimitResult

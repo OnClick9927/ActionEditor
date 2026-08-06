@@ -231,6 +231,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1415125287}
   - component: {fileID: 1415125286}
+  - component: {fileID: 1415125288}
   m_Layer: 0
   m_Name: Directional Light
   m_TagString: Untagged
@@ -315,3 +316,86 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+--- !u!114 &1415125288
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1415125285}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 90f48f10e84d430ea5afdc47a30f0004, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  showAdvanced: 0
+  mode: 2
+  advancedModeValue: 0
+  advancedValue: 10
+  simpleHint: "\u5F53\u524D\u4F7F\u7528\u7B80\u5316\u914D\u7F6E"
+  lockValues: 0
+  conditionalValue: 0
+  health: 75
+  teamSize: 1
+  GG0: 0
+  progress: 31
+  GG: 0
+  positiveEven: 10
+  delayedText: 5
+  fixedTextArea: 
+  resizableTextArea: 
+  accessToken: 
+  shortIdentifier: 
+  gridValue: 10
+  sliderValue: 4.5
+  eulerRotation: {x: 0, y: 0, z: 0, w: 1}
+  paletteColor: {r: 0.14194465, g: 1, b: 0, a: 1}
+  texturePath: 
+  textureGuid: 
+  requiredTarget: {fileID: 1415125287}
+  options: -1
+  labelFreeText: "\u8FD9\u662F\u4E00\u4E2A\u9690\u85CF\u6807\u7B7E\u7684\u5B57\u6BB5"
+  lastCallbackValue: "\u5DF2\u5173\u95ED\u9AD8\u7EA7\u914D\u7F6E"
+  moveSpeed: -3
+  attack: 10
+  foldoutA: -21
+  foldoutB: 0
+  horizontalLeft: 12
+  horizontalRight: 0
+  basicOption: 
+  expertOption: 
+  enableOptional: 0
+  optionalValue: 0
+  difficulty: normal
+  checkpoints: []
+  integerRange: {x: 2.0172415, y: 62.017235}
+  responseCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0.1
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 10
+      value: 1
+      inSlope: 0.1
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  previewTexture: {fileID: 2800000, guid: 70c5807489979744fbdd1baca46b4233, type: 3}
+  targetTag: Untagged
+  targetLayer: 5
+  sceneName: SampleScene
+  outputFolder: Assets/Editor
+  inlineMessage: 

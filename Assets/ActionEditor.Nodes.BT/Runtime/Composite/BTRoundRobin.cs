@@ -4,7 +4,8 @@ using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("轮询", "每次进入只执行当前索引的一个子节点，并根据完成结果决定是否推进；索引会进入状态快照，恢复后继续相同轮询位置。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("Repeater")]
+    [TypeInfoBox("每次进入只执行当前索引的一个子节点，并根据完成结果决定是否推进；索引会进入状态快照，恢复后继续相同轮询位置。")]
+    [Name("轮询"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("RoundRobin")]
     public class BTRoundRobin : BTComposite
     {
         [Name("成功后前进", "当前子节点返回成功时，将下一次进入所用索引推进到后一个子节点，并在末尾循环回第一个。")]
