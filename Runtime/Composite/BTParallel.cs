@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using ActionUnity;
+using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("并行", "并行执行全部子节点；任一失败即失败，全部成功后成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("Parallel")]
+    [Name("并行", "每个 Tick 按固定子节点顺序更新所有未完成分支；任一分支失败时中止其余运行分支并失败，全部成功时才成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("Parallel")]
 
     public class BTParallel : BTComposite
     {

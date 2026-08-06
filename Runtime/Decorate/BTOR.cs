@@ -1,8 +1,8 @@
-using ActionUnity;
+using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("或", "依次检查条件，任一条件成功时返回成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("OR")]
+    [Name("或", "按固定顺序求值条件子节点；遇到成功立即成功，遇到运行中立即返回运行中，仅当全部条件失败时才失败。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("OR")]
     public class BTOR : BTDecorateMuti
     {
         internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)

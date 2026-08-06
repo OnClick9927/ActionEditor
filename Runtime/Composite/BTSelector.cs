@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using ActionUnity;
+using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("选择", "按顺序执行子节点，直到某个子节点成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Selector")]
+    [Name("选择", "按固定顺序寻找可成功的子节点；失败时继续下一个，运行中时记住当前位置并在下一 Tick 续跑，任一成功即成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Selector")]
 
     public class BTSelector : BTComposite
     {
