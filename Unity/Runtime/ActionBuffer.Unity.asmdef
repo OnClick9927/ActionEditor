@@ -1,0 +1,16 @@
+{
+    "name": "ActionBuffer.Unity",
+    "rootNamespace": "ActionBuffer.Unity",
+    "references": [
+        "GUID:27ca05e1d80c71c44873bc25f807c70b"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
