@@ -1,15 +1,17 @@
-using ActionUnity;
+using ActionAttribute;
 using System;
 using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
-    [Name("收到事件？", "检查行为树是否收到指定的命名事件。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Condition), Icon("Event")]
-    public class BTRecEventCondition : BTCondition
+    [Name("收到事件？", "检查所属行为树是否已广播指定命名事件；收到后本次条件成功并消费标记，未收到时失败。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Condition), Icon("Event")]
+    public class BTRecEventCondition : BTCondition, IBTEventReceiver
     {
-        [ReadOnly] public string eventName;
+        [ReadOnly, Name("事件名称", "监听和消费的精确事件键，由树资源的事件列表统一维护；接收标记会写入运行时状态快照。")]
+        public string eventName;
         [NonSerialized] private bool recEve;
 
-        internal void ReceiveEvent() => recEve = true;
+        string IBTEventReceiver.EventName => eventName;
+        void IBTEventReceiver.ReceiveEvent() => recEve = true;
 
         internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
         {

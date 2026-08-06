@@ -1,14 +1,16 @@
-using ActionUnity;
+using ActionAttribute;
 using System;
 using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("信号量", "通过行为树信号量限制同时运行的分支数量。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Semaphore")]
+    [Name("信号量", "进入唯一子分支前申请行为树整数信号量，结束或中止时归还，用于确定性限制可同时运行的分支数量。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Semaphore")]
     public class BTSemaphore : BTDecorateSingle
     {
+        [Name("等待空位", "信号量达到上限时，开启会保持运行中并在后续 Tick 重试申请；关闭则不进入子节点并立即失败。")]
         public bool wait = true;
-        [ReadOnly] public int semaphore;
+        [ReadOnly, Name("信号量", "需要申请的树级信号量稳定索引，由编辑器根据配置列表写入；越界索引会在运行初始化阶段报错。")]
+        public int semaphore;
         [NonSerialized] private bool acquired;
 
         internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)

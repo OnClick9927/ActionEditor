@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ActionAttribute;
 namespace ActionEditor.Nodes.BT
 {
     public abstract class BTComposite : BTNode
@@ -11,6 +12,7 @@ namespace ActionEditor.Nodes.BT
             Both
         }
 
+        [Name("中止方式", "指定条件节点结果变化时允许中止当前分支、自身以下分支或低优先级分支的范围；只影响正在运行的节点。")]
         public AbortType abortType;
         [System.NonSerialized] private List<BTNode> _children;
         [System.NonSerialized] private IReadOnlyList<BTNode> _childView;

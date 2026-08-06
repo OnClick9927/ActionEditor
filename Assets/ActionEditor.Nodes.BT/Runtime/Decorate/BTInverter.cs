@@ -1,8 +1,8 @@
-using ActionUnity;
+using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("取反", "交换子节点的成功与失败结果。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Inverter")]
+    [Name("取反", "执行唯一子节点并交换其成功与失败结果；运行中状态保持不变，中止时会继续向正在运行的子节点传递。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate),Icon("Inverter")]
 
     public class BTInverter : BTDecorateSingle
     {

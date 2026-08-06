@@ -1,4 +1,4 @@
-﻿using ActionUnity;
+using ActionAttribute;
 using ActionBuffer;
 using System;
 using System.Collections.Generic;
@@ -9,7 +9,8 @@ namespace ActionEditor.Nodes
     public class NodeData
     {
         [ReadOnly][Buffer] internal V4 position = new V4();
-        [ReadOnly][Buffer] public string guid;
+        [ReadOnly, Buffer, Name("节点标识", "用于唯一识别当前图节点的只读标识。")]
+        public string guid;
         public NodeData()
         {
             position = new V4();

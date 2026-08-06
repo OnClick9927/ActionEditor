@@ -1,14 +1,17 @@
-using ActionUnity;
+using ActionAttribute;
 using System;
 using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("轮询", "按顺序轮流执行子节点，并保存下一次执行位置。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("Repeater")]
+    [Name("轮询", "每次进入只执行当前索引的一个子节点，并根据完成结果决定是否推进；索引会进入状态快照，恢复后继续相同轮询位置。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("Repeater")]
     public class BTRoundRobin : BTComposite
     {
+        [Name("成功后前进", "当前子节点返回成功时，将下一次进入所用索引推进到后一个子节点，并在末尾循环回第一个。")]
         public bool advanceOnSuccess = true;
+        [Name("失败后前进", "当前子节点返回失败时，将下一次进入所用索引推进到后一个子节点；关闭时失败会停留在当前位置。")]
         public bool advanceOnFailure = true;
+        [Name("中止时重置", "节点处于运行中并被父级中止时，将已保存的轮询索引恢复为零；关闭时保留中止前的位置。")]
         public bool resetOnAbort;
         [NonSerialized] private int currentIndex;
 

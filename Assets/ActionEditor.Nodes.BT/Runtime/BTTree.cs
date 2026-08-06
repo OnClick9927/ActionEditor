@@ -1,15 +1,17 @@
-using ActionUnity;
+using ActionAttribute;
 using System;
 using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
-    [System.Serializable, Name("行为树", "可运行行为树的图数据与运行时容器。")]
+    [System.Serializable, Name("行为树", "保存节点图、黑板和信号量配置，并在准备运行后负责更新、中断、事件分发及完整整数状态快照的收集与恢复。")]
     public abstract class BTTree : GraphAsset
     {
         [System.Serializable]
         public class Semaphore
         {
+            [Name("名称", "信号量的人类可读名称，供装饰节点选择和编辑器展示；运行时实际按稳定列表索引访问。")]
             public string name;
+            [Name("最大数量", "同一时刻允许成功占用该信号量的最大分支数，必须大于零；当前占用数会包含在状态快照中。")]
             public int max = 1;
         }
         public static event Action<BTTree> onInstanceChanged;
@@ -29,7 +31,7 @@ namespace ActionEditor.Nodes.BT
         public static void ClearInstance() => instance = null;
         protected abstract Blackboard blackboard { get; }
         public Blackboard Blackboard => _parent == null ? blackboard : _parent.blackboard;
-        [Name("子树?", "标记当前资源是否只能作为其他行为树的子树。")]
+        [Name("子树?", "开启后该资源只能由同类型父树通过子树节点加载，并共享父树黑板；关闭时它作为可独立运行的主树初始化运行容器。")]
         public bool IsSubTree;
         [System.NonSerialized] private BTTree _parent;
         [System.NonSerialized] private BTRoot _root;
@@ -58,7 +60,7 @@ namespace ActionEditor.Nodes.BT
         [System.NonSerialized] private Dictionary<string, BTInterrupt> interrupts;
         [System.NonSerialized] private int[] semaphore_value;
         [System.NonSerialized] private int[] semaphore_limits;
-        [System.NonSerialized] private Dictionary<string, List<BTRecEventCondition>> eve_map;
+        [System.NonSerialized] private Dictionary<string, List<IBTEventReceiver>> eve_map;
 
         internal void ReleaseSemaphore(int index)
         {
@@ -87,15 +89,15 @@ namespace ActionEditor.Nodes.BT
                 if (!interrupts.TryAdd(flag, interrupt))
                     throw new Exception($"Same Flag {flag}");
             }
-            else if (node is BTRecEventCondition rec)
+            else if (node is IBTEventReceiver receiver)
             {
-                var flag = rec.eventName;
+                string flag = receiver.EventName;
                 if (!eve_map.TryGetValue(flag, out var list))
                 {
-                    list = new List<BTRecEventCondition>();
+                    list = new List<IBTEventReceiver>();
                     eve_map[flag] = list;
                 }
-                list.Add(rec);
+                list.Add(receiver);
             }
         }
         public T FindRuntimeTreeNode<T>(string guid) where T : NodeData
@@ -145,8 +147,7 @@ namespace ActionEditor.Nodes.BT
             if (!eve_map.TryGetValue(eve, out var list)) return false;
             for (int i = 0; i < list.Count; i++)
             {
-                var rec = list[i];
-                rec.ReceiveEvent();
+                list[i].ReceiveEvent();
             }
             return true;
         }

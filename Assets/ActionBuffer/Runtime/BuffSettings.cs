@@ -12,6 +12,8 @@ namespace ActionBuffer
         private static readonly object LimitSync = new object();
         private readonly object _converterSync = new object();
         private Dictionary<Type, BuffConverter> _converters;
+        private List<ConverterFactoryRegistration> _converterFactories;
+        private Dictionary<Type, BuffConverter> _factoryConverters;
         private HashSet<Type> _types;
         private int _activeOperations;
         private int _restrictTypes;
@@ -25,6 +27,12 @@ namespace ActionBuffer
 
         public static BuffSettings DefaultSetting { get; } =
             new BuffSettings();
+
+        private sealed class ConverterFactoryRegistration
+        {
+            internal Type BaseType;
+            internal Func<Type, BuffConverter> Factory;
+        }
 
         public bool TypeInfo { get; set; } = true;
         public bool FullField { get; set; }
@@ -101,6 +109,36 @@ namespace ActionBuffer
                 if (_converters == null)
                     _converters = new Dictionary<Type, BuffConverter>();
                 _converters[typeof(T)] = converter;
+                _factoryConverters?.Remove(typeof(T));
+            }
+        }
+
+        public void RegisterConverterFactory<TBase>(
+            Func<Type, BuffConverter> factory) =>
+            RegisterConverterFactory(typeof(TBase), factory);
+
+        public void RegisterConverterFactory(Type baseType,
+            Func<Type, BuffConverter> factory)
+        {
+            if (baseType == null) throw new ArgumentNullException(nameof(baseType));
+            if (factory == null) throw new ArgumentNullException(nameof(factory));
+            lock (_converterSync)
+            {
+                EnsureSettingsMutable();
+                _converterFactories ??= new List<ConverterFactoryRegistration>();
+                for (int i = 0; i < _converterFactories.Count; i++)
+                {
+                    if (_converterFactories[i].BaseType != baseType) continue;
+                    _converterFactories[i].Factory = factory;
+                    _factoryConverters = null;
+                    return;
+                }
+                _converterFactories.Add(new ConverterFactoryRegistration
+                {
+                    BaseType = baseType,
+                    Factory = factory
+                });
+                _factoryConverters = null;
             }
         }
 
@@ -115,21 +153,81 @@ namespace ActionBuffer
             }
         }
 
+        public bool RemoveConverterFactory<TBase>() =>
+            RemoveConverterFactory(typeof(TBase));
+
+        public bool RemoveConverterFactory(Type baseType)
+        {
+            if (baseType == null) throw new ArgumentNullException(nameof(baseType));
+            lock (_converterSync)
+            {
+                EnsureSettingsMutable();
+                if (_converterFactories == null) return false;
+                for (int i = 0; i < _converterFactories.Count; i++)
+                {
+                    if (_converterFactories[i].BaseType != baseType) continue;
+                    _converterFactories.RemoveAt(i);
+                    if (_converterFactories.Count == 0) _converterFactories = null;
+                    _factoryConverters = null;
+                    return true;
+                }
+                return false;
+            }
+        }
+
         public void ClearConverters()
         {
             lock (_converterSync)
             {
                 EnsureSettingsMutable();
                 _converters = null;
+                _converterFactories = null;
+                _factoryConverters = null;
             }
         }
 
         internal bool TryGetConverter(Type type, out BuffConverter converter)
         {
-            var converters = _converters;
-            if (converters != null) return converters.TryGetValue(type, out converter);
-            converter = null;
-            return false;
+            lock (_converterSync)
+            {
+                if (_converters != null &&
+                    _converters.TryGetValue(type, out converter)) return true;
+                if (_factoryConverters != null &&
+                    _factoryConverters.TryGetValue(type, out converter)) return true;
+                var registration = FindConverterFactory(type);
+                if (registration == null)
+                {
+                    converter = null;
+                    return false;
+                }
+
+                converter = registration.Factory(type);
+                if (converter == null)
+                    throw new InvalidOperationException(
+                        $"Converter factory for '{registration.BaseType}' returned null for '{type}'.");
+                Type requiredConverter = typeof(BuffConverter<>).MakeGenericType(type);
+                if (!requiredConverter.IsInstanceOfType(converter))
+                    throw new InvalidOperationException(
+                        $"Converter factory for '{registration.BaseType}' returned " +
+                        $"'{converter.GetType()}', which cannot serialize '{type}'.");
+                _factoryConverters ??= new Dictionary<Type, BuffConverter>();
+                _factoryConverters[type] = converter;
+                return true;
+            }
+        }
+
+        private ConverterFactoryRegistration FindConverterFactory(Type type)
+        {
+            ConverterFactoryRegistration best = null;
+            if (_converterFactories == null) return null;
+            for (int i = _converterFactories.Count - 1; i >= 0; i--)
+            {
+                var candidate = _converterFactories[i];
+                if (!candidate.BaseType.IsAssignableFrom(type)) continue;
+                if (best == null || best.BaseType.IsAssignableFrom(candidate.BaseType))
+                    best = candidate;
+            }
+            return best;
         }
 
         internal void BeginOperation()

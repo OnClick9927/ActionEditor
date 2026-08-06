@@ -1,0 +1,18 @@
+{
+    "name": "ActionAttribute.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:8ff3795b68a2ab845b3dd7d36b77235b"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

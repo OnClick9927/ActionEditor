@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
-using ActionUnity;
+using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [Name("重复次数", "将子节点重复执行指定次数。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Repeater")]
+    [Name("重复次数", "按固定次数完整执行唯一子节点；已完成次数写入状态快照，达到总次数后返回最后一次结果或成功。"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("Repeater")]
     public class BTRepeatCount : BTDecorateSingle
     {
+        [Name("重复次数", "一次进入期间要求子节点结束的总次数，必须为正数；运行中断后是否保留由节点的状态恢复流程决定。")]
         public int repeatCount = 1;
+        [Name("失败时停止", "开启后任意一轮失败都会立即返回失败；关闭时失败也计为一次完成并继续剩余轮次。")]
         public bool stopOnFailure;
         [NonSerialized] private int completedCount;
 
