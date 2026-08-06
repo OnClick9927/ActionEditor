@@ -470,6 +470,7 @@ namespace ActionBuffer
         private readonly List<CachedField> _fields = new();
         private readonly List<CachedEnumerable> _enumerables = new();
         private readonly List<CachedPolymorphic> _polymorphicValues = new();
+        private readonly List<object> _converterValues = new();
         private readonly Dictionary<Type, IFieldValueCache> _fieldValueCaches = new();
         private readonly BoxedFieldValueCache _boxedFieldValues = new BoxedFieldValueCache();
         private Dictionary<string, int> _metaMap = new();
@@ -480,6 +481,7 @@ namespace ActionBuffer
         private int _objectIndex;
         private int _enumerableIndex;
         private int _polymorphicIndex;
+        private int _converterValueIndex;
         private int _scanDepth;
         private int _nodeCount;
         private bool _collectMeta;
@@ -906,11 +908,34 @@ namespace ActionBuffer
             return cached.GetMultiDimensionalValues<T>(rank, out shape);
         }
 
+        public void CacheConverterValue<T>(T value) => _converterValues.Add(value);
+
+        public T ReadConverterValue<T>()
+        {
+            if (_converterValueIndex >= _converterValues.Count)
+                throw new InvalidOperationException(
+                    "The converter scan cache is out of sync.");
+            object value = _converterValues[_converterValueIndex++];
+            if (value == null) return default;
+            if (value is T typed) return typed;
+            throw new InvalidOperationException(
+                $"Cached converter value '{value.GetType()}' is not assignable to '{typeof(T)}'.");
+        }
+
+        internal void EnsureConverterValuesConsumed()
+        {
+            if (_converterValueIndex != _converterValues.Count)
+                throw new InvalidOperationException(
+                    $"Converter scan cache contains {_converterValues.Count} values, " +
+                    $"but Write consumed {_converterValueIndex}.");
+        }
+
         internal void ResetRead()
         {
             _objectIndex = 0;
             _enumerableIndex = 0;
             _polymorphicIndex = 0;
+            _converterValueIndex = 0;
         }
 
         private void Clear()
@@ -918,6 +943,7 @@ namespace ActionBuffer
             _objects.Clear();
             _fields.Clear();
             _polymorphicValues.Clear();
+            _converterValues.Clear();
             foreach (var values in _fieldValueCaches.Values)
                 values.Clear();
             if (_fieldValueCaches.Count > BuffSettings.PoolLimit * 4)
@@ -940,6 +966,7 @@ namespace ActionBuffer
             TrimList(_fields);
             TrimList(_enumerables);
             TrimList(_polymorphicValues);
+            TrimList(_converterValues);
             TrimList(_metas);
             if (_activeReferences.Count > BuffSettings.RetainedListCapacity)
                 _activeReferences = new HashSet<object>(ReferenceComparer.Instance);

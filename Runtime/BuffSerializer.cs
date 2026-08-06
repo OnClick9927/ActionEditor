@@ -44,6 +44,7 @@ namespace ActionBuffer
                     scan.ResetRead();
                     writer.Init(scan);
                     converter.Write(writer, scan, obj);
+                    scan.EnsureConverterValuesConsumed();
                 }
                 finally
                 {
