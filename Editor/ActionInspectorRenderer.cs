@@ -126,9 +126,7 @@ namespace ActionAttribute
             if (entry.Property.propertyPath == "m_Script")
             {
                 using (new EditorGUI.DisabledScope(true))
-                    EditorGUILayout.ObjectField(new GUIContent("Script"),
-                        entry.Property.objectReferenceValue, typeof(MonoScript),
-                        false);
+                    EditorGUILayout.PropertyField(entry.Property, true);
                 return;
             }
             if (entry.Field == null)
