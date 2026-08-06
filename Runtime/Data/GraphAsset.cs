@@ -1,4 +1,4 @@
-using ActionUnity;
+using ActionAttribute;
 using ActionBuffer;
 using System;
 using System.Collections.Generic;
@@ -15,7 +15,8 @@ namespace ActionEditor.Nodes
         {
             guid = Guid.NewGuid().ToString();
         }
-        [ReadOnly] public string guid;
+        [ReadOnly, Name("资源标识", "用于唯一识别当前图资源的只读标识。")]
+        public string guid;
         public const string FileEx = "graph.bytes";
         [ReadOnly][Buffer] internal V4 position = new V4();
         [ReadOnly][Buffer] internal V4 scale = new V4() { x = 1, z = 1, w = 1, y = 1 };
