@@ -74,16 +74,17 @@ namespace ActionEditor.Nodes
         }
         void CreateConfirm(bool select)
         {
-            //var path = $"{Prefs.savePath}/{_createName}.json";
-
-            var path = Path.Combine(Prefs.savePath, $"{_createName}.{GraphAsset.FileEx}");
+            Type type = App.AssetTypes[_selectType];
+            string extension = App.GetFileExtension(type);
+            var path = Path.Combine(Prefs.savePath,
+                $"{_createName}.{extension}");
 
             if (select)
             {
                 var s = SelectSavePath();
                 if (string.IsNullOrEmpty(s))
                     return;
-                path = Path.Combine(s, $"{_createName}.{GraphAsset.FileEx}");
+                path = Path.Combine(s, $"{_createName}.{extension}");
             }
 
 
@@ -99,8 +100,7 @@ namespace ActionEditor.Nodes
             else
             {
 
-                var t = App.AssetTypes[_selectType];
-                var inst = Activator.CreateInstance(t) as GraphAsset;
+                var inst = Activator.CreateInstance(type) as GraphAsset;
                 if (inst != null)
                 {
                     var json = inst.ToBytes();

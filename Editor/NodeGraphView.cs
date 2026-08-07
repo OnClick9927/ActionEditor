@@ -104,7 +104,8 @@ namespace ActionEditor.Nodes
         {
             var tree = new List<SearchTreeEntry>
             {
-                new SearchTreeGroupEntry(new GUIContent("Nodes"), 0),
+                new SearchTreeGroupEntry(new GUIContent(
+                    Lan.Text("Nodes", "Nodes")), 0),
             };
             var nodeTypes = this.FitterNodeTypes(App.GetNodeTypes(), context_target);
 
@@ -162,13 +163,12 @@ namespace ActionEditor.Nodes
             return true;
         }
 
-        //internal void UpdateGraphColor()
-        //{
-        //    for (int i = 0; i < nodes.Count; i++)
-        //    {
-        //        nodes[i].SetTitleColor();
-        //    }
-        //}
+        internal void UpdateGraphColors()
+        {
+            List<GraphNode> graphNodes = nodes;
+            for (int i = 0; i < graphNodes.Count; i++)
+                graphNodes[i].RefreshColors();
+        }
     }
 
 
@@ -182,6 +182,7 @@ namespace ActionEditor.Nodes
             Inspector
         }
         protected GraphAsset graph;
+        public GraphAsset asset => graph;
         protected sealed override bool canCopySelection => false;
         protected sealed override bool canCutSelection => false;
         protected sealed override bool canDuplicateSelection => false;
@@ -285,9 +286,6 @@ namespace ActionEditor.Nodes
                 target = null;
             if (target == null)
             {
-                EditorEX.DrawPingScript(graph.GetType());
-                EditorGUILayout.LabelField(EditorEX.GetTypeContent(graph.GetType()),
-                    _style, GUILayout.Height(30));
                 this.OnInspectorGUI();
                 return;
             }
@@ -315,7 +313,8 @@ namespace ActionEditor.Nodes
                 ;
                 if (target is GraphComment comment)
                 {
-                    EditorGUILayout.LabelField("注释", _style,
+                    EditorGUILayout.LabelField(Lan.Text("Comment", "Comment"),
+                        _style,
                         GUILayout.Height(30));
                     comment.OnInspectorGUI();
                 }
@@ -424,7 +423,7 @@ namespace ActionEditor.Nodes
         {
             if (evt.target is Edge con)
             {
-                evt.menu.AppendAction("Delete", (x) =>
+                evt.menu.AppendAction(Lan.ins.Delete, (x) =>
                 {
                     this.DeleteElements(new List<GraphElement>() { con });
                 }, DropdownMenuAction.AlwaysEnabled);
@@ -432,12 +431,14 @@ namespace ActionEditor.Nodes
             if (!(evt.target is NodeGraphView)) return;
             if (nodeCreationRequest != null)
             {
-                evt.menu.AppendAction("Create Node", (x) =>
+                evt.menu.AppendAction(Lan.Text("CreateNode", "Create Node"),
+                    (x) =>
                 {
                     OpenSearchPop(null, x.eventInfo.mousePosition + position.position);
 
                 }, DropdownMenuAction.AlwaysEnabled);
-                evt.menu.AppendAction("Create Comment", (x) =>
+                evt.menu.AppendAction(Lan.Text("CreateComment",
+                    "Create Comment"), (x) =>
                 {
                     var mousePosition = root.ChangeCoordinatesTo(root.parent,
                         x.eventInfo.mousePosition);
@@ -450,7 +451,8 @@ namespace ActionEditor.Nodes
                     AddToSelection(comment);
                     comment.FocusContent();
                 }, DropdownMenuAction.AlwaysEnabled);
-                evt.menu.AppendAction("Create Group", (x) =>
+                evt.menu.AppendAction(Lan.Text("CreateGroup", "Create Group"),
+                    (x) =>
                 {
 
                     var mousePosition = root.ChangeCoordinatesTo(root.parent, x.eventInfo.mousePosition);
@@ -465,14 +467,18 @@ namespace ActionEditor.Nodes
 
 
             }
-            evt.menu.AppendAction("Duplicate Selection", x => App.Duplicate(),
+            evt.menu.AppendAction(Lan.Text("DuplicateSelection",
+                "Duplicate Selection"), x => App.Duplicate(),
                 DuplicateSelectionStatus);
-            evt.menu.AppendAction("Frame Selection", x => FrameSelection(),
+            evt.menu.AppendAction(Lan.Text("FrameSelection", "Frame Selection"),
+                x => FrameSelection(),
                 DeleteSelectionStutas);
-            evt.menu.AppendAction("Select All", x => App.SelectAll(),
+            evt.menu.AppendAction(Lan.Text("SelectAll", "Select All"),
+                x => App.SelectAll(),
                 DropdownMenuAction.AlwaysEnabled);
             evt.menu.AppendSeparator();
-            evt.menu.AppendAction("Delete Selection", (x) =>
+            evt.menu.AppendAction(Lan.Text("DeleteSelection",
+                "Delete Selection"), (x) =>
             {
                 this.DeleteSelection();
             }, DeleteSelectionStutas);
@@ -496,10 +502,18 @@ namespace ActionEditor.Nodes
 
         protected virtual void OnInspectorGUI()
         {
+            DrawInspectorHeader(graph.GetType());
             scroll = GUILayout.BeginScrollView(scroll);
 
             EditorEX.CreateEditor(this.graph).OnInspectorGUI();
             GUILayout.EndScrollView();
+        }
+
+        protected void DrawInspectorHeader(Type type)
+        {
+            EditorEX.DrawPingScript(type);
+            EditorGUILayout.LabelField(EditorEX.GetTypeContent(type), _style,
+                GUILayout.Height(30));
         }
         public virtual void Update()
         {
@@ -514,7 +528,8 @@ namespace ActionEditor.Nodes
         }
         public virtual void OnHeaderGUI()
         {
-            App.window.showMiniMap = GUILayout.Toggle(App.window.showMiniMap, "Mini", EditorStyles.toolbarButton);
+            App.window.showMiniMap = GUILayout.Toggle(App.window.showMiniMap,
+                Lan.Text("MiniMap", "Mini Map"), EditorStyles.toolbarButton);
             minimap.visible = App.window.showMiniMap;
         }
     }

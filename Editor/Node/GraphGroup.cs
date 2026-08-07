@@ -63,12 +63,18 @@ namespace ActionEditor.Nodes
         {
             if (!(evt.target is GraphGroup)) return;
 
-            evt.menu.AppendAction("DeleteSelf", DeleteSelf, DeleteStatus);
-            evt.menu.AppendAction("Delete", Delete, DeleteStatus);
+            evt.menu.AppendAction(Lan.Text("DeleteSelf", "Delete Group Only"),
+                DeleteSelf, DeleteStatus);
+            evt.menu.AppendAction(Lan.ins.Delete, Delete, DeleteStatus);
 
-            evt.menu.AppendAction("Remove Nodes", RemoveNodes, RemoveNodesStatus);
-            evt.menu.AppendAction("Remove Selected Nodes", RemoveSelectedNodes, RemoveSelectedNodesStatus);
-            evt.menu.AppendAction("Add Selected Nodes", AddSelectedNodes, AddSelectedNodesStatus);
+            evt.menu.AppendAction(Lan.Text("RemoveNodes", "Remove Nodes"),
+                RemoveNodes, RemoveNodesStatus);
+            evt.menu.AppendAction(Lan.Text("RemoveSelectedNodes",
+                "Remove Selected Nodes"), RemoveSelectedNodes,
+                RemoveSelectedNodesStatus);
+            evt.menu.AppendAction(Lan.Text("AddSelectedNodes",
+                "Add Selected Nodes"), AddSelectedNodes,
+                AddSelectedNodesStatus);
 
         }
 

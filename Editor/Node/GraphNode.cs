@@ -76,6 +76,7 @@ namespace ActionEditor.Nodes
         public abstract string GUID { get; }
         public abstract string NodeName { get; }
         public NodeGraphView view { get; private set; }
+        public GraphAsset asset { get; private set; }
         public List<GraphPort> ports { get { return this.view.ports.FindAll(x => x.node == this); } }
         public abstract NodeData Data { get; }
 
@@ -99,6 +100,7 @@ namespace ActionEditor.Nodes
 
             SetTitleColor();
             this.view = view;
+            asset = view.asset;
 
             var find = this.Data.GetIcon();
             if (find != null)
@@ -157,10 +159,18 @@ namespace ActionEditor.Nodes
         }
 
 
-        void SetTitleColor()
+        private void SetTitleColor()
         {
             this.titleContainer.style.backgroundColor = new StyleColor(this.Data.GetColor());
 
+        }
+
+        internal void RefreshColors()
+        {
+            SetTitleColor();
+            List<GraphPort> nodePorts = ports;
+            for (int i = 0; i < nodePorts.Count; i++)
+                nodePorts[i].portColor = Prefs.GetColor(nodePorts[i].portType);
         }
 
 
@@ -223,11 +233,14 @@ namespace ActionEditor.Nodes
         public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
         {
             if (!(evt.target is Node)) return;
-            evt.menu.AppendAction("Delete", Delete, DeleteStatus);
+            evt.menu.AppendAction(Lan.ins.Delete, Delete, DeleteStatus);
 
-            evt.menu.AppendAction("Disconnect all", DisconnectAll, DisconnectAllStatus);
-            evt.menu.AppendAction("Remove From Group", RemoveFromGroup, RemoveFromGroupStatus);
-            evt.menu.AppendAction("Pretty Layout OutPuts", (e) =>
+            evt.menu.AppendAction(Lan.Text("DisconnectAll", "Disconnect All"),
+                DisconnectAll, DisconnectAllStatus);
+            evt.menu.AppendAction(Lan.Text("RemoveFromGroup",
+                "Remove From Group"), RemoveFromGroup, RemoveFromGroupStatus);
+            evt.menu.AppendAction(Lan.Text("PrettyLayoutOutputs",
+                "Layout Outputs"), (e) =>
             {
 
                 LayoutTree(this);
