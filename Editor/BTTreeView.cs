@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
+using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.UIElements;
 using IMGUIControls = UnityEditor.IMGUI.Controls;
@@ -337,15 +338,16 @@ namespace ActionEditor.Nodes.BT
         private double _nextSubTreePathCheck;
 
         private static int _Runing_BlackBoard = -1;
-        private static float _height = -1;
+        private static float _graphInspectorHeight = -1f;
+        private static bool _resizingBlackboard;
         private static GUIStyle _blackboardHeaderStyle;
         private static GUIContent _blackboardPlayContent;
         private static GUIContent _treeToolbarContent;
         private static readonly GUIContent[] BlackboardRunningContents =
         {
-            new GUIContent("BlackBord ."),
-            new GUIContent("BlackBord .."),
-            new GUIContent("BlackBord ...")
+            new GUIContent(),
+            new GUIContent(),
+            new GUIContent()
         };
         private static readonly GUIContent[] BlackboardWaitContents =
             new GUIContent[10];
@@ -369,26 +371,32 @@ namespace ActionEditor.Nodes.BT
             }
         }
 
-        private static float height
+        private static float GraphInspectorHeight
         {
             get
             {
-                if (_height == -1)
-                {
-                    _height = EditorPrefs.GetFloat($"{typeof(BTTreeView<>).FullName}.{nameof(height)}", 100f);
-                }
-
-                return _height;
+                if (_graphInspectorHeight < 0f)
+                    _graphInspectorHeight = EditorPrefs.GetFloat(
+                        $"{typeof(BTTreeView<>).FullName}.GraphInspectorHeight",
+                        260f);
+                return _graphInspectorHeight;
             }
             set
             {
-                if (_height == value) return;
-                _height = value;
-                EditorPrefs.SetFloat($"{typeof(BTTreeView<>).FullName}.{nameof(height)}", value);
+                if (Mathf.Approximately(_graphInspectorHeight, value)) return;
+                _graphInspectorHeight = value;
+                EditorPrefs.SetFloat(
+                    $"{typeof(BTTreeView<>).FullName}.GraphInspectorHeight",
+                    value);
             }
         }
-        internal static void DrawBlackBord(BTTreeView<T> view, float maxheight)
+
+        internal static void DrawBlackBord(BTTreeView<T> view)
         {
+            string blackboardText = Lan.Text("Blackboard", "Blackboard");
+            BlackboardRunningContents[0].text = blackboardText + " .";
+            BlackboardRunningContents[1].text = blackboardText + " ..";
+            BlackboardRunningContents[2].text = blackboardText + " ...";
             if (_blackboardHeaderStyle == null)
             {
                 _blackboardHeaderStyle = new GUIStyle(EditorStyles.largeLabel)
@@ -407,6 +415,36 @@ namespace ActionEditor.Nodes.BT
             GUI.color = Color.white;
             var rect = GUILayoutUtility.GetLastRect();
             var _rect = new Rect(rect.xMax - 30, rect.y + 5, 20f, 20f);
+            var splitterRect = new Rect(rect.x, rect.y,
+                Mathf.Max(0f, rect.width - 36f), rect.height);
+            EditorGUIUtility.AddCursorRect(splitterRect,
+                MouseCursor.ResizeVertical);
+            Event resizeEvent = Event.current;
+            if (resizeEvent.type == EventType.MouseDown &&
+                resizeEvent.button == 0 &&
+                splitterRect.Contains(resizeEvent.mousePosition))
+            {
+                _resizingBlackboard = true;
+                resizeEvent.Use();
+            }
+            else if (resizeEvent.type == EventType.MouseDrag &&
+                _resizingBlackboard)
+            {
+                float availableHeight = view.layout.height;
+                if (float.IsNaN(availableHeight) || availableHeight <= 0f)
+                    availableHeight = 600f;
+                GraphInspectorHeight = Mathf.Clamp(
+                    GraphInspectorHeight + resizeEvent.delta.y, 80f,
+                    Mathf.Max(80f, availableHeight - 180f));
+                resizeEvent.Use();
+                view.RepaintEditorWindow();
+            }
+            else if (resizeEvent.rawType == EventType.MouseUp &&
+                _resizingBlackboard)
+            {
+                _resizingBlackboard = false;
+                resizeEvent.Use();
+            }
             if (run)
             {
                 var value = EditorApplication.timeSinceStartup - Mathf.FloorToInt((float)EditorApplication.timeSinceStartup);
@@ -437,60 +475,113 @@ namespace ActionEditor.Nodes.BT
                         }
                     }
                 }
-                EditorGUI.LabelField(rect, "BlackBord", _blackboardHeaderStyle);
+                EditorGUI.LabelField(rect, blackboardText,
+                    _blackboardHeaderStyle);
             }
-
-
-            Event e = Event.current;
-            if (e.type == EventType.MouseDrag && rect.Contains(e.mousePosition))
+            GUILayout.BeginVertical(EditorStyles.helpBox,
+                GUILayout.ExpandHeight(true));
+            EditorEX.DrawPingScript(blackboard.GetType());
+            using (new UnityEditor.EditorGUI.DisabledScope(
+                run || view.graph.IsSubTree))
             {
-                height += e.delta.y;
-                height = Mathf.Clamp(height, 100, maxheight - 300);
-                e.Use();
+                _blackboardScroll = GUILayout.BeginScrollView(
+                    _blackboardScroll, GUILayout.ExpandHeight(true));
+                EditorEX.CreateEditor(blackboard).OnInspectorGUI();
+                GUILayout.EndScrollView();
             }
-            {
-                GUILayout.BeginVertical(EditorStyles.helpBox);
-                EditorEX.DrawPingScript(blackboard.GetType());
-                using (new UnityEditor.EditorGUI.DisabledScope(run || view.graph.IsSubTree))
-                {
-                    scroll = GUILayout.BeginScrollView(scroll);
-
-                    EditorEX.CreateEditor(blackboard).OnInspectorGUI();
-                    GUILayout.EndScrollView();
-                }
-                GUILayout.EndVertical();
-            }
+            GUILayout.EndVertical();
         }
-        private static Vector2 scroll;
+        private static Vector2 _graphInspectorScroll;
+        private static Vector2 _blackboardScroll;
+        private ReorderableList _eventsInspectorList;
+        private ReorderableList _interruptsInspectorList;
+        private ReorderableList _semaphoresInspectorList;
+        private BTTree _inspectorListTarget;
 
         protected override void OnInspectorGUI()
         {
-            GUILayout.BeginVertical(GUILayout.Height(height));
+            DrawInspectorHeader(graph.GetType());
+            GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
 
-            scroll = GUILayout.BeginScrollView(scroll);
+            _graphInspectorScroll = GUILayout.BeginScrollView(
+                _graphInspectorScroll,
+                GUILayout.Height(GraphInspectorHeight));
 
-            var editor = EditorEX.CreateEditor(this.graph);
+            var editor = EditorEX.CreateEditor(this.graph,
+                nameof(graph.events), nameof(graph.interruptFlags),
+                nameof(graph.semaphores));
             editor.OnInspectorGUI();
             using (new EditorGUI.DisabledScope(this.graph.IsSubTree))
             {
                 var p = editor.serializedObject.FindProperty("obj");
                 editor.serializedObject.UpdateIfRequiredOrScript();
-                EditorGUILayout.PropertyField(p.FindPropertyRelative(nameof(this.graph.events)), true);
-                EditorGUILayout.PropertyField(p.FindPropertyRelative(nameof(this.graph.interruptFlags)), true);
-                EditorGUILayout.PropertyField(p.FindPropertyRelative(nameof(this.graph.semaphores)),true);
+                EnsureInspectorLists(editor.serializedObject, p);
+                _eventsInspectorList.DoLayoutList();
+                GUILayout.Space(EditorGUIUtility.standardVerticalSpacing + 2f);
+                _interruptsInspectorList.DoLayoutList();
+                GUILayout.Space(EditorGUIUtility.standardVerticalSpacing + 2f);
+                _semaphoresInspectorList.DoLayoutList();
                 editor.serializedObject.ApplyModifiedProperties();
              
             }
             GUILayout.EndScrollView();
-            DrawBlackBord(this, position.height);
+            DrawBlackBord(this);
             GUILayout.Space(2);
+            GUILayout.EndVertical();
+        }
+
+        private void EnsureInspectorLists(SerializedObject serializedObject,
+            SerializedProperty root)
+        {
+            if (ReferenceEquals(_inspectorListTarget, graph) &&
+                _eventsInspectorList != null) return;
+            _inspectorListTarget = graph;
+            _eventsInspectorList = CreateInspectorList(serializedObject,
+                root.FindPropertyRelative(nameof(graph.events)), "Events",
+                "Events");
+            _interruptsInspectorList = CreateInspectorList(serializedObject,
+                root.FindPropertyRelative(nameof(graph.interruptFlags)),
+                "InterruptFlags", "Interrupt Flags");
+            _semaphoresInspectorList = CreateInspectorList(serializedObject,
+                root.FindPropertyRelative(nameof(graph.semaphores)),
+                "Semaphores", "Semaphores");
+        }
+
+        private static ReorderableList CreateInspectorList(
+            SerializedObject serializedObject, SerializedProperty property,
+            string languageKey, string fallback)
+        {
+            var list = new ReorderableList(serializedObject, property, true,
+                true, true, true);
+            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect,
+                Lan.Text(languageKey, fallback));
+            list.elementHeightCallback = index =>
+            {
+                SerializedProperty element = property.GetArrayElementAtIndex(index);
+                return EditorGUI.GetPropertyHeight(element, GUIContent.none, true) +
+                    EditorGUIUtility.standardVerticalSpacing;
+            };
+            list.drawElementCallback = (rect, index, active, focused) =>
+            {
+                SerializedProperty element = property.GetArrayElementAtIndex(index);
+                rect.y += EditorGUIUtility.standardVerticalSpacing * 0.5f;
+                rect.height = EditorGUI.GetPropertyHeight(element,
+                    GUIContent.none, true);
+                EditorGUI.PropertyField(rect, element, GUIContent.none, true);
+            };
+            return list;
         }
 
         protected override void OnHeaderToolsGUI()
         {
-            if (_treeToolbarContent == null)
+            string treeText = Lan.Text("Tree", "Tree");
+            if (_treeToolbarContent == null ||
+                _treeToolbarContent.tooltip != treeText)
                 _treeToolbarContent = EditorGUIUtility.TrIconContent(
-                    "d_UnityEditor.HierarchyWindow", "Tree");
+                    "d_UnityEditor.HierarchyWindow", treeText);
+            if (_emptyTreeLabel != null)
+                _emptyTreeLabel.text = Lan.Text("RootNodeNotFound",
+                    "Root Node Not Found");
             bool show = GUILayout.Toggle(_showNodeTree, _treeToolbarContent,
                 EditorStyles.toolbarButton);
             if (show == _showNodeTree) return;
@@ -641,7 +732,8 @@ namespace ActionEditor.Nodes.BT
                 ? new Color(0.22f, 0.22f, 0.22f)
                 : new Color(0.76f, 0.76f, 0.76f);
 
-            _emptyTreeLabel = new Label("Not found RootNode");
+            _emptyTreeLabel = new Label(Lan.Text("RootNodeNotFound",
+                "Root Node Not Found"));
             _emptyTreeLabel.style.display = DisplayStyle.None;
             _emptyTreeLabel.style.alignSelf = Align.Center;
             _emptyTreeLabel.style.marginTop = 28;

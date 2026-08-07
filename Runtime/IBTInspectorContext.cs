@@ -34,5 +34,30 @@ namespace ActionEditor.Nodes.BT
             return TypeHelper.GetTypeFields(blackboardType)
                 .FindField(fieldName)?.FieldType;
         }
+
+        internal static bool IsDeterministicType(Type type)
+        {
+            BTVariableCondition.VariableType variableType =
+                BTVariableCondition.GetVariableType(type);
+            return variableType != BTVariableCondition.VariableType.None &&
+                variableType != BTVariableCondition.VariableType.Float &&
+                variableType != BTVariableCondition.VariableType.Double;
+        }
+
+        internal static ValueDropdownList<string> GetDeterministicFields(
+            Type blackboardType)
+        {
+            var result = new ValueDropdownList<string>();
+            if (blackboardType == null) return result;
+            var fields = TypeHelper.GetTypeFields(blackboardType).GetFields();
+            for (int i = 0; i < fields.Count; i++)
+            {
+                var field = fields[i];
+                if (field.DeclaringType == typeof(Blackboard) ||
+                    !IsDeterministicType(field.FieldType)) continue;
+                result.Add(field.name, field.name);
+            }
+            return result;
+        }
     }
 }

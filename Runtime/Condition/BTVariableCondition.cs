@@ -5,7 +5,8 @@ namespace ActionEditor.Nodes.BT
 {
     [TypeInfoBox("读取指定黑板字段并与配置值比较。整数、布尔、枚举、字符、字符串和 decimal 使用确定性比较；float 与 double 仅供非帧同步逻辑按需使用。")]
     [Name("参数比较"),
-     Attachable(typeof(BTTree)), Node(BTNodeTypes.Condition), Icon("Conditional")]
+     Attachable(typeof(BTTree)), Node(BTNodeTypes.Condition),
+     Icon("VariableCondition")]
     public class BTVariableCondition : BTCondition, IBTInspectorContext
     {
         public enum CompareType

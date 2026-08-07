@@ -5,7 +5,7 @@ namespace ActionEditor.Nodes.BT
 {
     [TypeInfoBox("设置或修改指定黑板字段。整数运算统一采用 unchecked 溢出规则，字符串使用 Ordinal 语义，decimal 不经过浮点转换；只有显式选择 float 或 double 字段时才进入非帧同步浮点路径。")]
     [Name("设置参数"),
-     Attachable(typeof(BTTree)), Node(BTNodeTypes.Action), Icon("Action")]
+     Attachable(typeof(BTTree)), Node(BTNodeTypes.Action), Icon("SetVariable")]
     public class BTSetVariable : BTAction, IBTInspectorContext
     {
         public enum SetVariableType

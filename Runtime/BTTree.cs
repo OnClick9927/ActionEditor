@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 namespace ActionEditor.Nodes.BT
 {
+    [AssetFileExtension("bt.bytes")]
     [System.Serializable, Name("行为树", "保存节点图、黑板和信号量配置，并在准备运行后负责更新、中断、事件分发及完整整数状态快照的收集与恢复。")]
     public abstract class BTTree : GraphAsset
     {
