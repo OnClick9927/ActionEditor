@@ -14,6 +14,20 @@ namespace ActionBuffer
         private int _maxObjectFieldCount;
         private int _maxScalarLength;
 
+        public static JsonReader Get()
+        {
+            var result = ClassPool.Get<JsonReader>();
+            result.Clear();
+            return result;
+        }
+
+        public static void Back(JsonReader value)
+        {
+            if (value == null) return;
+            value.Clear();
+            ClassPool.Back(value);
+        }
+
         public void Init(string data, BuffSettings settings = null)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));

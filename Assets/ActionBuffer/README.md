@@ -56,12 +56,14 @@ byte[] data = BuffSerializer.ToBytes(payload, settings);
 - 常用数学、颜色、几何、动画、物理/2D 物理、场景参数、TextCore、树实例和渲染值类型，以及它们的一维数组和 `List<T>`。
 - Editor 下可使用 Asset GUID/局部 ID resolver；Player 下使用 `RuntimeUnityObjectResolver`，需提前注册场景对象、Resources 地址或业务稳定 ID。
 
+物理、布料、音频、地形、TextCore、Virtual Texturing 等类型按 Unity 的模块和版本宏独立注册。项目未启用对应模块或当前 Unity 版本没有该 API 时，不会产生程序集引用，也不会要求安装额外 Package。
+
 不序列化 `Scene`、`NativeArray`、`PlayableHandle` 等瞬时原生句柄本身。这些类型没有跨进程或跨平台稳定含义，应由业务 Converter 写可重建描述。
 
 ## 性能与 GC
 
 - Unity 值类型 Converter、数组 Converter 和列表 Converter 为泛型静态缓存，不会在每个 `BuffSettings` 中重复创建。
-- Writer、Reader、扫描缓存和字段缓存由框架池管理；高频场景应复用 `BuffSettings` 和 resolver。
+- Writer、Reader、扫描缓存和字段缓存由框架池管理；手动持有具体 Reader/Writer 时使用其静态 `Get()` 获取，并在 `finally` 中调用 `Back()` 归还。
 - `ToBytes` 必须返回新的 `byte[]`；需要最低分配时使用 `WriteObject` 写入复用的 `BufferWriter`。
 - UnityEvent 监听列表和临时参数数组在 Converter 内复用。
 - 当前实现不承诺同一个可变 settings/resolver 被多线程同时写入；并行任务应使用独立实例。

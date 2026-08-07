@@ -76,6 +76,33 @@ namespace ActionBuffer.Tests
             Assert.That(result.UnmarkedValue, Is.EqualTo(5));
         }
 
+        [Test]
+        public void ReadersAndWritersUseTheirStaticPools()
+        {
+            var binaryWriter = BufferWriter.Get();
+            binaryWriter.WriteByte(1);
+            BufferWriter.Back(binaryWriter);
+
+            var reusedBinaryWriter = BufferWriter.Get();
+            try
+            {
+                Assert.That(reusedBinaryWriter, Is.SameAs(binaryWriter));
+                Assert.That(reusedBinaryWriter.length, Is.Zero);
+            }
+            finally
+            {
+                BufferWriter.Back(reusedBinaryWriter);
+            }
+
+            AssertPooled(BufferReader.Get, BufferReader.Back);
+            AssertPooled(JsonWriter.Get, JsonWriter.Back);
+            AssertPooled(JsonReader.Get, JsonReader.Back);
+            AssertPooled(YamlWriter.Get, YamlWriter.Back);
+            AssertPooled(YamlReader.Get, YamlReader.Back);
+            AssertPooled(XmlWriter.Get, XmlWriter.Back);
+            AssertPooled(XmlReader.Get, XmlReader.Back);
+        }
+
         [TestCaseSource(nameof(Formats))]
         public void CollectionTypesRoundTrip(string format)
         {
@@ -844,6 +871,22 @@ namespace ActionBuffer.Tests
         private static T RoundTrip<T>(T source, string format,
             BuffSettings settings = null) =>
             (T)RoundTripObject(source, typeof(T), format, settings);
+
+        private static void AssertPooled<T>(Func<T> get, Action<T> back)
+            where T : class
+        {
+            T first = get();
+            back(first);
+            T second = get();
+            try
+            {
+                Assert.That(second, Is.SameAs(first));
+            }
+            finally
+            {
+                back(second);
+            }
+        }
 
         private static object RoundTripObject(object source, Type type, string format,
             BuffSettings settings = null)

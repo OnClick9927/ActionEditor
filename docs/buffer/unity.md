@@ -48,7 +48,7 @@ Editor 下 `AssetDatabaseUnityObjectResolver` 使用 AssetDatabase 信息恢复�
 - 2D 物理：ContactFilter2D、JointMotor2D、JointAngleLimits2D、JointTranslationLimits2D、JointSuspension2D。
 - 系统与文本：AudioConfiguration、Resolution、BuildCompression、CreateSceneParameters、LoadSceneParameters、GlyphMetrics、GlyphRect、GlyphValueRecord、GlyphAdjustmentRecord、RectOffset。
 
-具体可用类型受 Unity 版本编译条件影响。没有稳定跨会话含义的 `Scene` 句柄、NativeArray、原生资源句柄、PlayableHandle 等不会按内存镜像序列化；请保存可重建描述并编写业务 Converter。
+具体可用类型受 Unity 版本和已启用模块影响。物理、布料、音频、地形、TextCore、Virtual Texturing 等 Converter 使用 Unity 模块宏隔离；模块未启用或当前版本不存在对应 API 时，相关代码不会参与编译和注册，ActionBuffer.Unity 不会因此强制依赖额外 Package。没有稳定跨会话含义的 `Scene` 句柄、NativeArray、原生资源句柄、PlayableHandle 等不会按内存镜像序列化；请保存可重建描述并编写业务 Converter。
 
 ## GC 与生命周期
 

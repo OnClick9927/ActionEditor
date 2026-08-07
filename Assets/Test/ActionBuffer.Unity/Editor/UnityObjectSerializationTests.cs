@@ -540,25 +540,31 @@ namespace ActionBuffer.Unity.Tests
             };
             BuffSettings settings = new BuffSettings()
                 .RegisterUnityValueConverters();
-            var writer = new BufferWriter(64 * 1024);
+            var writer = BufferWriter.Get();
+            try
+            {
+                for (int i = 0; i < 4; i++)
+                    BuffSerializer.WriteObject(writer, source, settings);
 
-            for (int i = 0; i < 4; i++)
-                BuffSerializer.WriteObject(writer, source, settings);
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                long before = readAllocatedBytes();
+                const int iterations = 8;
+                for (int i = 0; i < iterations; i++)
+                    BuffSerializer.WriteObject(writer, source, settings);
+                long allocated = readAllocatedBytes() - before;
 
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            long before = readAllocatedBytes();
-            const int iterations = 8;
-            for (int i = 0; i < iterations; i++)
-                BuffSerializer.WriteObject(writer, source, settings);
-            long allocated = readAllocatedBytes() - before;
-
-            TestContext.Progress.WriteLine(
-                $"ActionBuffer.Unity binary write: {allocated} allocated bytes, " +
-                $"{iterations} iterations, {values.Length} Vector3 and " +
-                $"Matrix4x4 values plus BoneWeight arrays/lists");
-            Assert.That(allocated, Is.LessThan(32L * 1024),
-                "Repeated Unity value writes should not allocate after warmup.");
+                TestContext.Progress.WriteLine(
+                    $"ActionBuffer.Unity binary write: {allocated} allocated bytes, " +
+                    $"{iterations} iterations, {values.Length} Vector3 and " +
+                    $"Matrix4x4 values plus BoneWeight arrays/lists");
+                Assert.That(allocated, Is.LessThan(32L * 1024),
+                    "Repeated Unity value writes should not allocate after warmup.");
+            }
+            finally
+            {
+                BufferWriter.Back(writer);
+            }
         }
 
         private static T RoundTrip<T>(T value, string format,

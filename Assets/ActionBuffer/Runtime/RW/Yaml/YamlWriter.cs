@@ -11,6 +11,20 @@ namespace ActionBuffer
         private int _indent;
         private bool _pendingValue;
 
+        public static YamlWriter Get()
+        {
+            var result = ClassPool.Get<YamlWriter>();
+            result.Clear();
+            return result;
+        }
+
+        public static void Back(YamlWriter value)
+        {
+            if (value == null) return;
+            value.Clear();
+            ClassPool.Back(value);
+        }
+
         internal int Capacity => _builder.Capacity;
 
         internal void TrimCapacity()

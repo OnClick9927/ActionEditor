@@ -20,6 +20,20 @@ namespace ActionBuffer
         private int _elementDepth;
         private int _indent;
 
+        public static XmlWriter Get()
+        {
+            var result = ClassPool.Get<XmlWriter>();
+            result.Clear();
+            return result;
+        }
+
+        public static void Back(XmlWriter value)
+        {
+            if (value == null) return;
+            value.Clear();
+            ClassPool.Back(value);
+        }
+
         internal int Capacity => _builder.Capacity;
 
         internal void TrimCapacity()

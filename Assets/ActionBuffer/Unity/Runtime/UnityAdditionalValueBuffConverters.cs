@@ -18,6 +18,7 @@ namespace ActionBuffer.Unity
                     return new BoundingSphere(new Vector3(b.F0, b.F1, b.F2),
                         b.F3);
                 });
+#if ENABLE_CLOTH && ACTIONBUFFER_UNITY_CLOTH
             Register(settings, 1,
                 (ClothSkinningCoefficient v, UnityValueBlockCollection b) =>
                     b.Set(0, UnityValueBlocks.Floats(v.maxDistance,
@@ -31,6 +32,8 @@ namespace ActionBuffer.Unity
                         collisionSphereDistance = b.F1
                     };
                 });
+#endif
+#if ENABLE_PHYSICS && ACTIONBUFFER_UNITY_PHYSICS2D
             Register(settings, 2,
                 (ContactFilter2D v, UnityValueBlockCollection b) =>
                 {
@@ -62,6 +65,8 @@ namespace ActionBuffer.Unity
                         maxNormalAngle = b.F3
                     };
                 });
+#endif
+#if ENABLE_CUSTOM_RENDER_TEXTURE
             Register(settings, 3,
                 (CustomRenderTextureUpdateZone v,
                     UnityValueBlockCollection b) =>
@@ -86,6 +91,8 @@ namespace ActionBuffer.Unity
                         needSwap = c.I1 != 0
                     };
                 });
+#endif
+#if ENABLE_AUDIO && ACTIONBUFFER_UNITY_AUDIO
             Register(settings, 2,
                 (AudioConfiguration v, UnityValueBlockCollection b) =>
                 {
@@ -105,6 +112,8 @@ namespace ActionBuffer.Unity
                         numVirtualVoices = b.I0
                     };
                 });
+#endif
+#if ACTIONBUFFER_UNITY_ANIMATION
             Register(settings, 1,
                 (MatchTargetWeightMask v, UnityValueBlockCollection b) =>
                 {
@@ -117,6 +126,8 @@ namespace ActionBuffer.Unity
                     return new MatchTargetWeightMask(
                         new Vector3(b.F0, b.F1, b.F2), b.F3);
                 });
+#endif
+#if ENABLE_PHYSICS && ACTIONBUFFER_UNITY_PHYSICS
             Register(settings, 2,
                 (JointLimits v, UnityValueBlockCollection b) =>
                 {
@@ -136,6 +147,8 @@ namespace ActionBuffer.Unity
                         contactDistance = b.F0
                     };
                 });
+#endif
+#if INCLUDE_DYNAMIC_GI
             Register(settings, 2,
                 (LightBakingOutput v, UnityValueBlockCollection b) =>
                 {
@@ -156,6 +169,8 @@ namespace ActionBuffer.Unity
                         isBaked = b.I0 != 0
                     };
                 });
+#endif
+#if UNITY_2020_1_OR_NEWER && ENABLE_VIRTUALTEXTURING
             Register(settings, 1,
                 (UnityEngine.Rendering.VirtualTexturing.GPUCacheSetting v,
                     UnityValueBlockCollection b) =>
@@ -170,6 +185,8 @@ namespace ActionBuffer.Unity
                         sizeInMegaBytes = unchecked((uint)b.I1)
                     };
                 });
+#endif
+#if TEXTCORE_1_0_OR_NEWER
             Register(settings, 2,
                 (UnityEngine.TextCore.GlyphMetrics v,
                     UnityValueBlockCollection b) =>
@@ -195,6 +212,8 @@ namespace ActionBuffer.Unity
                     return new UnityEngine.TextCore.GlyphRect(b.I0, b.I1,
                         b.I2, b.I3);
                 });
+#endif
+#if ACTIONBUFFER_UNITY_ASSETBUNDLE
             Register(settings, 1,
                 (BuildCompression v, UnityValueBlockCollection b) =>
                     b.Set(0, UnityValueBlocks.Ints((int)v.compression,
@@ -207,6 +226,7 @@ namespace ActionBuffer.Unity
                         (CompressionLevel)b.I1, unchecked((uint)b.I2),
                         b.I3 != 0);
                 });
+#endif
             Register(settings, 1,
                 (UnityEngine.SceneManagement.CreateSceneParameters v,
                     UnityValueBlockCollection b) =>
@@ -226,6 +246,7 @@ namespace ActionBuffer.Unity
                         (UnityEngine.SceneManagement.LoadSceneMode)b.I0,
                         (UnityEngine.SceneManagement.LocalPhysicsMode)b.I1);
                 });
+#if TEXTCORE_1_0_OR_NEWER
             Register(settings, 1,
                 (UnityEngine.TextCore.LowLevel.GlyphValueRecord v,
                     UnityValueBlockCollection b) =>
@@ -255,6 +276,8 @@ namespace ActionBuffer.Unity
                         new UnityEngine.TextCore.LowLevel.GlyphValueRecord(
                             b.F0, b.F1, b.F2, b.F3));
                 });
+#endif
+#if ENABLE_TERRAIN && ACTIONBUFFER_UNITY_TERRAIN
             Register(settings, 3,
                 (TreeInstance v, UnityValueBlockCollection b) =>
                 {
@@ -280,6 +303,7 @@ namespace ActionBuffer.Unity
                         lightmapColor = UnpackColor(c.I1)
                     };
                 });
+#endif
             Register(settings, 2, (Pose v, UnityValueBlockCollection b) =>
             {
                 b.Set(0, UnityValueBlocks.Floats(v.position.x, v.position.y,
@@ -352,6 +376,7 @@ namespace ActionBuffer.Unity
                 (PropertyName v, UnityValueBlockCollection b) =>
                     b.Set(0, UnityValueBlocks.Ints(v.GetHashCode())),
                 v => new PropertyName(UnityValueBlocks.Get(v, 0).I0));
+#if ENABLE_PHYSICS && ACTIONBUFFER_UNITY_PHYSICS
             Register(settings, 1,
                 (JointDrive v, UnityValueBlockCollection b) =>
                     b.Set(0, UnityValueBlocks.Floats(v.positionSpring,
@@ -415,6 +440,7 @@ namespace ActionBuffer.Unity
                         extremumValue = a.F1, asymptoteSlip = a.F2,
                         asymptoteValue = a.F3, stiffness = b.F0 };
                 });
+#if UNITY_2020_1_OR_NEWER
             Register(settings, 2,
                 (ArticulationDrive v, UnityValueBlockCollection b) =>
                 {
@@ -431,6 +457,9 @@ namespace ActionBuffer.Unity
                         forceLimit = b.F0, target = b.F1,
                         targetVelocity = b.F2 };
                 });
+#endif
+#endif
+#if ENABLE_PHYSICS && ACTIONBUFFER_UNITY_PHYSICS2D
             Register(settings, 1,
                 (JointMotor2D v, UnityValueBlockCollection b) =>
                     b.Set(0, UnityValueBlocks.Floats(v.motorSpeed,
@@ -468,6 +497,7 @@ namespace ActionBuffer.Unity
                     return new JointSuspension2D { dampingRatio = b.F0,
                         frequency = b.F1, angle = b.F2 };
                 });
+#endif
         }
 
         internal static bool Remove(BuffSettings settings)
@@ -480,34 +510,64 @@ namespace ActionBuffer.Unity
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<FrustumPlanes>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<Hash128>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<PropertyName>(settings);
+#if ENABLE_PHYSICS && ACTIONBUFFER_UNITY_PHYSICS
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<JointDrive>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<JointMotor>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<JointSpring>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<SoftJointLimit>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<SoftJointLimitSpring>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<WheelFrictionCurve>(settings);
+#if UNITY_2020_1_OR_NEWER
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<ArticulationDrive>(settings);
+#endif
+#endif
+#if ENABLE_PHYSICS && ACTIONBUFFER_UNITY_PHYSICS2D
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<JointMotor2D>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<JointAngleLimits2D>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<JointTranslationLimits2D>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<JointSuspension2D>(settings);
+#endif
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<BoundingSphere>(settings);
+#if ENABLE_CLOTH && ACTIONBUFFER_UNITY_CLOTH
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<ClothSkinningCoefficient>(settings);
+#endif
+#if ENABLE_PHYSICS && ACTIONBUFFER_UNITY_PHYSICS2D
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<ContactFilter2D>(settings);
+#endif
+#if ENABLE_CUSTOM_RENDER_TEXTURE
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<CustomRenderTextureUpdateZone>(settings);
+#endif
+#if ENABLE_AUDIO && ACTIONBUFFER_UNITY_AUDIO
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<AudioConfiguration>(settings);
+#endif
+#if ACTIONBUFFER_UNITY_ANIMATION
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<MatchTargetWeightMask>(settings);
+#endif
+#if ENABLE_PHYSICS && ACTIONBUFFER_UNITY_PHYSICS
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<JointLimits>(settings);
+#endif
+#if INCLUDE_DYNAMIC_GI
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<LightBakingOutput>(settings);
+#endif
+#if UNITY_2020_1_OR_NEWER && ENABLE_VIRTUALTEXTURING
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<UnityEngine.Rendering.VirtualTexturing.GPUCacheSetting>(settings);
+#endif
+#if TEXTCORE_1_0_OR_NEWER
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<UnityEngine.TextCore.GlyphMetrics>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<UnityEngine.TextCore.GlyphRect>(settings);
+#endif
+#if ACTIONBUFFER_UNITY_ASSETBUNDLE
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<BuildCompression>(settings);
+#endif
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<UnityEngine.SceneManagement.CreateSceneParameters>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<UnityEngine.SceneManagement.LoadSceneParameters>(settings);
+#if TEXTCORE_1_0_OR_NEWER
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<UnityEngine.TextCore.LowLevel.GlyphValueRecord>(settings);
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<UnityEngine.TextCore.LowLevel.GlyphAdjustmentRecord>(settings);
+#endif
+#if ENABLE_TERRAIN && ACTIONBUFFER_UNITY_TERRAIN
             removed |= UnityValueBuffConverters.RemoveValueAndCollections<TreeInstance>(settings);
+#endif
             return removed;
         }
 
@@ -525,6 +585,7 @@ namespace ActionBuffer.Unity
             (byte)value, (byte)(value >> 8), (byte)(value >> 16),
             (byte)(value >> 24));
 
+#if ACTIONBUFFER_UNITY_ASSETBUNDLE
         private static BuildCompression DecodeBuildCompression(
             CompressionType compression, CompressionLevel level,
             uint blockSize, bool enableProtect)
@@ -550,5 +611,6 @@ namespace ActionBuffer.Unity
             value.compression == compression && value.level == level &&
             value.blockSize == blockSize &&
             value.enableProtect == enableProtect;
+#endif
     }
 }

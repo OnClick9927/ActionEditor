@@ -10,6 +10,21 @@ namespace ActionBuffer
     {
         private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
         private static readonly BuffConverter<string> MetadataConverter = new StringConverter();
+
+        public static BufferReader Get()
+        {
+            var result = ClassPool.Get<BufferReader>();
+            result.Clear();
+            return result;
+        }
+
+        public static void Back(BufferReader value)
+        {
+            if (value == null) return;
+            value.Clear();
+            ClassPool.Back(value);
+        }
+
         private byte[] _buffer;
         private int _index = 0;
         private int _depth;

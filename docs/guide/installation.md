@@ -18,22 +18,31 @@
 
 ## Package Manager 安装
 
-打开 `Window > Package Manager`，选择 `Add package from git URL`。仓库保留了独立 UPM 分支：
+打开 `Window > Package Manager`，选择 `Add package from git URL`，复制所需包的安装地址：
 
 ```text
+https://github.com/OnClick9927/ActionEditor.git#upm_attribute
 https://github.com/OnClick9927/ActionEditor.git#upm_buffer
 https://github.com/OnClick9927/ActionEditor.git#upm
 https://github.com/OnClick9927/ActionEditor.git#upm_node
 https://github.com/OnClick9927/ActionEditor.git#upm_bt
 ```
 
-ActionAttribute 当前可从仓库子路径安装：
+也可以直接在项目的 `Packages/manifest.json` 的 `dependencies` 中加入所需包：
 
-```text
-https://github.com/OnClick9927/ActionEditor.git?path=/Assets/ActionAttribute#main
+```json
+{
+  "dependencies": {
+    "com.woo.actionattribute": "https://github.com/OnClick9927/ActionEditor.git#upm_attribute",
+    "com.woo.actionbuffer": "https://github.com/OnClick9927/ActionEditor.git#upm_buffer",
+    "com.woo.actioneditor": "https://github.com/OnClick9927/ActionEditor.git#upm",
+    "com.woo.actionnodes": "https://github.com/OnClick9927/ActionEditor.git#upm_node",
+    "com.woo.actionbt": "https://github.com/OnClick9927/ActionEditor.git#upm_bt"
+  }
+}
 ```
 
-在团队项目中建议把 URL 写入 `Packages/manifest.json` 并固定 tag，而不是长期跟随分支。例如 ActionBuffer 可固定为 `upm_buffer_1.0.12`。不同包的 tag 前缀不同，提交前应确认五个包版本彼此兼容。
+如果 `manifest.json` 已经存在其他依赖，只添加上述键值，不要覆盖整个文件。团队项目应提交 `Packages/manifest.json` 和 `Packages/packages-lock.json`。
 
 ## 直接放入 Assets
 

@@ -24,5 +24,3 @@ ActionEditor 是一组可以独立组合的 Unity 工具包，覆盖 Inspector �
 ## 从哪里开始
 
 首次使用请先阅读[安装与升级](guide/installation.md)，再按[五分钟上手](guide/quick-start.md)创建一份可保存、可打开、可执行的示例资源。已有项目升级时先看[迁移与协议演进](advanced/migration.md)，尤其不要直接修改已发布二进制协议的字段名、类型或 Converter 布局。
-
-> 文档按仓库 `main` 分支当前实现编写。使用固定 UPM tag 时，应同时查看对应 tag 的包版本和变更记录。
