@@ -3,7 +3,8 @@
 
 namespace ActionBuffer
 {
-    [AttributeUsage(AttributeTargets.Field)]
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property,
+        Inherited = true, AllowMultiple = false)]
     public class BufferAttribute : System.Attribute
     {
         public readonly string bufferName;

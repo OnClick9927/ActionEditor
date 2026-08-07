@@ -157,6 +157,54 @@ namespace ActionBuffer.Unity
             reader.ReadList(elementConverter);
     }
 
+    internal static class UnityCollectionConverterCache<T>
+    {
+        private static BuffConverter<T> valueConverter;
+        private static UnityArrayBuffConverter<T> arrayConverter;
+        private static UnityListBuffConverter<T> listConverter;
+
+        internal static void Register(BuffSettings settings,
+            BuffConverter<T> converter)
+        {
+            valueConverter ??= converter ??
+                throw new ArgumentNullException(nameof(converter));
+            arrayConverter ??= new UnityArrayBuffConverter<T>(valueConverter);
+            listConverter ??= new UnityListBuffConverter<T>(valueConverter);
+            settings.RegisterConverter(valueConverter);
+            settings.RegisterConverter(arrayConverter);
+            settings.RegisterConverter(listConverter);
+        }
+    }
+
+    internal static class UnityValueConverterCache<T>
+    {
+        private static BuffConverter<T> converter;
+
+        internal static BuffConverter<T> GetOrCreate(int blockCount,
+            Action<T, UnityValueBlockCollection> encode,
+            Func<UnityValueBlockCollection, T> decode,
+            Func<T, bool> isNull = null)
+        {
+            return converter ??= blockCount == 1 && isNull == null
+                ? (BuffConverter<T>)new AtomicPackedUnityBuffConverter<T>(
+                    encode, decode)
+                : new PackedUnityBuffConverter<T>(blockCount, encode, decode,
+                    isNull);
+        }
+    }
+
+    internal static class UnityPackedConverterCache<T>
+    {
+        private static PackedUnityBuffConverter<T> converter;
+
+        internal static PackedUnityBuffConverter<T> GetOrCreate(int blockCount,
+            Action<T, UnityValueBlockCollection> encode,
+            Func<UnityValueBlockCollection, T> decode,
+            Func<T, bool> isNull = null) =>
+            converter ??= new PackedUnityBuffConverter<T>(blockCount, encode,
+                decode, isNull);
+    }
+
     internal sealed class PackedUnityBuffConverter<T> : BuffConverter<T>
     {
         private readonly UnityValueBlockCollection writeValues;
@@ -341,6 +389,9 @@ namespace ActionBuffer.Unity
 
     internal static class UnityValueBuffConverters
     {
+        private static AnimationCurveBuffConverter animationCurveConverter;
+        private static GradientBuffConverter gradientConverter;
+
         internal static void Register(BuffSettings settings)
         {
             Register(settings, 1,
@@ -409,8 +460,9 @@ namespace ActionBuffer.Unity
             var alphaKey = CreateGradientAlphaKeyConverter();
             RegisterValueAndCollections(settings, alphaKey);
             RegisterValueAndCollections(settings,
-                new AnimationCurveBuffConverter());
-            RegisterValueAndCollections(settings, new GradientBuffConverter());
+                animationCurveConverter ??= new AnimationCurveBuffConverter());
+            RegisterValueAndCollections(settings,
+                gradientConverter ??= new GradientBuffConverter());
 
             Register(settings, 1,
                 (RectOffset v, UnityValueBlockCollection b) =>
@@ -470,9 +522,7 @@ namespace ActionBuffer.Unity
         internal static void RegisterValueAndCollections<T>(BuffSettings settings,
             BuffConverter<T> converter)
         {
-            settings.RegisterConverter(converter);
-            settings.RegisterConverter(new UnityArrayBuffConverter<T>(converter));
-            settings.RegisterConverter(new UnityListBuffConverter<T>(converter));
+            UnityCollectionConverterCache<T>.Register(settings, converter);
         }
 
         internal static bool RemoveValueAndCollections<T>(BuffSettings settings)
@@ -488,10 +538,11 @@ namespace ActionBuffer.Unity
             Func<UnityValueBlockCollection, T> decode,
             Func<T, bool> isNull = null) =>
             RegisterValueAndCollections(settings,
-                CreateValue(blockCount, encode, decode, isNull));
+                UnityValueConverterCache<T>.GetOrCreate(blockCount, encode,
+                    decode, isNull));
 
         private static PackedUnityBuffConverter<Keyframe> CreateKeyframeConverter() =>
-            Create<Keyframe>(2, (v, b) =>
+            UnityPackedConverterCache<Keyframe>.GetOrCreate(2, (v, b) =>
             {
                 b.Set(0, UnityValueBlocks.Floats(v.time, v.value,
                     v.inTangent, v.outTangent));
@@ -506,7 +557,8 @@ namespace ActionBuffer.Unity
             });
 
         private static PackedUnityBuffConverter<GradientColorKey>
-            CreateGradientColorKeyConverter() => Create<GradientColorKey>(2,
+            CreateGradientColorKeyConverter() =>
+                UnityPackedConverterCache<GradientColorKey>.GetOrCreate(2,
                 (v, b) =>
                 {
                     b.Set(0, UnityValueBlocks.Floats(v.color.r, v.color.g,
@@ -521,7 +573,8 @@ namespace ActionBuffer.Unity
                 });
 
         private static PackedUnityBuffConverter<GradientAlphaKey>
-            CreateGradientAlphaKeyConverter() => Create<GradientAlphaKey>(1,
+            CreateGradientAlphaKeyConverter() =>
+                UnityPackedConverterCache<GradientAlphaKey>.GetOrCreate(1,
                 (v, b) => b.Set(0, UnityValueBlocks.Floats(v.alpha, v.time)),
                 v =>
                 {
