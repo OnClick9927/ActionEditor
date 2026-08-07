@@ -18,6 +18,7 @@ namespace ActionEditor
         private static GUIContent _saveAsContent;
         private static GUIContent _saveContent;
         private static GUIContent _settingsContent;
+        private static string _toolbarLanguage;
         private GUIStyle _customToolbarButtonStyle;
         private GUIContent _assetToolbarContent;
         private string _assetToolbarPath;
@@ -173,9 +174,11 @@ namespace ActionEditor
                     }, (x) =>
                     {
                         if (App.AssetData == null)
-                            return x.EndsWith(Asset.FileEx);
+                            return AppInternal.IsSupportedAssetPath(x);
                         //return x.EndsWith(Asset.FileEx);
-                        return x.EndsWith(Asset.FileEx) && ActonEditorView.GetEditor(App.AssetData).IsFileFitAsset(x);
+                        return AppInternal.IsSupportedAssetPath(x) &&
+                            ActonEditorView.GetEditor(App.AssetData)
+                                .IsFileFitAsset(x);
 
                     });
                 }
@@ -235,20 +238,27 @@ namespace ActionEditor
 
         private static void EnsureToolbarContent()
         {
-            if (_firstKeyContent != null) return;
+            if (_firstKeyContent != null &&
+                _toolbarLanguage == Lan.Language) return;
+            _toolbarLanguage = Lan.Language;
             _firstKeyContent = EditorGUIUtility.TrIconContent("d_Animation.FirstKey");
             _previousKeyContent = EditorGUIUtility.TrIconContent("d_Animation.PrevKey");
             _playContent = EditorGUIUtility.TrIconContent("d_Animation.Play");
             _pauseContent = EditorGUIUtility.TrIconContent("d_PauseButton");
             _nextKeyContent = EditorGUIUtility.TrIconContent("d_Animation.NextKey");
             _lastKeyContent = EditorGUIUtility.TrIconContent("d_Animation.LastKey");
-            _createContent = EditorGUIUtility.TrIconContent("Toolbar Plus", "Create");
-            _folderContent = EditorGUIUtility.TrIconContent("d_Project", "Show in Project");
+            _createContent = EditorGUIUtility.TrIconContent("Toolbar Plus",
+                Lan.Text("Create", "Create"));
+            _folderContent = EditorGUIUtility.TrIconContent("d_Project",
+                Lan.Text("ShowInProject", "Show in Project"));
             _undoHistoryContent = EditorGUIUtility.TrIconContent(
-                "d_UndoHistory", "Undo History");
-            _saveAsContent = EditorGUIUtility.TrIconContent("SaveAs", "Save As");
-            _saveContent = EditorGUIUtility.TrIconContent("SaveActive", "Save");
-            _settingsContent = EditorGUIUtility.TrIconContent("Settings", "Settings");
+                "d_UndoHistory", Lan.Text("UndoHistory", "Undo History"));
+            _saveAsContent = EditorGUIUtility.TrIconContent("SaveAs",
+                Lan.ins.SaveAs);
+            _saveContent = EditorGUIUtility.TrIconContent("SaveActive",
+                Lan.ins.Save);
+            _settingsContent = EditorGUIUtility.TrIconContent("Settings",
+                Lan.Text("Settings", "Settings"));
         }
 
         private void UpdateAssetToolbarContent()
@@ -261,8 +271,11 @@ namespace ActionEditor
             _assetToolbarPath = path;
             _assetToolbarDirty = isDirty;
             string name = Path.GetFileName(path);
-            name = name.Replace($".{Asset.FileEx}", "");
-            if (string.IsNullOrEmpty(name)) name = "None";
+            if (AppInternal.AssetData != null)
+                name = Path.GetFileName(AssetFileExtensionUtility.WithoutExtension(
+                    path, AppInternal.GetFileExtension(
+                        AppInternal.AssetData.GetType())));
+            if (string.IsNullOrEmpty(name)) name = Lan.Text("None", "None");
             _assetToolbarContent = new GUIContent($"[{name}]{(isDirty ? "*" : string.Empty)}");
             _assetToolbarWidth = Mathf.Max(80, GUI.skin.label.CalcSize(
                 _assetToolbarContent).x + 8) + 20;
@@ -310,7 +323,7 @@ namespace ActionEditor
                 int count = AppInternal.UndoHistoryCount;
                 if (count == 0)
                 {
-                    GUI.Label(rect, "No Undo History",
+                    GUI.Label(rect, Lan.Text("NoUndoHistory", "No Undo History"),
                         EditorStyles.centeredGreyMiniLabel);
                     return;
                 }

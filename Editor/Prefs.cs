@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using ActionBuffer;
@@ -11,9 +10,6 @@ namespace ActionEditor
 {
     static class Prefs
     {
-        public static readonly string CONFIG_PATH =
-            $"{Application.dataPath}/Editor/ActionEditor.txt";
-
         [Serializable]
         public enum TimeStepMode
         {
@@ -33,7 +29,8 @@ namespace ActionEditor
 
             public int AutoSaveSeconds = 10;
             public string SavePath = "Assets";
-            public string Lan_key = string.Empty;
+            [HideInInspector] public string Lan_key = string.Empty;
+            [HideInInspector] public string LastAssetPath = string.Empty;
             //public bool ScrollWheelZooms = true;
 
             public bool MagnetSnapping = true;
@@ -43,6 +40,7 @@ namespace ActionEditor
             [System.Serializable]
             public class ColorPref
             {
+                public string assetType;
                 public string type;
                 public Color color;
                 public List<string> attach;
@@ -56,8 +54,8 @@ namespace ActionEditor
                 }
             }
 
-            public List<ColorPref> clips = new List<ColorPref>();
-            public List<ColorPref> tracks = new List<ColorPref>();
+            [HideInInspector] public List<ColorPref> clips = new List<ColorPref>();
+            [HideInInspector] public List<ColorPref> tracks = new List<ColorPref>();
 
             public void valid()
             {
@@ -65,7 +63,8 @@ namespace ActionEditor
                 clips.RemoveAll(x => !metas.Any(y => y.type.FullName == x.type));
                 foreach (var meta in metas)
                 {
-                    var find = clips.Find(x => x.type == meta.type.FullName);
+                    var find = clips.Find(x => x.type == meta.type.FullName &&
+                        string.IsNullOrEmpty(x.assetType));
                     if (find == null)
                     {
                         find = new ColorPref
@@ -76,7 +75,12 @@ namespace ActionEditor
                         clips.Add(find);
 
                     }
-                    find.attach = meta.attachableTypes?.Select(x => x.FullName).ToList();
+                    List<string> attach = meta.attachableTypes?
+                        .Select(x => x.FullName).ToList();
+                    for (int i = 0; i < clips.Count; i++)
+                        if (clips[i].type == meta.type.FullName)
+                            clips[i].attach = attach == null
+                                ? null : new List<string>(attach);
 
 
 
@@ -90,7 +94,8 @@ namespace ActionEditor
 
                 foreach (var meta in metas)
                 {
-                    var find = tracks.Find(x => x.type == meta.type.FullName);
+                    var find = tracks.Find(x => x.type == meta.type.FullName &&
+                        string.IsNullOrEmpty(x.assetType));
                     if (find == null)
                     {
                         find = new ColorPref
@@ -101,24 +106,99 @@ namespace ActionEditor
                         tracks.Add(find);
                     }
 
-                    find.attach = meta.attachableTypes?.Select(x => x.FullName)?.ToList();
-
-
-                    if (find.attach == null || find.attach.Count == 0)
+                    List<string> attach = meta.attachableTypes?
+                        .Select(x => x.FullName).ToList();
+                    List<string> assets = null;
+                    if (attach != null && attach.Count > 0)
                     {
-                        find.asset = null;
-                    }
-                    else
-                    {
-                        var _groups = find.attach.Select(x => metas_group.Find(y => y.type.FullName == x)).ToList();
-
-
-                        find.asset = _groups.SelectMany(x => x.attachableTypes)
-                            .Select(x => metas_asset.First(y => y.type == x))
+                        var groups = attach.Select(x => metas_group.Find(y =>
+                                y.type.FullName == x))
+                            .Where(x => x.type != null &&
+                                x.attachableTypes != null);
+                        assets = groups.SelectMany(x => x.attachableTypes)
+                            .Select(x => metas_asset.Find(y => y.type == x))
+                            .Where(x => x.type != null)
                             .Select(x => x.type.FullName).ToList();
-
+                    }
+                    for (int i = 0; i < tracks.Count; i++)
+                    {
+                        if (tracks[i].type != meta.type.FullName) continue;
+                        tracks[i].attach = attach == null
+                            ? null : new List<string>(attach);
+                        tracks[i].asset = assets == null
+                            ? null : new List<string>(assets);
                     }
                 }
+            }
+
+            internal ColorPref GetColor(Type valueType, Type ownerType,
+                bool isClip)
+            {
+                List<ColorPref> source = isClip ? clips : tracks;
+                string valueName = valueType.FullName;
+                string ownerName = ownerType?.FullName ?? string.Empty;
+                ColorPref result = source.Find(x => x.type == valueName &&
+                    x.assetType == ownerName);
+                if (result != null) return result;
+
+                ColorPref template = source.Find(x => x.type == valueName &&
+                    string.IsNullOrEmpty(x.assetType));
+                result = new ColorPref
+                {
+                    assetType = ownerName,
+                    type = valueName,
+                    color = template?.color ?? Color.white,
+                    attach = template?.attach == null ? null :
+                        new List<string>(template.attach),
+                    asset = template?.asset == null ? null :
+                        new List<string>(template.asset)
+                };
+                source.Add(result);
+                Save();
+                return result;
+            }
+
+            internal List<ColorPref> GetTrackColors(Type ownerType)
+            {
+                var result = new List<ColorPref>();
+                int count = tracks.Count;
+                for (int i = 0; i < count; i++)
+                {
+                    ColorPref template = tracks[i];
+                    if (!string.IsNullOrEmpty(template.assetType) ||
+                        !AppliesToAsset(template, ownerType)) continue;
+                    Type type = template.GetRealType();
+                    if (type != null)
+                        result.Add(GetColor(type, ownerType, false));
+                }
+                return result;
+            }
+
+            internal List<ColorPref> GetClipColors(Type ownerType,
+                string trackType)
+            {
+                var result = new List<ColorPref>();
+                int count = clips.Count;
+                for (int i = 0; i < count; i++)
+                {
+                    ColorPref template = clips[i];
+                    if (!string.IsNullOrEmpty(template.assetType) ||
+                        template.attach == null ||
+                        !template.attach.Contains(trackType)) continue;
+                    Type type = template.GetRealType();
+                    if (type != null)
+                        result.Add(GetColor(type, ownerType, true));
+                }
+                return result;
+            }
+
+            private static bool AppliesToAsset(ColorPref value, Type assetType)
+            {
+                if (value.asset == null || assetType == null) return false;
+                for (Type current = assetType; current != null &&
+                    current != typeof(object); current = current.BaseType)
+                    if (value.asset.Contains(current.FullName)) return true;
+                return false;
             }
 
 
@@ -129,32 +209,8 @@ namespace ActionEditor
             Save();
         }
 
-        private static SerializedData _data;
-
-        public static SerializedData data
-        {
-            get
-            {
-                if (_data == null)
-                {
-                    if (!Directory.Exists("Assets/Editor"))
-                        Directory.CreateDirectory("Assets/Editor");
-
-                    if (File.Exists(CONFIG_PATH))
-                    {
-                        var json = File.ReadAllText(CONFIG_PATH);
-                        _data = JsonUtility.FromJson<SerializedData>(json);
-                    }
-
-                    if (_data == null)
-                    {
-                        _data = new SerializedData();
-                    }
-                }
-
-                return _data;
-            }
-        }
+        public static SerializedData data =>
+            ActionEditorProjectSettings.instance.Data;
 
         public static readonly float[] snapIntervals = new float[] { 0.001f, 0.01f, 0.1f };
         public static readonly int[] frameRates = new int[] { 24, 25, 30, 60 };
@@ -293,7 +349,18 @@ namespace ActionEditor
 
         public static void Save()
         {
-            System.IO.File.WriteAllText(CONFIG_PATH, JsonUtility.ToJson(data));
+            ActionEditorProjectSettings.instance.SaveSettings();
+        }
+
+        public static string lastAssetPath
+        {
+            get => data.LastAssetPath;
+            set
+            {
+                if (data.LastAssetPath == value) return;
+                data.LastAssetPath = value ?? string.Empty;
+                Save();
+            }
         }
 
 

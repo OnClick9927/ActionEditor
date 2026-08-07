@@ -7,6 +7,7 @@ using System.Collections.Generic;
 namespace ActionEditor
 {
     [Serializable]
+    [TypeInfoBox("时间轴分组，用于组织同类轨道，并统一控制折叠、锁定和启用状态。")]
     public abstract class Group : SegmentBase
     {
 

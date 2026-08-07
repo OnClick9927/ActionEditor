@@ -2,7 +2,7 @@
 
 namespace ActionEditor
 {
-    interface ILanguages
+    internal interface ILanguages
     {
         string AssetPickListType { get; }
 

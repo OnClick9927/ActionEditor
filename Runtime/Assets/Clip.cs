@@ -1,11 +1,13 @@
 ﻿using ActionBuffer;
 using System;
+using ActionAttribute;
 using System.Collections.Generic;
 
 
 namespace ActionEditor
 {
     [Serializable]
+    [TypeInfoBox("时间轴片段，表示指定起始时间和持续时长内执行的内容。")]
     public abstract class Clip : SegmentBase, IClip
     {
 
@@ -60,6 +62,7 @@ namespace ActionEditor
 
 
     [Serializable]
+    [TypeInfoBox("时间轴信号，在单个时间点触发，不占用持续时长。")]
     public abstract class ClipSignal : Clip
     {
         public override float Length
