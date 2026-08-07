@@ -86,7 +86,7 @@ namespace ActionBuffer
 
         public static string ToJson(object obj, BuffSettings settings = null)
         {
-            var writer = ClassPool.Get<JsonWriter>();
+            var writer = JsonWriter.Get();
             try
             {
                 WriteObject(writer, obj, settings);
@@ -94,15 +94,14 @@ namespace ActionBuffer
             }
             finally
             {
-                writer.Clear();
-                ClassPool.Back(writer);
+                JsonWriter.Back(writer);
             }
         }
 
         public static object FromJson(string data, Type type,
             BuffSettings settings = null)
         {
-            var reader = ClassPool.Get<JsonReader>();
+            var reader = JsonReader.Get();
             try
             {
                 reader.Init(data, settings);
@@ -110,8 +109,7 @@ namespace ActionBuffer
             }
             finally
             {
-                reader.Clear();
-                ClassPool.Back(reader);
+                JsonReader.Back(reader);
             }
         }
 
@@ -120,7 +118,7 @@ namespace ActionBuffer
 
         public static string ToYaml(object obj, BuffSettings settings = null)
         {
-            var writer = ClassPool.Get<YamlWriter>();
+            var writer = YamlWriter.Get();
             try
             {
                 WriteObject(writer, obj, settings);
@@ -128,15 +126,14 @@ namespace ActionBuffer
             }
             finally
             {
-                writer.Clear();
-                ClassPool.Back(writer);
+                YamlWriter.Back(writer);
             }
         }
 
         public static object FromYaml(string data, Type type,
             BuffSettings settings = null)
         {
-            var reader = ClassPool.Get<YamlReader>();
+            var reader = YamlReader.Get();
             try
             {
                 reader.Init(data, settings);
@@ -144,8 +141,7 @@ namespace ActionBuffer
             }
             finally
             {
-                reader.Clear();
-                ClassPool.Back(reader);
+                YamlReader.Back(reader);
             }
         }
 
@@ -154,7 +150,7 @@ namespace ActionBuffer
 
         public static string ToXml(object obj, BuffSettings settings = null)
         {
-            var writer = ClassPool.Get<XmlWriter>();
+            var writer = XmlWriter.Get();
             try
             {
                 WriteObject(writer, obj, settings);
@@ -162,15 +158,14 @@ namespace ActionBuffer
             }
             finally
             {
-                writer.Clear();
-                ClassPool.Back(writer);
+                XmlWriter.Back(writer);
             }
         }
 
         public static object FromXml(string data, Type type,
             BuffSettings settings = null)
         {
-            var reader = ClassPool.Get<XmlReader>();
+            var reader = XmlReader.Get();
             try
             {
                 reader.Init(data, settings);
@@ -178,8 +173,7 @@ namespace ActionBuffer
             }
             finally
             {
-                reader.Clear();
-                ClassPool.Back(reader);
+                XmlReader.Back(reader);
             }
         }
 
@@ -188,7 +182,7 @@ namespace ActionBuffer
 
         public static byte[] ToBytes(object obj, BuffSettings settings = null)
         {
-            var writer = ClassPool.Get<BufferWriter>();
+            var writer = BufferWriter.Get();
             try
             {
                 WriteObject(writer, obj, settings);
@@ -196,8 +190,7 @@ namespace ActionBuffer
             }
             finally
             {
-                writer.Clear();
-                ClassPool.Back(writer);
+                BufferWriter.Back(writer);
             }
         }
 
@@ -206,7 +199,7 @@ namespace ActionBuffer
         {
             if (type == null) throw new ArgumentNullException(nameof(type));
             settings ??= BuffSettings.DefaultSetting;
-            var reader = ClassPool.Get<BufferReader>();
+            var reader = BufferReader.Get();
             settings.BeginOperation();
             try
             {
@@ -219,8 +212,7 @@ namespace ActionBuffer
             }
             finally
             {
-                reader.Clear();
-                ClassPool.Back(reader);
+                BufferReader.Back(reader);
                 settings.EndOperation();
             }
         }

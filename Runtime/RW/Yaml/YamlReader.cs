@@ -24,6 +24,20 @@ namespace ActionBuffer
         private int _maxObjectFieldCount;
         private int _maxScalarLength;
 
+        public static YamlReader Get()
+        {
+            var result = ClassPool.Get<YamlReader>();
+            result.Clear();
+            return result;
+        }
+
+        public static void Back(YamlReader value)
+        {
+            if (value == null) return;
+            value.Clear();
+            ClassPool.Back(value);
+        }
+
         public void Init(string data, BuffSettings settings = null)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));

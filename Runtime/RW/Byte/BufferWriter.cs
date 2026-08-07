@@ -10,6 +10,20 @@ namespace ActionBuffer
         private int _maxBinaryLength = BuffSettings.MaxBinaryLength;
         private int _maxScalarLength = BuffSettings.MaxScalarLength;
 
+        public static BufferWriter Get()
+        {
+            var result = ClassPool.Get<BufferWriter>();
+            result.Clear();
+            return result;
+        }
+
+        public static void Back(BufferWriter value)
+        {
+            if (value == null) return;
+            value.Clear();
+            ClassPool.Back(value);
+        }
+
         public bool CollectMeta => true;
 
         public byte[] GetValidBuffer()

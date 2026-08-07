@@ -27,6 +27,20 @@ namespace ActionBuffer
             }
         }
 
+        public static XmlReader Get()
+        {
+            var result = ClassPool.Get<XmlReader>();
+            result.Clear();
+            return result;
+        }
+
+        public static void Back(XmlReader value)
+        {
+            if (value == null) return;
+            value.Clear();
+            ClassPool.Back(value);
+        }
+
         public void Init(string data, BuffSettings settings = null)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));

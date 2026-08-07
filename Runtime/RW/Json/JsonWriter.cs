@@ -20,6 +20,20 @@ namespace ActionBuffer
         private int _containerDepth;
         private int _sequenceDepth;
 
+        public static JsonWriter Get()
+        {
+            var result = ClassPool.Get<JsonWriter>();
+            result.Clear();
+            return result;
+        }
+
+        public static void Back(JsonWriter value)
+        {
+            if (value == null) return;
+            value.Clear();
+            ClassPool.Back(value);
+        }
+
         internal int Capacity => _builder.Capacity;
 
         internal void TrimCapacity()
