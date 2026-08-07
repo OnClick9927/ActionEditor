@@ -25,6 +25,8 @@ namespace ActionAttribute
         private bool toggleLeft;
         private bool assetsOnly;
         private bool sceneObjectsOnly;
+        private bool nonNegative;
+        private bool positive;
         private bool expandable;
         private GUIContent nameLabel;
         private ShowIfAttribute[] showConditions = Array.Empty<ShowIfAttribute>();
@@ -44,6 +46,7 @@ namespace ActionAttribute
         private RequiredAttribute required;
         private TitleAttribute title;
         private SuffixLabelAttribute suffix;
+        private PrefixLabelAttribute prefix;
         private PropertySpaceAttribute propertySpace;
         private ProgressBarAttribute progressBar;
         private EnumFlagsAttribute enumFlags;
@@ -66,6 +69,9 @@ namespace ActionAttribute
         private FilePathAttribute filePath;
         private FolderPathAttribute folderPath;
         private RequiredListLengthAttribute requiredListLength;
+        private UniqueListAttribute uniqueList;
+        private ChildGameObjectsOnlyAttribute childGameObjectsOnly;
+        private ParentGameObjectsOnlyAttribute parentGameObjectsOnly;
         private WrapAttribute wrap;
         private CurveRangeAttribute curveRange;
         private ReorderableListAttribute reorderableList;
@@ -150,6 +156,8 @@ namespace ActionAttribute
             }
             if (TryGetListLengthError(property, out string listError))
                 height += GetHelpBoxHeight(listError, width) + spacing;
+            if (TryGetUniqueListError(property, out string uniqueError))
+                height += GetHelpBoxHeight(uniqueError, width) + spacing;
             if (TryGetObjectScopeError(property, out string objectError))
                 height += GetHelpBoxHeight(objectError, width) + spacing;
             height += propertySpace?.after ?? 0;
@@ -247,7 +255,10 @@ namespace ActionAttribute
                 changed = changeCheck.changed;
             }
             if (changed)
+            {
                 ApplyValueLimits(property);
+                ApplyObjectScope(property);
+            }
             position.y += fieldHeight + spacing;
 
             if (ShouldDrawColorPalette(property))
@@ -297,6 +308,13 @@ namespace ActionAttribute
                     height), listError, MessageType.Error);
                 position.y += height + spacing;
             }
+            if (TryGetUniqueListError(property, out string uniqueError))
+            {
+                float height = GetHelpBoxHeight(uniqueError, position.width);
+                EditorGUI.HelpBox(new Rect(position.x, position.y, position.width,
+                    height), uniqueError, MessageType.Error);
+                position.y += height + spacing;
+            }
             if (TryGetObjectScopeError(property, out string objectError))
             {
                 float height = GetHelpBoxHeight(objectError, position.width);
@@ -336,6 +354,20 @@ namespace ActionAttribute
                 valueRect.width = Mathf.Max(1, valueRect.width - suffixWidth);
                 suffixRect = new Rect(valueRect.xMax + 4, position.y,
                     suffixWidth - 4, EditorGUIUtility.singleLineHeight);
+            }
+            if (prefix != null && !string.IsNullOrEmpty(prefix.label))
+            {
+                Rect contentRect = EditorGUI.PrefixLabel(valueRect, label);
+                float prefixWidth = Mathf.Min(contentRect.width * 0.4f,
+                    EditorStyles.miniLabel.CalcSize(
+                        new GUIContent(prefix.label)).x + 6);
+                EditorGUI.LabelField(new Rect(contentRect.x, contentRect.y,
+                    prefixWidth, EditorGUIUtility.singleLineHeight),
+                    prefix.label, EditorStyles.miniLabel);
+                valueRect = new Rect(contentRect.x + prefixWidth,
+                    contentRect.y, Mathf.Max(1, contentRect.width - prefixWidth),
+                    contentRect.height);
+                label = GUIContent.none;
             }
 
             if (resizableTextArea != null &&
@@ -428,7 +460,8 @@ namespace ActionAttribute
             else if (delayed && DrawDelayed(valueRect, property, label))
             {
             }
-            else if ((assetsOnly || sceneObjectsOnly) &&
+            else if ((assetsOnly || sceneObjectsOnly ||
+                childGameObjectsOnly != null || parentGameObjectsOnly != null) &&
                 property.propertyType == SerializedPropertyType.ObjectReference)
                 property.objectReferenceValue = EditorGUI.ObjectField(valueRect,
                     label, property.objectReferenceValue,
@@ -1153,6 +1186,18 @@ namespace ActionAttribute
                 max = Math.Min(max, maxValue.value);
                 hasMax = true;
             }
+            if (nonNegative)
+            {
+                min = Math.Max(min, 0);
+                hasMin = true;
+            }
+            if (positive)
+            {
+                double positiveMinimum = property.propertyType ==
+                    SerializedPropertyType.Integer ? 1 : float.Epsilon;
+                min = Math.Max(min, positiveMinimum);
+                hasMin = true;
+            }
             if ((hasMin || hasMax) &&
                 property.propertyType == SerializedPropertyType.Integer)
             {
@@ -1282,7 +1327,8 @@ namespace ActionAttribute
             out string message)
         {
             message = null;
-            if ((!assetsOnly && !sceneObjectsOnly) ||
+            if ((!assetsOnly && !sceneObjectsOnly &&
+                childGameObjectsOnly == null && parentGameObjectsOnly == null) ||
                 property.propertyType != SerializedPropertyType.ObjectReference ||
                 property.objectReferenceValue == null) return false;
             bool persistent = EditorUtility.IsPersistent(
@@ -1291,7 +1337,68 @@ namespace ActionAttribute
                 message = "该字段只允许引用 Project 中的资源。";
             else if (sceneObjectsOnly && persistent)
                 message = "该字段只允许引用当前场景中的对象。";
+            else if (!persistent && childGameObjectsOnly != null &&
+                !IsAllowedHierarchyObject(property, true,
+                    childGameObjectsOnly.includeSelf))
+                message = "该字段只允许引用当前对象的子层级。";
+            else if (!persistent && parentGameObjectsOnly != null &&
+                !IsAllowedHierarchyObject(property, false,
+                    parentGameObjectsOnly.includeSelf))
+                message = "该字段只允许引用当前对象的父层级。";
             return message != null;
+        }
+
+        private bool TryGetUniqueListError(SerializedProperty property,
+            out string message)
+        {
+            message = null;
+            if (uniqueList == null || !property.isArray ||
+                property.propertyType == SerializedPropertyType.String)
+                return false;
+            if (!(SerializedPropertyMemberUtility.GetSerializedValue(property)
+                is IList values)) return false;
+            for (int i = 0; i < values.Count; i++)
+            {
+                for (int j = i + 1; j < values.Count; j++)
+                {
+                    if (!Equals(values[i], values[j])) continue;
+                    message = string.IsNullOrEmpty(uniqueList.message)
+                        ? $"集合中第 {i + 1} 与第 {j + 1} 个元素重复。"
+                        : uniqueList.message;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void ApplyObjectScope(SerializedProperty property)
+        {
+            if (property.propertyType != SerializedPropertyType.ObjectReference ||
+                property.objectReferenceValue == null) return;
+            if (childGameObjectsOnly != null &&
+                !IsAllowedHierarchyObject(property, true,
+                    childGameObjectsOnly.includeSelf))
+                property.objectReferenceValue = null;
+            else if (parentGameObjectsOnly != null &&
+                !IsAllowedHierarchyObject(property, false,
+                    parentGameObjectsOnly.includeSelf))
+                property.objectReferenceValue = null;
+        }
+
+        private static bool IsAllowedHierarchyObject(SerializedProperty property,
+            bool child, bool includeSelf)
+        {
+            Transform owner = GetTransform(property.serializedObject.targetObject);
+            Transform selected = GetTransform(property.objectReferenceValue);
+            if (owner == null || selected == null) return false;
+            if (ReferenceEquals(owner, selected)) return includeSelf;
+            return child ? selected.IsChildOf(owner) : owner.IsChildOf(selected);
+        }
+
+        private static Transform GetTransform(UnityEngine.Object value)
+        {
+            if (value is GameObject gameObject) return gameObject.transform;
+            return value is Component component ? component.transform : null;
         }
 
         private bool ShouldDrawAssetPreview(SerializedProperty property) =>
@@ -1457,6 +1564,8 @@ namespace ActionAttribute
                     case ToggleLeftAttribute _: toggleLeft = true; break;
                     case AssetsOnlyAttribute _: assetsOnly = true; break;
                     case SceneObjectsOnlyAttribute _: sceneObjectsOnly = true; break;
+                    case NonNegativeAttribute _: nonNegative = true; break;
+                    case PositiveAttribute _: positive = true; break;
                     case ExpandableAttribute _: expandable = true; break;
                     case ShowIfAttribute value: shows.Add(value); break;
                     case HideIfAttribute value: hides.Add(value); break;
@@ -1475,6 +1584,7 @@ namespace ActionAttribute
                     case RequiredAttribute value: required = value; break;
                     case TitleAttribute value: title = value; break;
                     case SuffixLabelAttribute value: suffix = value; break;
+                    case PrefixLabelAttribute value: prefix = value; break;
                     case PropertySpaceAttribute value: propertySpace = value; break;
                     case ProgressBarAttribute value: progressBar = value; break;
                     case EnumFlagsAttribute value: enumFlags = value; break;
@@ -1500,6 +1610,11 @@ namespace ActionAttribute
                     case FolderPathAttribute value: folderPath = value; break;
                     case RequiredListLengthAttribute value:
                         requiredListLength = value; break;
+                    case UniqueListAttribute value: uniqueList = value; break;
+                    case ChildGameObjectsOnlyAttribute value:
+                        childGameObjectsOnly = value; break;
+                    case ParentGameObjectsOnlyAttribute value:
+                        parentGameObjectsOnly = value; break;
                     case WrapAttribute value: wrap = value; break;
                     case CurveRangeAttribute value: curveRange = value; break;
                     case ReorderableListAttribute value:
