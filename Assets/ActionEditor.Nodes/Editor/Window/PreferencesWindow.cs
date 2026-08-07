@@ -24,8 +24,6 @@ namespace ActionEditor.Nodes
         }
 
         public override Vector2 GetWindowSize() => win_size;
-        System.Collections.Generic.List<string> assetNames = new System.Collections.Generic.List<string>();
-
         public override void OnGUI(Rect rect)
         {
             if (_titleStyle == null)
@@ -38,6 +36,8 @@ namespace ActionEditor.Nodes
             }
             if (_languageNames == null)
                 _languageNames = Lan.AllLanguages.Keys.ToList();
+
+            EditorGUI.BeginChangeCheck();
 
             GUILayout.BeginHorizontal();
             GUILayout.Label(Lan.ins.Preferences, _titleStyle);
@@ -89,70 +89,47 @@ namespace ActionEditor.Nodes
             GUILayout.Space(5);
 
 
-            if (App.AssetNames.Length == 0) return;
+            Type assetType = App.asset?.GetType();
+            if (assetType == null)
+            {
+                EditorGUILayout.HelpBox(Lan.ins.NotSelectAsset,
+                    MessageType.Info);
+                EditorGUI.EndChangeCheck();
+                return;
+            }
+            EditorGUILayout.LabelField(EditorEX.GetTypeName(assetType),
+                EditorStyles.boldLabel);
             tag = (Tag)GUILayout.Toolbar((int)tag, TagNames);
-            assetIndex = GUILayout.Toolbar(assetIndex, App.AssetNames);
-            var assetType = App.AssetTypes[App.AssetNames[assetIndex]];
-            if (_selectedAssetType != assetType)
+            if (tag == Tag.Asset)
             {
-                _selectedAssetType = assetType;
-                assetNames.Clear();
-                var temp = assetType;
-                while (temp != typeof(object))
+                scroll = GUILayout.BeginScrollView(scroll);
+                var colors = Prefs.data.GetNodeColors(assetType);
+                for (int i = 0; i < colors.Count; i++)
                 {
-                    assetNames.Add(temp.FullName);
-                    temp = temp.BaseType;
+                    var node = colors[i];
+                    node.color = EditorGUILayout.ColorField(
+                        EditorEX.GetTypeName(node.GetRealType()), node.color);
                 }
-            }
-
-        
-            if(tag== Tag.Asset)
-            {
-            scroll = GUILayout.BeginScrollView(scroll);
-            for (int i = 0; i < Prefs.data.nodes.Count; i++)
-            {
-                var node = Prefs.data.nodes[i];
-                if (!CanAttachToSelectedAsset(node.attach)) continue;
-                node.color = EditorGUILayout.ColorField(
-                    EditorEX.GetTypeName(node.GetRealType()), node.color);
-            }
-            GUILayout.EndScrollView();
-
+                GUILayout.EndScrollView();
             }
             else
             {
-            scroll2 = GUILayout.BeginScrollView(scroll2);
-            foreach (var node in Prefs.data.other)
-                node.color = EditorGUILayout.ColorField(EditorEX.GetTypeName(node.GetRealType()), node.color);
-            GUILayout.EndScrollView();
-
-            }
-
-
-
-
-            //if (EditorGUI.EndChangeCheck())
-            //{
-
-            //    //if (window == null)
-            //    //    window = App.window;
-            //    App.UpdateGraphColor();
-            //    App.window.Repaint();
-            //}
-        }
-
-        //private static GraphWindow window;
-        private bool CanAttachToSelectedAsset(System.Collections.Generic.List<string> attach)
-        {
-            if (attach == null) return false;
-            for (int i = 0; i < attach.Count; i++)
-            {
-                for (int j = 0; j < assetNames.Count; j++)
+                scroll2 = GUILayout.BeginScrollView(scroll2);
+                var colors = Prefs.data.GetPortColors(assetType);
+                for (int i = 0; i < colors.Count; i++)
                 {
-                    if (attach[i] == assetNames[j]) return true;
+                    var portColor = colors[i];
+                    portColor.color = EditorGUILayout.ColorField(
+                        EditorEX.GetTypeName(portColor.GetRealType()),
+                        portColor.color);
                 }
+                GUILayout.EndScrollView();
             }
-            return false;
+            if (EditorGUI.EndChangeCheck())
+            {
+                Prefs.Save();
+                App.UpdateGraphColors();
+            }
         }
 
         private Vector2 scroll;
@@ -165,8 +142,6 @@ namespace ActionEditor.Nodes
         private Tag tag
             ;
 
-        private int assetIndex;
-        private Type _selectedAssetType;
     }
 
 }

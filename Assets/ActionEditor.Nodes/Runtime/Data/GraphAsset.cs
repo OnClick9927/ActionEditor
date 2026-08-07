@@ -17,6 +17,7 @@ namespace ActionEditor.Nodes
         }
         [ReadOnly, Name("资源标识", "用于唯一识别当前图资源的只读标识。")]
         public string guid;
+        [Obsolete("Use AssetFileExtensionUtility.Get(assetType) instead.")]
         public const string FileEx = "graph.bytes";
         [ReadOnly][Buffer] internal V4 position = new V4();
         [ReadOnly][Buffer] internal V4 scale = new V4() { x = 1, z = 1, w = 1, y = 1 };
@@ -49,7 +50,44 @@ namespace ActionEditor.Nodes
             this._connections.AddRange(connections.Where(x => x != null));
             this._nodes.AddRange(nodes);
             this._groups.AddRange(groups);
+            nodeDic = null;
 
+        }
+
+        public void RegenerateGuids()
+        {
+            guid = Guid.NewGuid().ToString();
+            var remap = new Dictionary<string, string>(StringComparer.Ordinal);
+            var visited = new HashSet<NodeData>();
+
+            void Regenerate(NodeData node)
+            {
+                if (node == null || !visited.Add(node)) return;
+                string previous = node.guid;
+                string current = Guid.NewGuid().ToString();
+                node.guid = current;
+                if (!string.IsNullOrEmpty(previous)) remap[previous] = current;
+            }
+
+            for (int i = 0; i < _nodes.Count; i++) Regenerate(_nodes[i]);
+            for (int i = 0; i < _groups.Count; i++) Regenerate(_groups[i]);
+
+            for (int i = 0; i < _connections.Count; i++)
+            {
+                ConnectionData connection = _connections[i];
+                if (remap.TryGetValue(connection.outNodeGuid, out string output))
+                    connection.outNodeGuid = output;
+                if (remap.TryGetValue(connection.InNodeGuid, out string input))
+                    connection.InNodeGuid = input;
+            }
+            for (int i = 0; i < _groups.Count; i++)
+            {
+                List<string> members = _groups[i]._nodes;
+                for (int j = 0; j < members.Count; j++)
+                    if (remap.TryGetValue(members[j], out string member))
+                        members[j] = member;
+            }
+            nodeDic = null;
         }
         public byte[] ToBytes() => BuffSerializer.ToBytes(this);
 

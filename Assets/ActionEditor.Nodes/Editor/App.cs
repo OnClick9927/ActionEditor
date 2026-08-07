@@ -33,7 +33,8 @@ namespace ActionEditor.Nodes
         internal static GraphWindow window;
         internal static string[] AssetNames;
         internal static Dictionary<string, Type> AssetTypes;
-        private static string key => Prefs.CONFIG_PATH;
+        private static string LegacyAssetPathKey =>
+            $"{Application.dataPath}/Editor/NodeGraph.txt";
         private static string openPath = string.Empty;
         private static GraphAsset _asset;
         private static bool _restoringUndo;
@@ -89,7 +90,7 @@ namespace ActionEditor.Nodes
         public static bool OnObjectPickerConfig(string path)
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path)
-                || !path.EndsWith(GraphAsset.FileEx)) return false;
+                || !IsSupportedAssetPath(path)) return false;
             if (path == openPath && _asset != null && _undoHistory.Count > 0)
                 return true;
             if (!ConfirmAssetSwitch()) return false;
@@ -100,6 +101,7 @@ namespace ActionEditor.Nodes
                     typeof(GraphAsset), txt.bytes);
                 _asset = loadedAsset;
                 openPath = path;
+                Prefs.lastAssetPath = path;
                 window?.ShowGraph();
                 ResetUndo();
                 return true;
@@ -111,15 +113,48 @@ namespace ActionEditor.Nodes
             }
         }
 
+        internal static bool IsSupportedAssetPath(string path)
+        {
+            // A plain "bytes" graph extension must not claim a more specific
+            // timeline extension such as ".action.bytes".
+            if (IsTimelineAssetPath(path)) return false;
+            IEnumerable<Type> types = AssetTypes != null
+                ? AssetTypes.Values
+                : TypeHelper.GetSubTypes(typeof(GraphAsset));
+            return types.Any(type => AssetFileExtensionUtility.Matches(path,
+                type));
+        }
+
+        internal static bool IsSupportedAssetPath(string path,
+            Type assetType) => assetType != null &&
+            !IsTimelineAssetPath(path) &&
+            typeof(GraphAsset).IsAssignableFrom(assetType) &&
+            AssetFileExtensionUtility.Matches(path, assetType);
+
+        private static bool IsTimelineAssetPath(string path)
+        {
+            IReadOnlyList<Type> types = TypeHelper.GetSubTypes(typeof(Asset));
+            for (int i = 0; i < types.Count; i++)
+                if (AssetFileExtensionUtility.Matches(path, types[i]))
+                    return true;
+            return false;
+        }
+
+        internal static string GetFileExtension(Type type) =>
+            AssetFileExtensionUtility.Get(type ?? typeof(GraphAsset));
+
         private static bool ConfirmAssetSwitch()
         {
             FlushPendingUndo();
             if (!IsDirty || _asset == null) return true;
             string fileName = Path.GetFileName(openPath);
             int result = EditorUtility.DisplayDialogComplex(
-                "Unsaved Changes",
-                $"Save changes to \"{fileName}\" before opening another file?",
-                "Save", "Cancel", "Don't Save");
+                Lan.Text("UnsavedChanges", "Unsaved Changes"),
+                string.Format(Lan.Text("SaveChangesPrompt",
+                    "Save changes to \"{0}\" before opening another file?"),
+                    fileName),
+                Lan.ins.Save, Lan.Text("Cancel", "Cancel"),
+                Lan.Text("DontSave", "Don't Save"));
             if (result == 1) return false;
             if (result == 0) Save();
             return true;
@@ -192,12 +227,19 @@ namespace ActionEditor.Nodes
 
 
             //nodeDic_Reverse = nodeDic.ToDictionary(x => x.Value, x => x.Key);
-            OnObjectPickerConfig(PlayerPrefs.GetString(key));
+            string previousPath = Prefs.lastAssetPath;
+            if (string.IsNullOrEmpty(previousPath))
+            {
+                previousPath = PlayerPrefs.GetString(LegacyAssetPathKey);
+                if (!string.IsNullOrEmpty(previousPath))
+                    Prefs.lastAssetPath = previousPath;
+            }
+            OnObjectPickerConfig(previousPath);
 
         }
         internal static void OnWindowDisable()
         {
-            PlayerPrefs.SetString(key, openPath);
+            Prefs.lastAssetPath = openPath;
         }
 
         internal static void ShutdownUndo()
@@ -578,23 +620,22 @@ namespace ActionEditor.Nodes
         public static void SaveAs()
         {
             if (_asset == null || view == null) return;
-            var srcname = System.IO.Path.GetFileName(App.assetPath);
-            srcname = srcname.Remove(srcname.IndexOf(GraphAsset.FileEx) - 1);
-            string path = EditorUtility.SaveFilePanel(Lan.ins.SaveAs, Prefs.savePath, srcname + "_", GraphAsset.FileEx);
+            SyncGraphToAsset();
+            string extension = GetFileExtension(_asset.GetType());
+            string srcname = Path.GetFileName(
+                AssetFileExtensionUtility.WithoutExtension(App.assetPath,
+                    extension));
+            string path = EditorUtility.SaveFilePanel(Lan.ins.SaveAs,
+                Prefs.savePath, srcname + "_", extension);
 
             if (!string.IsNullOrEmpty(path))
             {
-                while (true)
-                {
-                    var index = path.IndexOf(GraphAsset.FileEx);
-                    if (index == -1) break;
-                    path = path.Remove(index - 1);
-                }
-                path = $"{path}.{GraphAsset.FileEx}";
+                path = AssetFileExtensionUtility.WithExtension(path,
+                    _asset.GetType());
                 if (path != App.assetPath)
                 {
                     var tree = App.asset.DeepCopyByBuffer();
-                    tree.guid = Guid.NewGuid().ToString();
+                    tree.RegenerateGuids();
                     File.WriteAllBytes(path, tree.ToBytes());
                     AssetDatabase.Refresh();
                 }
@@ -894,11 +935,12 @@ namespace ActionEditor.Nodes
             return path;
         }
 
-        //internal static void UpdateGraphColor()
-        //{
-        //    if (view == null) return;
-        //    view.UpdateGraphColor();
-        //}
+        internal static void UpdateGraphColors()
+        {
+            if (view == null) return;
+            view.UpdateGraphColors();
+            window?.Repaint();
+        }
     }
 
 }

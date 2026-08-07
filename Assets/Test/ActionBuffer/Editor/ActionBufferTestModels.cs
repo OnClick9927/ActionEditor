@@ -322,7 +322,7 @@ namespace ActionBuffer.Tests
     public sealed class ReadonlyAndInitModel
     {
         public readonly int ReadonlyNumber;
-        public string InitText { get; init; }
+        [Buffer] public string InitText { get; init; }
 
         public ReadonlyAndInitModel(int number, string text)
         {
@@ -452,6 +452,44 @@ namespace ActionBuffer.Tests
         public PrimitiveModel Primitive = new PrimitiveModel();
         public List<SmallStruct> Items = new List<SmallStruct>();
         public Dictionary<int, string> Lookup = new Dictionary<int, string>();
+    }
+
+    public sealed class BufferedPropertyModel
+    {
+        private int _manualValue;
+
+        [Buffer] public int PublicValue { get; set; }
+        [Buffer] private string PrivateValue { get; set; }
+        [Buffer("manual")] private int ManualValue
+        {
+            get => _manualValue;
+            set => _manualValue = value;
+        }
+        public int UnmarkedValue { get; set; } = 5;
+
+        public void SetPrivateValue(string value) => PrivateValue = value;
+        public string GetPrivateValue() => PrivateValue;
+        public void SetManualValue(int value) => ManualValue = value;
+        public int GetManualValue() => ManualValue;
+    }
+
+    public sealed class StressSerializationModel
+    {
+        [Buffer] public int Iteration { get; private set; }
+        [Buffer] private string Label { get; set; }
+        public ReferenceNode Root;
+        public SharedLeaf First;
+        public SharedLeaf Second;
+        public int[,,] Cube;
+        public int[,,,,] RankFive;
+
+        public void SetValues(int iteration, string label)
+        {
+            Iteration = iteration;
+            Label = label;
+        }
+
+        public string GetLabel() => Label;
     }
 
     public abstract class GenericDiscoveryBase { }

@@ -69,7 +69,8 @@ namespace ActionEditor
 
             if (normal_clip)
             {
-                GUILayout.Label("IN", GUILayout.Width(30));
+                GUILayout.Label(Lan.Text("InPoint", "IN"),
+                    GUILayout.Width(30));
                 if (doFrames)
                     _in = (float)EditorGUILayout.DelayedFloatField(_in * Prefs.FrameRate, GUILayout.Width(80)) / Prefs.FrameRate;
                 else
@@ -88,7 +89,8 @@ namespace ActionEditor
                 GUILayout.Label("►");
                 GUILayout.FlexibleSpace();
 
-                GUILayout.Label("OUT", GUILayout.Width(30));
+                GUILayout.Label(Lan.Text("OutPoint", "OUT"),
+                    GUILayout.Width(30));
                 if (doFrames)
                     _out = (float)EditorGUILayout.DelayedFloatField(_out * Prefs.FrameRate, GUILayout.Width(80)) / Prefs.FrameRate;
                 else
@@ -97,7 +99,8 @@ namespace ActionEditor
             }
             else
             {
-                GUILayout.Label("IN", GUILayout.Width(30));
+                GUILayout.Label(Lan.Text("InPoint", "IN"),
+                    GUILayout.Width(30));
 
 
                 if (doFrames)
@@ -186,7 +189,8 @@ namespace ActionEditor
 
                 var left = blend.BlendIn;
                 var right = blend.Length - blend.BlendOut;
-                GUILayout.Label("Blend", EditorStyles.boldLabel);
+                GUILayout.Label(Lan.Text("Blend", "Blend"),
+                    EditorStyles.boldLabel);
 
                 using (new EditorGUI.DisabledScope(true))
                 {

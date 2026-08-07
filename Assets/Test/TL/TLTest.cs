@@ -21,8 +21,8 @@ class TLAssetEditor : ActionEditor.ActonEditorView
     }
     public override void OnInspectorGUI()
     {
-        GUILayout.Button("OnInspectorGUI");
         base.OnInspectorGUI();
+        GUILayout.Button("OnInspectorGUI");
     }
 }
 [CustomActionView(typeof(TLActionTrack))]

@@ -73,16 +73,17 @@ namespace ActionEditor
         }
         void CreateConfirm(bool select)
         {
-            //var path = $"{Prefs.savePath}/{_createName}.json";
-
-            var path = Path.Combine(Prefs.savePath, $"{_createName}.{Asset.FileEx}");
+            Type type = AppInternal.AssetTypes[_selectType];
+            string extension = AppInternal.GetFileExtension(type);
+            var path = Path.Combine(Prefs.savePath,
+                $"{_createName}.{extension}");
 
             if (select)
             {
                 var s = SelectSavePath();
                 if (string.IsNullOrEmpty(s))
                     return;
-                path = Path.Combine(s, $"{_createName}.{Asset.FileEx}");
+                path = Path.Combine(s, $"{_createName}.{extension}");
             }
 
 
@@ -98,8 +99,7 @@ namespace ActionEditor
             else
             {
 
-                var t = AppInternal.AssetTypes[_selectType];
-                var inst = Activator.CreateInstance(t) as Asset;
+                var inst = Activator.CreateInstance(type) as Asset;
                 if (inst != null)
                 {
                     var json = inst.ToBytes();

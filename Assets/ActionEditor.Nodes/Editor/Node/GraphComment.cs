@@ -55,11 +55,13 @@ namespace ActionEditor.Nodes
         internal void OnInspectorGUI()
         {
             EditorGUI.BeginChangeCheck();
-            string newTitle = EditorGUILayout.TextField("标题", title);
+            string newTitle = EditorGUILayout.TextField(
+                Lan.Text("Title", "Title"), title);
             string newContents = EditorGUILayout.TextArea(contents,
                 GUILayout.MinHeight(120));
             StickyNoteFontSize newFontSize = (StickyNoteFontSize)
-                EditorGUILayout.EnumPopup("字号", fontSize);
+                EditorGUILayout.EnumPopup(Lan.Text("FontSize", "Font Size"),
+                    fontSize);
             if (!EditorGUI.EndChangeCheck()) return;
 
             applyingData = true;
@@ -243,7 +245,7 @@ namespace ActionEditor.Nodes
         private void BuildReadOnlyMenu(ContextualMenuPopulateEvent evt)
         {
             evt.menu.MenuItems().Clear();
-            evt.menu.AppendAction("Delete", _ =>
+            evt.menu.AppendAction(Lan.ins.Delete, _ =>
                 App.view.DeleteElements(new List<GraphElement> { this }),
                 DropdownMenuAction.AlwaysEnabled);
             evt.StopImmediatePropagation();

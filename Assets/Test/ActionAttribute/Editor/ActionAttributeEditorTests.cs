@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
@@ -33,6 +34,32 @@ namespace ActionAttribute.Tests
             [ShowAssetPreview(64, 48)] public Texture2D preview;
             [ColorPalette("#ff0000", "00ff00", "#0000ff")]
             public Color palette = Color.white;
+            [UniqueList] public List<int> uniqueValues = new List<int>();
+            [PrefixLabel("至少"), SuffixLabel("个")]
+            public int affixedValue = 1;
+        }
+
+        private sealed class ConstraintTarget : ScriptableObject
+        {
+            [NonNegative] public int count = -1;
+            [Positive] public int size;
+        }
+
+        private sealed class ScriptLookupProbe
+        {
+        }
+
+        [Test]
+        public void RuntimeAssembly_ExposesAtLeastOneHundredInspectorAttributes()
+        {
+            int count = 0;
+            Type baseType = typeof(ActionAttributeBase);
+            foreach (Type type in baseType.Assembly.GetTypes())
+            {
+                if (type.IsPublic && !type.IsAbstract &&
+                    baseType.IsAssignableFrom(type)) count++;
+            }
+            Assert.That(count, Is.GreaterThanOrEqualTo(100));
         }
 
         [Test]
@@ -48,6 +75,14 @@ namespace ActionAttribute.Tests
             var names = (string[])utility.GetMethod("GetNames", StaticFlags)
                 .Invoke(null, new object[] { typeof(TestMode) });
             Assert.That(names, Is.EqualTo(new[] { "基础模式", "Advanced" }));
+        }
+
+        [Test]
+        public void LocateScript_FindsTypeWhenFileNameDiffers()
+        {
+            string path = EditorEX.LocateScript(typeof(ScriptLookupProbe));
+            Assert.That(path.Replace('\\', '/'),
+                Does.EndWith("ActionAttributeEditorTests.cs"));
         }
 
         [Test]
@@ -121,10 +156,41 @@ namespace ActionAttribute.Tests
                 float paletteHeight = GetCombinedHeight(serializedObject,
                     nameof(LayoutTarget.palette));
                 Assert.That(paletteHeight, Is.EqualTo(line * 2 + spacing));
+
+                float affixedHeight = GetCombinedHeight(serializedObject,
+                    nameof(LayoutTarget.affixedValue));
+                Assert.That(affixedHeight, Is.EqualTo(line));
+
+                target.uniqueValues.Add(4);
+                target.uniqueValues.Add(4);
+                serializedObject.Update();
+                float uniqueHeight = GetCombinedHeight(serializedObject,
+                    nameof(LayoutTarget.uniqueValues));
+                Assert.That(uniqueHeight, Is.GreaterThan(line));
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(texture);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void NumericSignConstraints_ClampIntegerValues()
+        {
+            ConstraintTarget target = ScriptableObject.CreateInstance<
+                ConstraintTarget>();
+            try
+            {
+                var serializedObject = new SerializedObject(target);
+                ApplyValueLimits(serializedObject, nameof(ConstraintTarget.count));
+                ApplyValueLimits(serializedObject, nameof(ConstraintTarget.size));
+                serializedObject.ApplyModifiedPropertiesWithoutUndo();
+                Assert.That(target.count, Is.Zero);
+                Assert.That(target.size, Is.EqualTo(1));
+            }
+            finally
+            {
                 UnityEngine.Object.DestroyImmediate(target);
             }
         }
@@ -144,6 +210,22 @@ namespace ActionAttribute.Tests
                 BindingFlags.Instance | BindingFlags.Public);
             return (float)method.Invoke(drawer,
                 new object[] { property, label });
+        }
+
+        private static void ApplyValueLimits(SerializedObject serializedObject,
+            string fieldName)
+        {
+            Type drawerType = GetEditorType("ActionAttribute.ActionPropertyDrawer");
+            FieldInfo field = typeof(ConstraintTarget).GetField(fieldName,
+                BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic);
+            object drawer = drawerType.GetMethod("Create", StaticFlags)
+                .Invoke(null, new object[] { field });
+            SerializedProperty property = serializedObject.FindProperty(fieldName);
+            drawerType.GetMethod("Initialize", BindingFlags.Instance |
+                BindingFlags.NonPublic).Invoke(drawer, null);
+            drawerType.GetMethod("ApplyValueLimits", BindingFlags.Instance |
+                BindingFlags.NonPublic).Invoke(drawer, new object[] { property });
         }
 
         private static Type GetEditorType(string name)

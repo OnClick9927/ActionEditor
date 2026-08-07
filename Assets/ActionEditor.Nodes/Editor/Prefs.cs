@@ -3,7 +3,6 @@ using ActionBuffer;
 using ActionEditor;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -12,22 +11,11 @@ namespace ActionEditor.Nodes
 {
   internal  static class Prefs
     {
-        public static readonly string CONFIG_PATH =
-            $"{Application.dataPath}/Editor/NodeGraph.txt";
-        public static Color GetColor(this object track)
+        public static Color GetColor(this object value)
         {
-            Type type;
-            if (track is Type)
-                type = track as Type;
-            else
-                type = track.GetType();
-            if (track is NodeData )
-            {
-
-                return Prefs.data.nodes.First(x => x.type == type.FullName).color;
-            }
-            return Prefs.data.GetColor(type);
-
+            Type type = value as Type ?? value?.GetType();
+            return type == null ? Color.white : data.GetColor(type,
+                App.asset?.GetType(), value is NodeData);
         }
 
 
@@ -41,6 +29,7 @@ namespace ActionEditor.Nodes
 
             public int AutoSaveSeconds = 10;
             public string SavePath = "Assets";
+            [HideInInspector] public string LastAssetPath = string.Empty;
             public Vector2 NodePrettySpacing = new Vector2(200,200);
 
 
@@ -48,6 +37,7 @@ namespace ActionEditor.Nodes
             public class ColorPref
             {
                 public string type;
+                public string ownerType;
                 public Color color;
                 public List<string> attach;
                 [NonSerialized] private bool _null;
@@ -63,22 +53,74 @@ namespace ActionEditor.Nodes
                 }
             }
 
-            public List<ColorPref> nodes = new List<ColorPref>();
-            public List<ColorPref> other = new List<ColorPref>();
-            public Color GetColor(Type type)
+            [HideInInspector] public List<ColorPref> nodes = new List<ColorPref>();
+            [HideInInspector] public List<ColorPref> other = new List<ColorPref>();
+            public Color GetColor(Type type, Type graphType, bool nodeColor)
             {
-                var find = other.FirstOrDefault(x => x.GetRealType() == type);
-                if (find == null)
+                List<ColorPref> colors = nodeColor ? nodes : other;
+                return EnsureColor(colors, type, graphType, nodeColor).color;
+            }
+
+            public List<ColorPref> GetNodeColors(Type graphType)
+            {
+                if (graphType == null) return new List<ColorPref>();
+                var metas = EditorEX.GetTypeMetaDerivedFrom(typeof(NodeData));
+                for (int i = 0; i < metas.Count; i++)
                 {
-                    find = new ColorPref()
-                    {
-                        type = type.FullName,
-                        color = UnityEngine.Random.ColorHSV()
-                    };
-                    other.Add(find);
-                    Save();
+                    var meta = metas[i];
+                    if (!CanAttach(meta.attachableTypes, graphType)) continue;
+                    ColorPref color = EnsureColor(nodes, meta.type, graphType,
+                        true);
+                    color.attach = meta.attachableTypes?.Select(x => x.FullName)
+                        .ToList();
                 }
-                return find.color;
+                return nodes.Where(x => x.ownerType == graphType.FullName &&
+                    x.GetRealType() != null).ToList();
+            }
+
+            public List<ColorPref> GetPortColors(Type graphType)
+            {
+                if (graphType == null) return new List<ColorPref>();
+                return other.Where(x => x.ownerType == graphType.FullName &&
+                    x.GetRealType() != null).ToList();
+            }
+
+            private static bool CanAttach(IReadOnlyList<Type> attachableTypes,
+                Type graphType)
+            {
+                if (attachableTypes == null || graphType == null) return false;
+                for (Type current = graphType; current != null;
+                    current = current.BaseType)
+                    for (int i = 0; i < attachableTypes.Count; i++)
+                        if (attachableTypes[i] == current) return true;
+                return false;
+            }
+
+            private static ColorPref EnsureColor(List<ColorPref> colors,
+                Type type, Type ownerType, bool nodeColor)
+            {
+                string owner = ownerType?.FullName ?? string.Empty;
+                ColorPref result = colors.FirstOrDefault(x =>
+                    x.type == type.FullName &&
+                    (string.IsNullOrEmpty(owner)
+                        ? string.IsNullOrEmpty(x.ownerType)
+                        : x.ownerType == owner));
+                if (result != null) return result;
+                ColorPref legacy = colors.FirstOrDefault(x =>
+                    x.type == type.FullName && string.IsNullOrEmpty(x.ownerType));
+                result = new ColorPref
+                {
+                    type = type.FullName,
+                    ownerType = owner,
+                    color = legacy?.color ?? (nodeColor
+                        ? UnityEngine.Random.ColorHSV(0.2f, 0.8f)
+                        : UnityEngine.Random.ColorHSV()),
+                    attach = legacy?.attach == null ? null :
+                        new List<string>(legacy.attach)
+                };
+                colors.Add(result);
+                Save();
+                return result;
             }
             public void valid()
             {
@@ -87,7 +129,8 @@ namespace ActionEditor.Nodes
                 other.RemoveAll(x => x.GetRealType() == null);
                 foreach (var meta in metas)
                 {
-                    var find = nodes.Find(x => x.type == meta.type.FullName);
+                    var find = nodes.Find(x => x.type == meta.type.FullName &&
+                        string.IsNullOrEmpty(x.ownerType));
                     if (find == null)
                     {
                         find = new ColorPref
@@ -98,7 +141,12 @@ namespace ActionEditor.Nodes
                         nodes.Add(find);
 
                     }
-                    find.attach = meta.attachableTypes?.Select(x => x.FullName).ToList();
+                    List<string> attach = meta.attachableTypes?
+                        .Select(x => x.FullName).ToList();
+                    for (int i = 0; i < nodes.Count; i++)
+                        if (nodes[i].type == meta.type.FullName)
+                            nodes[i].attach = attach == null ? null :
+                                new List<string>(attach);
 
 
 
@@ -106,13 +154,17 @@ namespace ActionEditor.Nodes
                 nodes.Sort((a, b) =>
                 {
 
-                    return App.GetNodePath(a.GetRealType())
-                    .CompareTo(App.GetNodePath(b.GetRealType()));
+                    int owner = string.CompareOrdinal(a.ownerType, b.ownerType);
+                    if (owner != 0) return owner;
+                    return string.CompareOrdinal(App.GetNodePath(a.GetRealType()),
+                        App.GetNodePath(b.GetRealType()));
                 });
                 other.Sort((a, b) =>
                 {
-                    return EditorEX.GetTypeName(a.GetRealType())
-                    .CompareTo(EditorEX.GetTypeName(b.GetRealType()));
+                    int owner = string.CompareOrdinal(a.ownerType, b.ownerType);
+                    if (owner != 0) return owner;
+                    return string.CompareOrdinal(EditorEX.GetTypeName(a.GetRealType()),
+                        EditorEX.GetTypeName(b.GetRealType()));
                 });
             }
 
@@ -124,32 +176,8 @@ namespace ActionEditor.Nodes
             Save();
         }
 
-        private static SerializedData _data;
-
-        public static SerializedData data
-        {
-            get
-            {
-                if (_data == null)
-                {
-                    if (!Directory.Exists("Assets/Editor"))
-                        Directory.CreateDirectory("Assets/Editor");
-
-                    if (File.Exists(CONFIG_PATH))
-                    {
-                        var json = File.ReadAllText(CONFIG_PATH);
-                        _data = JsonUtility.FromJson<SerializedData>(json);
-                    }
-
-                    if (_data == null)
-                    {
-                        _data = new SerializedData();
-                    }
-                }
-
-                return _data;
-            }
-        }
+        public static SerializedData data =>
+            ActionNodeEditorProjectSettings.instance.Data;
 
         public static readonly float[] snapIntervals = new float[] { 0.001f, 0.01f, 0.1f };
         public static readonly int[] frameRates = new int[] { 24, 25, 30, 60 };
@@ -220,7 +248,18 @@ namespace ActionEditor.Nodes
 
         public static void Save()
         {
-            System.IO.File.WriteAllText(CONFIG_PATH, JsonUtility.ToJson(data));
+            ActionNodeEditorProjectSettings.instance.SaveSettings();
+        }
+
+        public static string lastAssetPath
+        {
+            get => data.LastAssetPath;
+            set
+            {
+                if (data.LastAssetPath == value) return;
+                data.LastAssetPath = value ?? string.Empty;
+                Save();
+            }
         }
 
 

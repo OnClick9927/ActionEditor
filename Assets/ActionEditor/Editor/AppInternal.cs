@@ -31,13 +31,22 @@ namespace ActionEditor
 
         private const int MaxUndoHistoryCount = 100;
 
-        const string key = "ActionEditor.APP";
+        private const string LegacyAssetPathKey = "ActionEditor.APP";
         private static string _assetPath;
         public static string assetPath
         {
             get
             {
-                if (_assetPath == null) _assetPath = EditorPrefs.GetString(key);
+                if (_assetPath == null)
+                {
+                    _assetPath = Prefs.lastAssetPath;
+                    if (string.IsNullOrEmpty(_assetPath))
+                    {
+                        _assetPath = EditorPrefs.GetString(LegacyAssetPathKey);
+                        if (!string.IsNullOrEmpty(_assetPath))
+                            Prefs.lastAssetPath = _assetPath;
+                    }
+                }
                 return _assetPath;
             }
         }
@@ -86,7 +95,8 @@ namespace ActionEditor
 
         public static bool OnObjectPickerConfig(string path)
         {
-            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return false;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path) ||
+                !IsSupportedAssetPath(path)) return false;
             if (path == assetPath && _asset != null && _undoHistory.Count > 0)
                 return true;
             if (!ConfirmAssetSwitch()) return false;
@@ -106,7 +116,7 @@ namespace ActionEditor
                 return false;
             }
             _assetPath = path;
-            EditorPrefs.SetString(key, path);
+            Prefs.lastAssetPath = path;
             AssetPlayer.Inst.Invalidate();
             CopyAsset = null;
             Select();
@@ -115,15 +125,32 @@ namespace ActionEditor
             return true;
         }
 
+        internal static bool IsSupportedAssetPath(string path)
+        {
+            if (AssetFileExtensionUtility.Matches(path, typeof(Asset)))
+                return true;
+            IEnumerable<Type> types = AssetTypes.Count > 0
+                ? AssetTypes.Values
+                : TypeHelper.GetSubTypes(typeof(Asset));
+            return types.Any(type => AssetFileExtensionUtility.Matches(path,
+                type));
+        }
+
+        internal static string GetFileExtension(Type type) =>
+            AssetFileExtensionUtility.Get(type ?? typeof(Asset));
+
         private static bool ConfirmAssetSwitch()
         {
             FlushPendingUndo();
             if (!IsDirty || _asset == null) return true;
             string fileName = Path.GetFileName(assetPath);
             int result = EditorUtility.DisplayDialogComplex(
-                "Unsaved Changes",
-                $"Save changes to \"{fileName}\" before opening another file?",
-                "Save", "Cancel", "Don't Save");
+                Lan.Text("UnsavedChanges", "Unsaved Changes"),
+                string.Format(Lan.Text("SaveChangesPrompt",
+                    "Save changes to \"{0}\" before opening another file?"),
+                    fileName),
+                Lan.ins.Save, Lan.Text("Cancel", "Cancel"),
+                Lan.Text("DontSave", "Don't Save"));
             if (result == 1) return false;
             if (result == 0) SaveAsset();
             return true;
@@ -733,19 +760,18 @@ namespace ActionEditor
 
         public static void SaveAs()
         {
-            var srcname = System.IO.Path.GetFileName(AppInternal.assetPath);
-            srcname = srcname.Remove(srcname.IndexOf(Asset.FileEx) - 1);
-            string path = EditorUtility.SaveFilePanel(Lan.ins.SaveAs, Prefs.savePath, srcname + "_", Asset.FileEx);
+            if (AssetData == null) return;
+            string extension = GetFileExtension(AssetData.GetType());
+            string srcname = Path.GetFileName(
+                AssetFileExtensionUtility.WithoutExtension(assetPath,
+                    extension));
+            string path = EditorUtility.SaveFilePanel(Lan.ins.SaveAs,
+                Prefs.savePath, srcname + "_", extension);
 
             if (!string.IsNullOrEmpty(path))
             {
-                while (true)
-                {
-                    var index = path.IndexOf(Asset.FileEx);
-                    if (index == -1) break;
-                    path = path.Remove(index - 1);
-                }
-                path = $"{path}.{Asset.FileEx}";
+                path = AssetFileExtensionUtility.WithExtension(path,
+                    AssetData.GetType());
                 if (path != AppInternal.assetPath)
                 {
                     var txt = AppInternal.AssetData.ToBytes();
@@ -895,12 +921,13 @@ namespace ActionEditor
         {
             if (track is Clip)
             {
-
-                return Prefs.data.clips.First(x => x.type == track.GetType().FullName).color;
+                return Prefs.data.GetColor(track.GetType(),
+                    AssetData?.GetType(), true).color;
             }
             else if (track is Track)
             {
-                return Prefs.data.tracks.First(x => x.type == track.GetType().FullName).color;
+                return Prefs.data.GetColor(track.GetType(),
+                    AssetData?.GetType(), false).color;
 
             }
             return Color.white;

@@ -58,6 +58,14 @@ public sealed class ActionAttributeExample : MonoBehaviour
     [MinValue(1), MaxValue(20)]
     [Name("队伍人数", "修改后限制在一到二十之间。")]
     [SerializeField] private int teamSize = 4;
+
+    [NonNegative, PrefixLabel("不少于"), SuffixLabel("次")]
+    [Name("重试次数", "组合前缀、后缀与非负数约束。")]
+    [SerializeField] private int retryCount = 3;
+
+    [Positive]
+    [Name("批次数量", "只允许输入大于零的数值。")]
+    [SerializeField] private int batchSize = 1;
     public int GG0;
 
     [ProgressBar(0, 100, "任务进度")]
@@ -176,8 +184,17 @@ public sealed class ActionAttributeExample : MonoBehaviour
 
     [ReorderableList]
     [RequiredListLength(1, 8)]
-    [Name("检查点", "列表支持拖拽排序和元素数量校验。")]
+    [UniqueList]
+    [Name("检查点", "列表支持拖拽排序、数量校验和重复元素校验。")]
     [SerializeField] private List<string> checkpoints = new List<string>();
+
+    [ChildGameObjectsOnly(true)]
+    [Name("子层级目标", "只接受当前对象自身或子层级中的对象。")]
+    [SerializeField] private Transform childTarget;
+
+    [ParentGameObjectsOnly(true)]
+    [Name("父层级目标", "只接受当前对象自身或父层级中的对象。")]
+    [SerializeField] private Transform parentTarget;
 
     [MinMaxSlider(0, 100)]
     [Name("随机范围", "Vector2 的 X/Y 分别保存最小值和最大值。")]

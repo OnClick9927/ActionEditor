@@ -19,14 +19,15 @@ namespace ActionEditor.Nodes
         private static GUIContent _saveAsContent;
         private static GUIContent _saveContent;
         private static GUIContent _settingsContent;
+        private static string _toolbarLanguage;
 
         [OnOpenAsset(1)]
         private static bool OnOpenAsset(int instanceID, int line)
         {
             var path = AssetDatabase.GetAssetPath(instanceID);
-            if (path.EndsWith(GraphAsset.FileEx))
+            if (App.IsSupportedAssetPath(path))
             {
-                if (!App.OnObjectPickerConfig(path)) return true;
+                if (!App.OnObjectPickerConfig(path)) return false;
                 if (App.asset != null)
                 {
                     App.OnWindowDisable();
@@ -84,9 +85,12 @@ namespace ActionEditor.Nodes
                         GUIUtility.ExitGUI();
                     }, (x) =>
                     {
-                        if (view == null)
-                            return x.EndsWith(GraphAsset.FileEx);
-                        return x.EndsWith(GraphAsset.FileEx) && view.IsFileFitAsset(x);
+                        bool extensionMatches = App.asset == null
+                            ? App.IsSupportedAssetPath(x)
+                            : App.IsSupportedAssetPath(x,
+                                App.asset.GetType());
+                        return extensionMatches &&
+                            (view == null || view.IsFileFitAsset(x));
 
                     });
                 }
@@ -139,16 +143,24 @@ namespace ActionEditor.Nodes
 
         private static void EnsureToolbarContent()
         {
-            if (_createAssetContent != null) return;
-            _createAssetContent = EditorGUIUtility.TrIconContent("Toolbar Plus", "Create");
-            _folderContent = EditorGUIUtility.TrIconContent("d_Project", "Show in Project");
+            if (_createAssetContent != null &&
+                _toolbarLanguage == Lan.Language) return;
+            _toolbarLanguage = Lan.Language;
+            _createAssetContent = EditorGUIUtility.TrIconContent("Toolbar Plus",
+                Lan.Text("Create", "Create"));
+            _folderContent = EditorGUIUtility.TrIconContent("d_Project",
+                Lan.Text("ShowInProject", "Show in Project"));
             _inspectorContent = EditorGUIUtility.TrIconContent(
-                "d_UnityEditor.InspectorWindow", "Inspector");
+                "d_UnityEditor.InspectorWindow",
+                Lan.Text("Inspector", "Inspector"));
             _undoHistoryContent = EditorGUIUtility.TrIconContent(
-                "d_UndoHistory", "Undo History");
-            _saveAsContent = EditorGUIUtility.TrIconContent("SaveAs", "Save As");
-            _saveContent = EditorGUIUtility.TrIconContent("SaveActive", "Save");
-            _settingsContent = EditorGUIUtility.TrIconContent("Settings", "Settings");
+                "d_UndoHistory", Lan.Text("UndoHistory", "Undo History"));
+            _saveAsContent = EditorGUIUtility.TrIconContent("SaveAs",
+                Lan.ins.SaveAs);
+            _saveContent = EditorGUIUtility.TrIconContent("SaveActive",
+                Lan.ins.Save);
+            _settingsContent = EditorGUIUtility.TrIconContent("Settings",
+                Lan.Text("Settings", "Settings"));
         }
 
         private void UpdateAssetToolbarContent()
@@ -161,8 +173,10 @@ namespace ActionEditor.Nodes
             _assetToolbarPath = path;
             _assetToolbarDirty = isDirty;
             string name = Path.GetFileName(path);
-            name = name.Replace($".{GraphAsset.FileEx}", "");
-            if (string.IsNullOrEmpty(name)) name = "None";
+            if (App.asset != null)
+                name = Path.GetFileName(AssetFileExtensionUtility.WithoutExtension(
+                    path, App.GetFileExtension(App.asset.GetType())));
+            if (string.IsNullOrEmpty(name)) name = Lan.Text("None", "None");
             _assetToolbarContent = new GUIContent($"[{name}]{(isDirty ? "*" : string.Empty)}");
             _assetToolbarWidth = Mathf.Max(80, GUI.skin.label.CalcSize(
                 _assetToolbarContent).x + 8) + 20;
@@ -209,7 +223,7 @@ namespace ActionEditor.Nodes
                 int count = App.UndoHistoryCount;
                 if (count == 0)
                 {
-                    GUI.Label(rect, "No Undo History",
+                    GUI.Label(rect, Lan.Text("NoUndoHistory", "No Undo History"),
                         EditorStyles.centeredGreyMiniLabel);
                     return;
                 }

@@ -7,23 +7,21 @@ using UnityEngine;
 
 namespace ActionEditor
 {
+    public static class ActionAssetOpenHandler
+    {
+        [OnOpenAsset(0)]
+        public static bool OnOpenAsset(int instanceID, int line)
+        {
+            string path = AssetDatabase.GetAssetPath(instanceID);
+            if (!AppInternal.IsSupportedAssetPath(path)) return false;
+            if (!AppInternal.OnObjectPickerConfig(path)) return true;
+            ActionEditorWindow.OpenDirectorWindow();
+            return true;
+        }
+    }
+
     class ActionEditorWindow : EditorWindow
     {
-        [OnOpenAsset(1)]
-        private static bool OnOpenAsset(int instanceID, int line)
-        {
-            var path = AssetDatabase.GetAssetPath(instanceID);
-            if (path.EndsWith(Asset.FileEx))
-            {
-                if (!AppInternal.OnObjectPickerConfig(path)) return true;
-                if (AppInternal.AssetData != null)
-                {
-                    OpenDirectorWindow();
-                    return true;
-                }
-            }
-            return false;
-        }
         [MenuItem("Tools/Action Editor", priority = 0)]
         public static void OpenDirectorWindow()
         {

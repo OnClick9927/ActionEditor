@@ -12,7 +12,7 @@ namespace ActionEditor.Nodes.BT
         {
             DrawDefaultInspector();
 
-            if (GUILayout.Button("Select"))
+            if (GUILayout.Button(Lan.Text("Select", "Select")))
             {
 
                 ActionEditor.AssetPick.ShowObjectPicker(GUILayoutUtility.GetLastRect(), "Assets", "t:TextAsset", Prefs.pickListType, (o) =>
@@ -37,13 +37,17 @@ namespace ActionEditor.Nodes.BT
                 }, (x) =>
                 {
 
-                    if (!x.EndsWith(GraphAsset.FileEx)) return false;
+                    string extension = App.GetFileExtension(
+                        App.asset?.GetType() ?? typeof(GraphAsset));
+                    if (!x.EndsWith("." + extension,
+                        System.StringComparison.OrdinalIgnoreCase)) return false;
                     if (!view.IsFileFitAsset(x)) return false;
                     if (x == App.assetPath) return false;
                     return true;
                 });
             }
-            if (GUILayout.Button("Sync interrupt && Semaphore && Events"))
+            if (GUILayout.Button(Lan.Text("SyncSubTree",
+                "Sync Interrupts, Semaphores and Events")))
             {
                 var path = this.data.path;
                 var text = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
@@ -66,12 +70,11 @@ namespace ActionEditor.Nodes.BT
             this.GeneratePort(Direction.Input, typeof(BTNode));
             RegisterCallback<PointerDownEvent>((evt) =>
             {
-                // 检查点击次数是否为 2
+                // Open a subtree after a double-click.
                 if (evt.clickCount == 2)
                 {
                     App.OnObjectPickerConfig(this.data.path);
                     //this.data.path
-                    // 在这里执行你的双击逻辑
                 }
             });
         }

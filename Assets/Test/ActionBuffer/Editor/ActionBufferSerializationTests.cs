@@ -58,6 +58,25 @@ namespace ActionBuffer.Tests
         }
 
         [TestCaseSource(nameof(Formats))]
+        public void OnlyBufferedPropertiesRoundTrip(string format)
+        {
+            var source = new BufferedPropertyModel
+            {
+                PublicValue = 17,
+                UnmarkedValue = 99
+            };
+            source.SetPrivateValue("private");
+            source.SetManualValue(23);
+
+            BufferedPropertyModel result = RoundTrip(source, format);
+
+            Assert.That(result.PublicValue, Is.EqualTo(17));
+            Assert.That(result.GetPrivateValue(), Is.EqualTo("private"));
+            Assert.That(result.GetManualValue(), Is.EqualTo(23));
+            Assert.That(result.UnmarkedValue, Is.EqualTo(5));
+        }
+
+        [TestCaseSource(nameof(Formats))]
         public void CollectionTypesRoundTrip(string format)
         {
             var result = RoundTrip(new CollectionModel(), format);
@@ -691,6 +710,68 @@ namespace ActionBuffer.Tests
                     BuffSerializer.FromJson<SettingsScopedValue>(defaultJson).Value != 31)
                     throw new InvalidOperationException("Settings converter leaked to another write.");
             }));
+        }
+
+        [Test]
+        public void OneThousandMixedFormatRoundTripsRemainStable()
+        {
+            var settings = new BuffSettings
+            {
+                SupportReferences = true,
+                DeterministicCollectionOrder = true
+            };
+            var firstNode = new ReferenceNode { Name = "first" };
+            var secondNode = new ReferenceNode { Name = "second" };
+            firstNode.Next = secondNode;
+            secondNode.Next = firstNode;
+            var shared = new SharedLeaf();
+            var source = new StressSerializationModel
+            {
+                Root = firstNode,
+                First = shared,
+                Second = shared,
+                Cube = new int[2, 1, 2],
+                RankFive = new int[1, 1, 2, 1, 2]
+            };
+
+            for (int iteration = 0; iteration < 1000; iteration++)
+            {
+                string format = Formats[iteration % Formats.Length];
+                string label = "iteration-" + iteration;
+                source.SetValues(iteration, label);
+                shared.Value = iteration * 3;
+                source.Cube[1, 0, 1] = iteration + 10;
+                source.RankFive[0, 0, 1, 0, 1] = iteration + 20;
+
+                StressSerializationModel result = RoundTrip(source, format, settings);
+                if (result.Iteration != iteration || result.GetLabel() != label ||
+                    result.First.Value != iteration * 3 ||
+                    !ReferenceEquals(result.First, result.Second) ||
+                    result.Root.Next.Name != "second" ||
+                    !ReferenceEquals(result.Root.Next.Next, result.Root) ||
+                    result.Cube[1, 0, 1] != iteration + 10 ||
+                    result.RankFive[0, 0, 1, 0, 1] != iteration + 20)
+                {
+                    Assert.Fail($"Round-trip mismatch at iteration {iteration} ({format}).");
+                }
+            }
+        }
+
+        [TestCaseSource(nameof(Formats))]
+        public void RepeatedPooledWritesProduceIdenticalOutput(string format)
+        {
+            var source = new PrimitiveModel();
+            object expected = Write(source, format);
+            for (int iteration = 0; iteration < 100; iteration++)
+            {
+                object actual = Write(source, format);
+                if (expected is byte[] expectedBytes)
+                    CollectionAssert.AreEqual(expectedBytes, (byte[])actual,
+                        $"Binary output changed at iteration {iteration}.");
+                else
+                    Assert.That(actual, Is.EqualTo(expected),
+                        $"{format} output changed at iteration {iteration}.");
+            }
         }
 
         [Test]

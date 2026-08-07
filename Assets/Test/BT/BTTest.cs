@@ -17,6 +17,8 @@ namespace ActionEditor.Nodes.BT
     {
         public float Money;
         public A a;
+
+        public int b, c, d, e, f;
         public enum A
         {
             a,b,c

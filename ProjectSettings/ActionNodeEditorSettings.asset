@@ -1,0 +1,465 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &1
+MonoBehaviour:
+  m_ObjectHideFlags: 61
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 611730cf55a47eb449f2e677518006a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  data:
+    searchListType: 0
+    AutoSaveSeconds: 78
+    SavePath: Assets/Test/BT
+    LastAssetPath: Assets/Test/BT/1.bt.bytes
+    NodePrettySpacing: {x: 30, y: 100}
+    nodes:
+    - type: ActionEditor.Nodes.BT.BTWaitTime
+      ownerType: 
+      color: {r: 0.2177871, g: 0.40977412, b: 0.31408042, a: 1}
+      attach: []
+    - type: ActionEditor.Nodes.BT.Tests.BehaviorTreeRuntimeTests+CountSuccess
+      ownerType: 
+      color: {r: 0.35337266, g: 0.214206, b: 0.8027606, a: 1}
+      attach: []
+    - type: ActionEditor.Nodes.GroupData
+      ownerType: 
+      color: {r: 0.27231595, g: 0.3560255, b: 0.35027403, a: 1}
+      attach: []
+    - type: ActionEditor.Nodes.BT.BTSubTree
+      ownerType: 
+      color: {r: 0.15258722, g: 0.07894683, b: 0.69570047, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTVariableCondition
+      ownerType: 
+      color: {r: 0.12575124, g: 0.17442931, b: 0.079767086, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTCompareVariables
+      ownerType: 
+      color: {r: 0.50515765, g: 0.94606185, b: 0.82890916, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRecEventCondition
+      ownerType: 
+      color: {r: 0.037962336, g: 0.0012507837, b: 0.058734186, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRoot
+      ownerType: 
+      color: {r: 0.053921476, g: 0.09834792, b: 0.05817084, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.GraphCommentData
+      ownerType: 
+      color: {r: 0.3030779, g: 0.54514426, b: 0.5880907, a: 1}
+      attach: []
+    - type: ActionEditor.Nodes.BT.BTReactiveSequence
+      ownerType: 
+      color: {r: 0.029839767, g: 0.8813101, b: 0.38632968, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTReactiveSelector
+      ownerType: 
+      color: {r: 0.10326324, g: 0.18650784, b: 0.1574523, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTParallel
+      ownerType: 
+      color: {r: 0.3795569, g: 0.70608604, b: 0.87803555, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTParallelComplete
+      ownerType: 
+      color: {r: 0.29558712, g: 0.51096445, b: 0.653928, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTParallelSelector
+      ownerType: 
+      color: {r: 0.8648226, g: 0.917905, b: 0.78821653, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSequence
+      ownerType: 
+      color: {r: 0.6049496, g: 0.54507154, b: 0.6523666, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSwitchInteger
+      ownerType: 
+      color: {r: 0.27333602, g: 0.28949073, b: 0.2622471, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRoundRobin
+      ownerType: 
+      color: {r: 0.2673795, g: 0.36429313, b: 0.22446428, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSelector
+      ownerType: 
+      color: {r: 0.1668007, g: 0.04025549, b: 0.5947549, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRset
+      ownerType: 
+      color: {r: 0.28625745, g: 1, b: 0.26981127, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.TestBT
+    - type: ActionEditor.Nodes.BT.BTWork
+      ownerType: 
+      color: {r: 0.28812987, g: 0.3809008, b: 0.19125967, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.TestBT
+    - type: ActionEditor.Nodes.BT.BTSwapVariables
+      ownerType: 
+      color: {r: 0.04188263, g: 0.091772206, b: 0.035861913, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTPushEvent
+      ownerType: 
+      color: {r: 0.029008089, g: 0.064354636, b: 0.1954011, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTCopyVariable
+      ownerType: 
+      color: {r: 0.23238906, g: 0.19184822, b: 0.31114867, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTPerformInterrupt
+      ownerType: 
+      color: {r: 0.2062671, g: 0.67646664, b: 0.028963625, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTWaitTicks
+      ownerType: 
+      color: {r: 0.00755805, g: 0.31390932, b: 0.31079614, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTWaitEvent
+      ownerType: 
+      color: {r: 0.29945874, g: 0.35341445, b: 0.34155464, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSetVariable
+      ownerType: 
+      color: {r: 0.02508889, g: 0.07892037, b: 0.027386367, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTIF
+      ownerType: 
+      color: {r: 0.1198651, g: 0.02375577, b: 0.15970041, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTCooldownTicks
+      ownerType: 
+      color: {r: 0.15633395, g: 0.17711265, b: 0.17872323, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTAnd
+      ownerType: 
+      color: {r: 0.07836743, g: 0.34365597, b: 0.22674216, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTInterrupt
+      ownerType: 
+      color: {r: 0.33561766, g: 0.63915414, b: 0.40706855, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSemaphore
+      ownerType: 
+      color: {r: 0.13582052, g: 0.18324818, b: 0.110893145, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTOnce
+      ownerType: 
+      color: {r: 0.039739266, g: 0.54928786, b: 0.55995446, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTInverter
+      ownerType: 
+      color: {r: 0.29995203, g: 0.8343797, b: 0.6248704, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTFailure
+      ownerType: 
+      color: {r: 0.39930844, g: 0.52030855, b: 0.37052542, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRetry
+      ownerType: 
+      color: {r: 0.58241314, g: 0.5984355, b: 0.610709, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTDelayTicks
+      ownerType: 
+      color: {r: 0.15623985, g: 0.1525999, b: 0.1697755, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSuccess
+      ownerType: 
+      color: {r: 0.022132862, g: 0.077433474, b: 0.057688735, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTOR
+      ownerType: 
+      color: {r: 0.20282331, g: 0.14701249, b: 0.30690005, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTExecutionLimit
+      ownerType: 
+      color: {r: 0.24263057, g: 0.29481307, b: 0.28869757, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTUtilFailure
+      ownerType: 
+      color: {r: 0.042194232, g: 0.2709619, b: 0.016702648, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTUtilSuccess
+      ownerType: 
+      color: {r: 0.16553096, g: 0.3840335, b: 0.38178408, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTTimeoutTicks
+      ownerType: 
+      color: {r: 0.5350783, g: 0.78389966, b: 0.4666466, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRepeat
+      ownerType: 
+      color: {r: 0.5013249, g: 0.69297296, b: 0.36679202, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRepeatCount
+      ownerType: 
+      color: {r: 0.32092232, g: 0.33151188, b: 0.2896366, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSubTree
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.15258722, g: 0.07894683, b: 0.69570047, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTVariableCondition
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.12575124, g: 0.17442931, b: 0.079767086, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTCompareVariables
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.50515765, g: 0.94606185, b: 0.82890916, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRecEventCondition
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.037962336, g: 0.0012507837, b: 0.058734186, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRoot
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.053921476, g: 0.09834792, b: 0.05817084, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTReactiveSequence
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.029839767, g: 0.8813101, b: 0.38632968, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTReactiveSelector
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.10326324, g: 0.18650784, b: 0.1574523, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTParallel
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.3795569, g: 0.70608604, b: 0.87803555, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTParallelComplete
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.29558712, g: 0.51096445, b: 0.653928, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTParallelSelector
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.8648226, g: 0.917905, b: 0.78821653, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSequence
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.6049496, g: 0.54507154, b: 0.6523666, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSwitchInteger
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.27333602, g: 0.28949073, b: 0.2622471, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRoundRobin
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.2673795, g: 0.36429313, b: 0.22446428, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSelector
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.1668007, g: 0.04025549, b: 0.5947549, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRset
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.28625745, g: 1, b: 0.26981127, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.TestBT
+    - type: ActionEditor.Nodes.BT.BTWork
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.28812987, g: 0.3809008, b: 0.19125967, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.TestBT
+    - type: ActionEditor.Nodes.BT.BTSwapVariables
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.04188263, g: 0.091772206, b: 0.035861913, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTPushEvent
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.029008089, g: 0.064354636, b: 0.1954011, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTCopyVariable
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.23238906, g: 0.19184822, b: 0.31114867, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTPerformInterrupt
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.2062671, g: 0.67646664, b: 0.028963625, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTWaitTicks
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.00755805, g: 0.31390932, b: 0.31079614, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTWaitEvent
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.29945874, g: 0.35341445, b: 0.34155464, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSetVariable
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.02508889, g: 0.07892037, b: 0.027386367, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTIF
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.1198651, g: 0.02375577, b: 0.15970041, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTCooldownTicks
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.15633395, g: 0.17711265, b: 0.17872323, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTAnd
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.07836743, g: 0.34365597, b: 0.22674216, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTInterrupt
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.33561766, g: 0.63915414, b: 0.40706855, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSemaphore
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.13582052, g: 0.18324818, b: 0.110893145, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTOnce
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.039739266, g: 0.54928786, b: 0.55995446, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTInverter
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.29995203, g: 0.8343797, b: 0.6248704, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTFailure
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.39930844, g: 0.52030855, b: 0.37052542, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRetry
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.58241314, g: 0.5984355, b: 0.610709, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTDelayTicks
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.15623985, g: 0.1525999, b: 0.1697755, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTSuccess
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.022132862, g: 0.077433474, b: 0.057688735, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTOR
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.20282331, g: 0.14701249, b: 0.30690005, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTExecutionLimit
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.24263057, g: 0.29481307, b: 0.28869757, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTUtilFailure
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.042194232, g: 0.2709619, b: 0.016702648, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTUtilSuccess
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.16553096, g: 0.3840335, b: 0.38178408, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTTimeoutTicks
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.5350783, g: 0.78389966, b: 0.4666466, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRepeat
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.5013249, g: 0.69297296, b: 0.36679202, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    - type: ActionEditor.Nodes.BT.BTRepeatCount
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 0.32092232, g: 0.33151188, b: 0.2896366, a: 1}
+      attach:
+      - ActionEditor.Nodes.BT.BTTree
+    other:
+    - type: ActionEditor.Nodes.BT.BTCondition
+      ownerType: 
+      color: {r: 0.8786714, g: 0.95587695, b: 0.16363546, a: 1}
+      attach: []
+    - type: ActionEditor.Nodes.BT.BTNode
+      ownerType: 
+      color: {r: 0.15027462, g: 0.21101427, b: 0.4342715, a: 1}
+      attach: []
+    - type: System.RuntimeType
+      ownerType: 
+      color: {r: 0.481666, g: 0.7735849, b: 0.37219647, a: 1}
+      attach: []
+    - type: ActionEditor.Nodes.BT.BTNode
+      ownerType: ActionEditor.Nodes.BT.TestBT
+      color: {r: 1, g: 1, b: 1, a: 1}
+      attach: []
+  legacySettingsMigrated: 1

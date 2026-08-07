@@ -9,8 +9,11 @@ using System.Collections.Generic;
 namespace ActionEditor
 {
     [Serializable]
+    [TypeInfoBox("时间轴资源，负责组织分组、轨道和片段，并保存播放长度与编辑视图范围。")]
+    [AssetFileExtension("action.bytes")]
     public abstract class Asset : IAction
     {
+        [Obsolete("Use AssetFileExtensionUtility.Get(assetType) instead.")]
         public const string FileEx = "action.bytes";
 
 

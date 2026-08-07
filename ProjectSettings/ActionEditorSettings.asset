@@ -1,0 +1,80 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &1
+MonoBehaviour:
+  m_ObjectHideFlags: 61
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41b79c49840fc3242881d69abd6e1f66, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  data:
+    TimeStepMode: 0
+    searchListType: 1
+    SnapInterval: 0.01
+    FrameRate: 10
+    AutoSaveSeconds: 54
+    SavePath: Assets/Test/TL
+    Lan_key: "\u7B80\u4F53\u4E2D\u6587"
+    LastAssetPath: Assets/Test/TL/1.action.bytes
+    MagnetSnapping: 1
+    TrackListLeftMargin: 180
+    clips:
+    - assetType: 
+      type: TLLogSignal
+      color: {r: 0.14285731, g: 1, b: 0, a: 1}
+      attach:
+      - TLSignalTrack
+      asset: []
+    - assetType: 
+      type: TLMoveClip
+      color: {r: 0.50980395, g: 0.68340206, b: 0.827451, a: 1}
+      attach:
+      - TLActionTrack
+      asset: []
+    - assetType: TLAsset
+      type: TLLogSignal
+      color: {r: 0.14285731, g: 1, b: 0, a: 1}
+      attach:
+      - TLSignalTrack
+      asset: []
+    - assetType: TLAsset
+      type: TLMoveClip
+      color: {r: 0.50980395, g: 0.68340206, b: 0.827451, a: 1}
+      attach:
+      - TLActionTrack
+      asset: []
+    tracks:
+    - assetType: 
+      type: TLActionTrack
+      color: {r: 0, g: 0.6530044, b: 1, a: 1}
+      attach:
+      - TLGroup
+      asset:
+      - TLAsset
+    - assetType: 
+      type: TLSignalTrack
+      color: {r: 0.27598, g: 1, b: 0, a: 1}
+      attach:
+      - TLGroup
+      asset:
+      - TLAsset
+    - assetType: TLAsset
+      type: TLSignalTrack
+      color: {r: 0.27598, g: 1, b: 0, a: 1}
+      attach:
+      - TLGroup
+      asset:
+      - TLAsset
+    - assetType: TLAsset
+      type: TLActionTrack
+      color: {r: 0, g: 0.6530044, b: 1, a: 1}
+      attach:
+      - TLGroup
+      asset:
+      - TLAsset
+  legacySettingsMigrated: 1

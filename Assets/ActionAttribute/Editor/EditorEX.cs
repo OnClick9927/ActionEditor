@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -35,15 +36,14 @@ namespace ActionAttribute
             if (!ScriptObjectCache.TryGetValue(type, out UnityEngine.Object obj))
             {
                 string path = LocateScript(type);
-                obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                obj = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
                 ScriptObjectCache[type] = obj;
             }
-            if (obj == null) return;
-
-            GUILayout.Space(10);
             using (new EditorGUI.DisabledScope(true))
-                EditorGUILayout.ObjectField(string.Empty, obj, obj.GetType(), false);
-            GUILayout.Space(10);
+                EditorGUILayout.ObjectField(
+                    EditorGUIUtility.TrTextContent("Script"), obj,
+                    typeof(MonoScript), false);
+            GUILayout.Space(4);
         }
 
         public static string LocateScript(Type targetType)
@@ -73,8 +73,39 @@ namespace ActionAttribute
                     fallback = path;
             }
 
+            if (string.IsNullOrEmpty(fallback))
+                fallback = LocateContainingScript(targetType, className);
+
             ScriptPathCache[targetType] = fallback;
             return fallback;
+        }
+
+        private static string LocateContainingScript(Type targetType,
+            string className)
+        {
+            string declaration = @"\b(?:class|struct|interface|enum|record)\s+" +
+                Regex.Escape(className) + @"(?:\s|:|<)";
+            string namespacePattern = string.IsNullOrEmpty(targetType.Namespace)
+                ? null
+                : @"\bnamespace\s+" +
+                    Regex.Escape(targetType.Namespace) + @"\s*[;{]";
+            string firstMatch = string.Empty;
+            string[] scriptGuids = AssetDatabase.FindAssets("t:Script");
+            for (int i = 0; i < scriptGuids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(scriptGuids[i]);
+                if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                MonoScript script =
+                    AssetDatabase.LoadAssetAtPath<MonoScript>(path);
+                string source = script != null ? script.text : null;
+                if (string.IsNullOrEmpty(source) ||
+                    !Regex.IsMatch(source, declaration)) continue;
+                if (string.IsNullOrEmpty(firstMatch)) firstMatch = path;
+                if (namespacePattern == null ||
+                    Regex.IsMatch(source, namespacePattern)) return path;
+            }
+            return firstMatch;
         }
 
         public static Texture2D GetIcon(this object value)
@@ -257,20 +288,24 @@ namespace ActionAttribute
             return types.Contains(attachTo);
         }
 
-        public static Editor CreateEditor(object target) =>
-            DrawerObject.CreateEditor(target);
+        public static Editor CreateEditor(object target,
+            params string[] excludedProperties) =>
+            DrawerObject.CreateEditor(target, excludedProperties);
 
         private sealed class DrawerObject : ScriptableObject
         {
             [SerializeReference] public object obj;
+            [NonSerialized] public string[] excludedProperties;
             private static DrawerObject instance;
             private static Editor editor;
 
-            public static Editor CreateEditor(object target)
+            public static Editor CreateEditor(object target,
+                string[] excludedProperties)
             {
                 instance = instance ?? CreateInstance<DrawerObject>();
                 instance.hideFlags = HideFlags.DontSave;
                 instance.obj = target;
+                instance.excludedProperties = excludedProperties;
                 if (editor == null) editor = Editor.CreateEditor(instance);
                 return editor;
             }
@@ -287,7 +322,8 @@ namespace ActionAttribute
                 SerializedProperty property = serializedObject.FindProperty(
                     nameof(DrawerObject.obj));
                 renderer.DrawChildren(serializedObject, property,
-                    ((DrawerObject)target).obj);
+                    ((DrawerObject)target).obj,
+                    ((DrawerObject)target).excludedProperties);
             }
 
             private void OnDisable() => renderer.Dispose();

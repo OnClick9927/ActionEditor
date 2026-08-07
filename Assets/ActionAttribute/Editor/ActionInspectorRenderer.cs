@@ -47,7 +47,8 @@ namespace ActionAttribute
         }
 
         internal void DrawChildren(SerializedObject serializedObject,
-            SerializedProperty parent, object target)
+            SerializedProperty parent, object target,
+            IReadOnlyCollection<string> excludedProperties = null)
         {
             SetTarget(target);
             serializedObject.Update();
@@ -59,11 +60,23 @@ namespace ActionAttribute
                 int childDepth = parent.depth + 1;
                 while (hasNext && child.depth >= childDepth)
                 {
-                    if (child.depth == childDepth) properties.Add(child.Copy());
+                    if (child.depth == childDepth &&
+                        !Contains(excludedProperties, child.name))
+                        properties.Add(child.Copy());
                     hasNext = child.NextVisible(false);
                 }
             }
             DrawProperties(serializedObject, target, properties);
+        }
+
+        private static bool Contains(IReadOnlyCollection<string> values,
+            string value)
+        {
+            if (values == null) return false;
+            foreach (string item in values)
+                if (string.Equals(item, value, StringComparison.Ordinal))
+                    return true;
+            return false;
         }
 
         private void DrawProperties(SerializedObject serializedObject,
@@ -90,6 +103,8 @@ namespace ActionAttribute
                 SerializedProperty property = source[i];
                 if (property.propertyPath == "m_Script") continue;
                 metadata.Fields.TryGetValue(property.name, out FieldInfo field);
+                if (field != null &&
+                    field.IsDefined(typeof(HideInInspector), true)) continue;
                 entries.Add(new PropertyEntry(property, field, i));
             }
             entries.Sort(PropertyEntry.Compare);
@@ -410,7 +425,10 @@ namespace ActionAttribute
             result.HideMonoScript = type.IsDefined(typeof(HideMonoScriptAttribute),
                 true);
             object[] typeInfoBoxes = type.GetCustomAttributes(
-                typeof(TypeInfoBoxAttribute), true);
+                typeof(TypeInfoBoxAttribute), false);
+            if (typeInfoBoxes.Length == 0)
+                typeInfoBoxes = type.GetCustomAttributes(
+                    typeof(TypeInfoBoxAttribute), true);
             result.TypeInfoBoxes = new TypeInfoBoxAttribute[typeInfoBoxes.Length];
             for (int i = 0; i < typeInfoBoxes.Length; i++)
                 result.TypeInfoBoxes[i] = (TypeInfoBoxAttribute)typeInfoBoxes[i];

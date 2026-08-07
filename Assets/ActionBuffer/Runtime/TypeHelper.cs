@@ -44,12 +44,10 @@ namespace ActionBuffer
                 public readonly Type FieldType;
                 public readonly Type DeclaringType;
                 public readonly bool IsEvent;
-                private readonly FieldInfo _field;
                 private readonly FieldAccess _access;
 
                 internal Field(FieldInfo field, string name)
                 {
-                    _field = field;
                     this.name = name;
                     FieldType = field.FieldType;
                     DeclaringType = field.DeclaringType;
@@ -57,6 +55,15 @@ namespace ActionBuffer
                         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
                         BindingFlags.DeclaredOnly) != null;
                     _access = FieldAccess.Create(field);
+                }
+
+                internal Field(PropertyInfo property, string name)
+                {
+                    this.name = name;
+                    FieldType = property.PropertyType;
+                    DeclaringType = property.DeclaringType;
+                    IsEvent = false;
+                    _access = FieldAccess.Create(property);
                 }
 
                 public object GetValue(object target) => _access.GetValue(target);
@@ -100,6 +107,30 @@ namespace ActionBuffer
                     }
 #endif
                 }
+
+                internal static FieldAccess Create(PropertyInfo property)
+                {
+#if ENABLE_IL2CPP
+                    return new ReflectionPropertyAccess(property);
+#else
+                    if (property.DeclaringType.IsValueType)
+                        return new ReflectionPropertyAccess(property);
+                    try
+                    {
+                        var accessType = typeof(TypedPropertyAccess<,>)
+                            .MakeGenericType(property.DeclaringType,
+                                property.PropertyType);
+                        return (FieldAccess)Activator.CreateInstance(accessType,
+                            BindingFlags.Instance | BindingFlags.Public |
+                            BindingFlags.NonPublic, null,
+                            new object[] { property }, null);
+                    }
+                    catch
+                    {
+                        return new ReflectionPropertyAccess(property);
+                    }
+#endif
+                }
             }
 
             private sealed class ReflectionFieldAccess : FieldAccess
@@ -136,6 +167,45 @@ namespace ActionBuffer
                 internal override void ReadAndSet(IBufferReader reader, object target,
                     BuffConverter converter) =>
                     _field.SetValue(target, converter.Read(reader, _field.FieldType));
+            }
+
+            private sealed class ReflectionPropertyAccess : FieldAccess
+            {
+                private readonly PropertyInfo _property;
+                private readonly object _defaultValue;
+
+                internal ReflectionPropertyAccess(PropertyInfo property)
+                {
+                    _property = property;
+                    _defaultValue = GetDefaultValue(property.PropertyType);
+                }
+
+                internal override object GetValue(object target) =>
+                    _property.GetValue(target, null);
+                internal override void SetValue(object target, object value) =>
+                    _property.SetValue(target, value, null);
+                internal override void SetDefaultValue(object target) =>
+                    _property.SetValue(target, _defaultValue, null);
+
+                internal override bool Capture(BufferScan scan, Field field,
+                    object target, BuffConverter converter, bool fullField,
+                    out BufferScan.CachedField cached)
+                {
+                    object value = _property.GetValue(target, null);
+                    if (!fullField && IsNullOrDefault(value,
+                        _property.PropertyType))
+                    {
+                        cached = default;
+                        return false;
+                    }
+                    cached = scan.CacheBoxedFieldValue(field, converter, value);
+                    return true;
+                }
+
+                internal override void ReadAndSet(IBufferReader reader,
+                    object target, BuffConverter converter) =>
+                    _property.SetValue(target,
+                        converter.Read(reader, _property.PropertyType), null);
             }
 
 #if !ENABLE_IL2CPP
@@ -204,6 +274,64 @@ namespace ActionBuffer
                     return EqualityComparer<TValue>.Default.Equals(value, default);
                 }
             }
+
+            private sealed class TypedPropertyAccess<TTarget, TValue> : FieldAccess
+            {
+                private readonly Func<TTarget, TValue> _getter;
+                private readonly Action<TTarget, TValue> _setter;
+
+                internal TypedPropertyAccess(PropertyInfo property)
+                {
+                    var target = Expression.Parameter(typeof(TTarget), "target");
+                    _getter = Expression.Lambda<Func<TTarget, TValue>>(
+                        Expression.Property(target, property), target).Compile();
+                    var value = Expression.Parameter(typeof(TValue), "value");
+                    _setter = Expression.Lambda<Action<TTarget, TValue>>(
+                        Expression.Assign(Expression.Property(target, property),
+                            value), target, value).Compile();
+                }
+
+                private TValue Read(object target) => _getter((TTarget)target);
+                private void Write(object target, TValue value) =>
+                    _setter((TTarget)target, value);
+
+                internal override object GetValue(object target) => Read(target);
+                internal override void SetValue(object target, object value) =>
+                    Write(target, (TValue)value);
+                internal override void SetDefaultValue(object target) =>
+                    Write(target, default);
+
+                internal override bool Capture(BufferScan scan, Field field,
+                    object target, BuffConverter converter, bool fullField,
+                    out BufferScan.CachedField cached)
+                {
+                    TValue value = Read(target);
+                    if (!fullField && IsDefault(value))
+                    {
+                        cached = default;
+                        return false;
+                    }
+                    cached = scan.CacheFieldValue(field, converter, value);
+                    return true;
+                }
+
+                internal override void ReadAndSet(IBufferReader reader,
+                    object target, BuffConverter converter)
+                {
+                    if (!(converter is BuffConverter<TValue> typed))
+                        throw new InvalidOperationException(
+                            $"Converter '{converter?.GetType()}' cannot deserialize property type '{typeof(TValue)}'.");
+                    Write(target, typed.ReadValue(reader, typeof(TValue)));
+                }
+
+                private static bool IsDefault(TValue value)
+                {
+                    if (!typeof(TValue).IsValueType)
+                        return ReferenceEquals(value, null);
+                    return EqualityComparer<TValue>.Default.Equals(value,
+                        default);
+                }
+            }
 #endif
 
             public sealed class FieldCollection : IReadOnlyList<Field>
@@ -235,11 +363,11 @@ namespace ActionBuffer
             private readonly FieldCollection _fieldView;
             private readonly bool _useUninitializedObject;
 
-            private TypeFields(Type type, bool usePropertyBackingFields)
+            private TypeFields(Type type, bool useImplicitPropertyBackingFields)
             {
                 _type = type;
                 _fieldView = new FieldCollection(_fields);
-                _useUninitializedObject = usePropertyBackingFields ||
+                _useUninitializedObject = useImplicitPropertyBackingFields ||
                     (!type.IsValueType && type.GetConstructor(
                         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
                         null, Type.EmptyTypes, null) == null);
@@ -281,8 +409,9 @@ namespace ActionBuffer
 
             private static TypeFields Create(Type type)
             {
-                bool usePropertyBackingFields = UsesPropertyBackingFields(type);
-                var result = new TypeFields(type, usePropertyBackingFields);
+                bool useImplicitProperties =
+                    UsesImplicitPropertyBackingFields(type);
+                var result = new TypeFields(type, useImplicitProperties);
                 var baseType = type.BaseType;
                 if (baseType != null && baseType != typeof(object))
                 {
@@ -295,10 +424,14 @@ namespace ActionBuffer
                     BindingFlags.Instance | BindingFlags.DeclaredOnly);
                 for (int i = 0; i < declaredFields.Length; i++)
                     result.AddField(declaredFields[i]);
-                if (usePropertyBackingFields)
-                    AddPropertyBackingFields(result, type, declaredFields);
-                else
-                    AddInitPropertyBackingFields(result, type, declaredFields);
+                var declaredProperties = type.GetProperties(BindingFlags.Public |
+                    BindingFlags.NonPublic | BindingFlags.Instance |
+                    BindingFlags.DeclaredOnly);
+                for (int i = 0; i < declaredProperties.Length; i++)
+                    result.AddProperty(declaredProperties[i]);
+                if (useImplicitProperties)
+                    AddImplicitPropertyBackingFields(result,
+                        declaredProperties, declaredFields);
                 result._fields.Sort((left, right) =>
                     string.CompareOrdinal(left.name, right.name));
                 return result;
@@ -333,88 +466,75 @@ namespace ActionBuffer
                 AddField(new Field(field, name));
             }
 
-            private static void AddPropertyBackingFields(TypeFields typeFields, Type type,
-                FieldInfo[] fields)
+            private void AddProperty(PropertyInfo property)
             {
-                var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance |
-                    BindingFlags.DeclaredOnly);
-                for (int i = 0; i < properties.Length; i++)
-                {
-                    var property = properties[i];
-                    if (!property.CanRead || property.GetIndexParameters().Length != 0 ||
-                        typeof(Delegate).IsAssignableFrom(property.PropertyType) ||
-                        typeFields._fieldsByName.ContainsKey(property.Name))
-                        continue;
-                    var backingField = FindPropertyBackingField(fields, property);
-                    if (backingField != null)
-                        typeFields.AddField(backingField, property.Name);
-                }
+                var attribute = property.GetCustomAttribute<BufferAttribute>(false);
+                if (attribute == null) return;
+                if (property.GetIndexParameters().Length != 0)
+                    throw new InvalidOperationException(
+                        $"Buffered property '{property.DeclaringType}.{property.Name}' cannot be an indexer.");
+                if (property.GetGetMethod(true) == null ||
+                    property.GetSetMethod(true) == null)
+                    throw new InvalidOperationException(
+                        $"Buffered property '{property.DeclaringType}.{property.Name}' must declare both a getter and a setter.");
+                string name = attribute.bufferName ?? property.Name;
+                if (_fieldsByName.TryGetValue(name, out var existing))
+                    throw new InvalidOperationException(
+                        $"Type '{_type}' contains duplicate serialized member name '{name}' in '{existing.DeclaringType}' and '{property.DeclaringType}'.");
+                AddField(new Field(property, name));
             }
 
-            private static void AddInitPropertyBackingFields(TypeFields typeFields, Type type,
+            private static void AddImplicitPropertyBackingFields(
+                TypeFields typeFields, PropertyInfo[] properties,
                 FieldInfo[] fields)
             {
-                var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance |
-                    BindingFlags.DeclaredOnly);
                 for (int i = 0; i < properties.Length; i++)
                 {
-                    var property = properties[i];
-                    if (!IsInitProperty(property) || !property.CanRead ||
+                    PropertyInfo property = properties[i];
+                    if (!property.CanRead ||
                         property.GetIndexParameters().Length != 0 ||
                         typeof(Delegate).IsAssignableFrom(property.PropertyType) ||
                         typeFields._fieldsByName.ContainsKey(property.Name))
                         continue;
-                    var backingField = FindPropertyBackingField(fields, property);
+                    FieldInfo backingField = FindPropertyBackingField(fields,
+                        property);
                     if (backingField != null)
                         typeFields.AddField(backingField, property.Name);
                 }
             }
 
-            private static bool IsInitProperty(PropertyInfo property)
-            {
-                var setter = property.SetMethod;
-                if (setter == null) return false;
-                var modifiers = setter.ReturnParameter.GetRequiredCustomModifiers();
-                for (int i = 0; i < modifiers.Length; i++)
-                    if (modifiers[i].FullName ==
-                        "System.Runtime.CompilerServices.IsExternalInit")
-                        return true;
-                return false;
-            }
-
-            private static FieldInfo FindPropertyBackingField(FieldInfo[] fields,
-                PropertyInfo property)
+            private static FieldInfo FindPropertyBackingField(
+                FieldInfo[] fields, PropertyInfo property)
             {
                 string compilerName = $"<{property.Name}>k__BackingField";
                 string anonymousName = $"<{property.Name}>i__Field";
                 string tupleName = "m_" + property.Name;
                 for (int i = 0; i < fields.Length; i++)
                 {
-                    var field = fields[i];
+                    FieldInfo field = fields[i];
                     if (field.FieldType != property.PropertyType) continue;
-                    if (field.Name == compilerName || field.Name == anonymousName ||
-                        field.Name == tupleName)
-                        return field;
+                    if (field.Name == compilerName ||
+                        field.Name == anonymousName ||
+                        field.Name == tupleName) return field;
                 }
                 return null;
             }
 
-            private static bool UsesPropertyBackingFields(Type type)
+            private static bool UsesImplicitPropertyBackingFields(Type type)
             {
-                if (!type.IsValueType && type.Namespace == "System" && type.IsGenericType &&
+                if (!type.IsValueType && type.Namespace == "System" &&
+                    type.IsGenericType &&
                     type.GetGenericTypeDefinition().FullName.StartsWith(
-                        "System.Tuple`", StringComparison.Ordinal))
-                    return true;
+                        "System.Tuple`", StringComparison.Ordinal)) return true;
                 if (type.IsDefined(typeof(CompilerGeneratedAttribute), false) &&
-                    type.Name.IndexOf("AnonymousType", StringComparison.Ordinal) >= 0)
-                    return true;
-                if (type.GetMethod("<Clone>$", BindingFlags.Instance | BindingFlags.Public |
-                        BindingFlags.NonPublic) != null ||
+                    type.Name.IndexOf("AnonymousType",
+                        StringComparison.Ordinal) >= 0) return true;
+                if (type.GetMethod("<Clone>$", BindingFlags.Instance |
+                        BindingFlags.Public | BindingFlags.NonPublic) != null ||
                     type.GetProperty("EqualityContract", BindingFlags.Instance |
-                        BindingFlags.NonPublic) != null)
-                    return true;
-                return type.GetMethod("PrintMembers",
-                    BindingFlags.Instance | BindingFlags.NonPublic, null,
+                        BindingFlags.NonPublic) != null) return true;
+                return type.GetMethod("PrintMembers", BindingFlags.Instance |
+                    BindingFlags.NonPublic, null,
                     new[] { typeof(StringBuilder) }, null) != null;
             }
         }

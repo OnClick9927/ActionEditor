@@ -106,17 +106,18 @@ namespace ActionEditor
     public partial class ActonEditorView
     {
         public IAction target { get; private set; }
+        public Asset asset { get; private set; }
 
         private Dictionary<int, bool> _unfoldDictionary = new Dictionary<int, bool>();
 
         internal void SetTarget(IAction t)
         {
             target = t;
+            asset = t as Asset ?? AppInternal.AssetData;
             //_unfoldDictionary.Clear();
 
         }
 
-        private Vector2 scroll;
         public virtual void OnInspectorGUI()
         {
             DrawDefaultInspector();
@@ -132,19 +133,11 @@ namespace ActionEditor
             {
                 var action = target as ISegment;
                 using (new EditorGUI.DisabledScope(action.IsLocked))
-                {
-                    scroll = GUILayout.BeginScrollView(scroll);
                     editor.OnInspectorGUI();
-                    GUILayout.EndScrollView();
-                }
             }
             else
             {
-                scroll = GUILayout.BeginScrollView(scroll);
-
                 editor.OnInspectorGUI();
-                GUILayout.EndScrollView();
-
             }
 
 

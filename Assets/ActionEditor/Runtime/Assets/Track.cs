@@ -11,6 +11,7 @@ namespace ActionEditor
 
 
     [Serializable]
+    [TypeInfoBox("时间轴轨道，按类型承载可附加的片段，并继承所属分组的锁定与启用状态。")]
     [Attachable(typeof(Group))]
     public abstract class Track : SegmentBase, ISegment
     {
