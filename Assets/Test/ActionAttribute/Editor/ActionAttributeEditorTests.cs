@@ -120,6 +120,8 @@ namespace ActionAttribute.Tests
             public Gradient mixedGradient = new Gradient();
             [Tooltip("Native tooltip"), Name("Mixed Tooltip")]
             public int mixedTooltip;
+            [Tooltip("Unnamed native tooltip"), ReadOnly]
+            public int unnamedTooltip;
             [NativeProbe] public int nativeProbe;
             [NativeProbe, Name("Mixed Probe")] public int mixedProbe;
             public NativeDrawerValue nativeDrawerValue =
@@ -643,6 +645,59 @@ namespace ActionAttribute.Tests
             }
         }
 
+        [TestCase(nameof(LayoutTarget.progress))]
+        [TestCase(nameof(LayoutTarget.preview))]
+        [TestCase(nameof(LayoutTarget.affixedValue))]
+        [TestCase(nameof(LayoutTarget.readOnlyList))]
+        [TestCase(nameof(LayoutTarget.nativePlaceholderTextArea))]
+        [TestCase(nameof(LayoutTarget.password))]
+        [TestCase(nameof(LayoutTarget.mixedRange))]
+        [TestCase(nameof(LayoutTarget.mixedDrawerValue))]
+        [TestCase(nameof(LayoutTarget.unnamedTooltip))]
+        public void UnnamedActionFieldsFallBackToSerializedDisplayName(
+            string fieldName)
+        {
+            LayoutTarget target = ScriptableObject.CreateInstance<LayoutTarget>();
+            try
+            {
+                var serializedObject = new SerializedObject(target);
+                SerializedProperty property = serializedObject.FindProperty(
+                    fieldName);
+
+                GUIContent label = GetCombinedLabel(serializedObject,
+                    fieldName, GUIContent.none);
+
+                Assert.That(label.text, Is.EqualTo(property.displayName));
+                Assert.That(label.tooltip, Is.EqualTo(property.tooltip));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void FallbackInspectorLeavesPlainFieldsOnUnityNativePath()
+        {
+            Type exampleType = Type.GetType(
+                "ActionAttributeExample, Assembly-CSharp");
+            Assert.That(exampleType, Is.Not.Null);
+            FieldInfo plain = exampleType.GetField("A",
+                BindingFlags.Instance | BindingFlags.Public);
+            FieldInfo named = exampleType.GetField("B",
+                BindingFlags.Instance | BindingFlags.Public);
+            Type rendererType = GetEditorType(
+                "ActionAttribute.ActionInspectorRenderer");
+            MethodInfo requiresDrawer = rendererType.GetMethod(
+                "RequiresActionDrawer", StaticFlags);
+
+            Assert.That(requiresDrawer, Is.Not.Null);
+            Assert.That(requiresDrawer.Invoke(null, new object[] { plain }),
+                Is.False);
+            Assert.That(requiresDrawer.Invoke(null, new object[] { named }),
+                Is.True);
+        }
+
         [Test]
         public void UnityCustomDrawersSurviveActionAttributesAndCollections()
         {
@@ -853,6 +908,15 @@ namespace ActionAttribute.Tests
         private static GUIContent GetCombinedLabel(
             SerializedObject serializedObject, string fieldName)
         {
+            SerializedProperty property = serializedObject.FindProperty(fieldName);
+            return GetCombinedLabel(serializedObject, fieldName,
+                new GUIContent(property.displayName, property.tooltip));
+        }
+
+        private static GUIContent GetCombinedLabel(
+            SerializedObject serializedObject, string fieldName,
+            GUIContent original)
+        {
             Type drawerType = GetEditorType("ActionAttribute.ActionPropertyDrawer");
             FieldInfo field = typeof(LayoutTarget).GetField(fieldName,
                 BindingFlags.Instance | BindingFlags.Public |
@@ -860,7 +924,6 @@ namespace ActionAttribute.Tests
             object drawer = drawerType.GetMethod("Create", StaticFlags)
                 .Invoke(null, new object[] { field });
             SerializedProperty property = serializedObject.FindProperty(fieldName);
-            var original = new GUIContent(property.displayName, property.tooltip);
             return (GUIContent)drawerType.GetMethod("GetLabel",
                     BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(drawer, new object[] { property, original });

@@ -13,7 +13,6 @@ public sealed class ActionAttributeExample : MonoBehaviour
         new ValueDropdownItem<string>("重载配置", "reload_config")
     };
 
-    [Name("A")]
     public List<int> A;
 
     [Name("B")]

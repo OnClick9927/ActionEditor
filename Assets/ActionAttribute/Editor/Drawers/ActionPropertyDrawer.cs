@@ -1398,12 +1398,20 @@ namespace ActionAttribute
             GUIContent original)
         {
             Initialize();
-            GUIContent result = nameLabel ?? original;
+            GUIContent fallback = original;
+            if (fallback == null || string.IsNullOrEmpty(fallback.text))
+                fallback = new GUIContent(property.displayName,
+                    original?.image, string.IsNullOrEmpty(original?.tooltip)
+                        ? property.tooltip
+                        : original.tooltip);
+            GUIContent result = nameLabel == null
+                ? fallback
+                : new GUIContent(nameLabel);
             if (nameLabel != null)
             {
-                nameLabel.image = original?.image;
-                if (string.IsNullOrEmpty(nameLabel.tooltip))
-                    nameLabel.tooltip = original?.tooltip;
+                result.image = fallback?.image;
+                if (string.IsNullOrEmpty(result.tooltip))
+                    result.tooltip = fallback?.tooltip;
             }
             if (extensionLabels.Length == 0) return result;
 
