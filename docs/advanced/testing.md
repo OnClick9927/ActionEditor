@@ -45,9 +45,11 @@ Unity -batchmode -nographics -quit \
 | 引用相关 | SupportReferences 开/关，共享、自环、互环、集合环 |
 | 属性采集 | public/private getter/setter、未标记跳过、协议别名 |
 | Unity Converter | 值、数组、List、null、运行时 resolver、Editor resolver |
-| Inspector 特性 | 高度=实际绘制、嵌套列表、窄 Inspector、Script 行 |
+| Inspector 特性 | 高度=实际绘制、嵌套列表、窄 Inspector、Script 行、外部派生特性自动路由、Unity 原生 Drawer/Decorator、第三方字段类型 Drawer、数组与 List 元素 |
 | Graph 操作 | 保存/重开、Undo/Redo、另存为 GUID、连线和 Group |
 | BT 节点 | Success/Failure/Running、Abort、状态收集/读取、非法快照 |
+
+ActionAttribute 逻辑扩展还必须验证公共契约：具体 Attribute 全部 `sealed`、只有三个抽象行为父类可继承、`ActionAttributeBase` 不能外部直接构造。行为测试覆盖嵌套 `Owner`/`PropertyPath`、`TryGetValue<T>` 转换、Priority 与同优先级稳定顺序、动态校验消息、异常开放回退和一次性日志去重。
 
 ## 性能测试
 

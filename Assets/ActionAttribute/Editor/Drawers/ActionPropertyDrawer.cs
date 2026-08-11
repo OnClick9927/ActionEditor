@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
-using UnityEditorInternal;
 using UnityEngine;
 
 namespace ActionAttribute
@@ -12,80 +11,45 @@ namespace ActionAttribute
     {
         private static readonly HashSet<PropertyKey> DrawingProperties = new();
         private static readonly HashSet<PropertyKey> MeasuringProperties = new();
+        private static readonly HashSet<string> ReportedExtensionFailures = new();
         private static GUIStyle placeholderStyle;
         private bool initialized;
         private bool readOnly;
         private bool collectionField;
-        private bool hideLabel;
-        private bool delayed;
-        private bool hideInEditorMode;
-        private bool hideInPlayMode;
-        private bool disableInEditorMode;
-        private bool disableInPlayMode;
         private bool toggleLeft;
-        private bool assetsOnly;
-        private bool sceneObjectsOnly;
-        private bool nonNegative;
-        private bool positive;
+        private ObjectsOnlyAttribute objectsOnly;
         private bool expandable;
         private GUIContent nameLabel;
-        private ShowIfAttribute[] showConditions = Array.Empty<ShowIfAttribute>();
-        private HideIfAttribute[] hideConditions = Array.Empty<HideIfAttribute>();
-        private EnableIfAttribute[] enableConditions = Array.Empty<EnableIfAttribute>();
-        private DisableIfAttribute[] disableConditions = Array.Empty<DisableIfAttribute>();
+        private ConditionAttribute[] conditions = Array.Empty<ConditionAttribute>();
+        private ActionConditionAttribute[] extensionConditions =
+            Array.Empty<ActionConditionAttribute>();
+        private ActionLabelAttribute[] extensionLabels =
+            Array.Empty<ActionLabelAttribute>();
+        private ActionMessageAttribute[] extensionMessages =
+            Array.Empty<ActionMessageAttribute>();
         private HelpBoxAttribute[] helpBoxes = Array.Empty<HelpBoxAttribute>();
-        private ValidateInputAttribute[] validators =
-            Array.Empty<ValidateInputAttribute>();
+        private OnValueChangedAttribute[] validators =
+            Array.Empty<OnValueChangedAttribute>();
         private OnValueChangedAttribute[] valueChangedCallbacks =
             Array.Empty<OnValueChangedAttribute>();
-        private ClampAttribute clamp;
-        private MinValueAttribute minValue;
-        private MaxValueAttribute maxValue;
-        private MultilineTextAttribute multiline;
-        private ResizableTextAreaAttribute resizableTextArea;
-        private RequiredAttribute required;
-        private TitleAttribute title;
+        private ActionValidationAttribute[] extensionValidators =
+            Array.Empty<ActionValidationAttribute>();
+        private ActionValueModifierAttribute[] valueModifiers =
+            Array.Empty<ActionValueModifierAttribute>();
         private SuffixLabelAttribute suffix;
-        private PrefixLabelAttribute prefix;
-        private PropertySpaceAttribute propertySpace;
         private ProgressBarAttribute progressBar;
-        private EnumFlagsAttribute enumFlags;
-        private EnumSearchAttribute enumSearch;
         private EnumToggleButtonsAttribute enumToggleButtons;
         private ValueDropdownAttribute valueDropdown;
         private MinMaxSliderAttribute minMaxSlider;
         private HorizontalLineAttribute horizontalLine;
         private ShowAssetPreviewAttribute assetPreview;
-        private TagAttribute tag;
-        private LayerAttribute layer;
-        private SortingLayerAttribute sortingLayer;
-        private SceneNameAttribute sceneName;
-        private InputAxisAttribute inputAxis;
-        private AnimatorParamAttribute animatorParam;
-        private PropertyTooltipAttribute propertyTooltip;
-        private LabelWidthAttribute labelWidth;
-        private IndentAttribute indent;
-        private GUIColorAttribute guiColor;
-        private FilePathAttribute filePath;
-        private FolderPathAttribute folderPath;
-        private RequiredListLengthAttribute requiredListLength;
-        private UniqueListAttribute uniqueList;
-        private ChildGameObjectsOnlyAttribute childGameObjectsOnly;
-        private ParentGameObjectsOnlyAttribute parentGameObjectsOnly;
-        private WrapAttribute wrap;
-        private CurveRangeAttribute curveRange;
-        private ReorderableListAttribute reorderableList;
-        private PasswordFieldAttribute passwordField;
-        private PlaceholderAttribute placeholder;
-        private MaxLengthAttribute maxLength;
-        private StepAttribute step;
+        private PathAttribute path;
+        private TextAttribute text;
         private SliderAttribute slider;
         private EulerAnglesAttribute eulerAngles;
-        private AssetPathAttribute assetPath;
-        private AssetGuidAttribute assetGuid;
-        private ColorPaletteAttribute colorPalette;
-        private Color[] paletteColors = Array.Empty<Color>();
         private FieldInfo explicitFieldInfo;
+        private UnityFieldTypeDrawerBridge fieldTypeDrawer;
+        private UnityFieldTypeDrawerBridge elementTypeDrawer;
 
         private FieldInfo EffectiveFieldInfo => explicitFieldInfo ?? fieldInfo;
 
@@ -96,8 +60,6 @@ namespace ActionAttribute
                 explicitFieldInfo = field
             };
         }
-        private readonly Dictionary<string, UnityEditorInternal.ReorderableList>
-            reorderableLists = new();
         private InlineButtonAttribute[] inlineButtons =
             Array.Empty<InlineButtonAttribute>();
 
@@ -121,46 +83,45 @@ namespace ActionAttribute
             GUIContent label)
         {
             if (IsCollectionElement(property))
-                return EditorGUI.GetPropertyHeight(property, label, true);
+                return elementTypeDrawer?.GetPropertyHeight(property, label) ??
+                    EditorGUI.GetPropertyHeight(property, label, true);
             if (!ShouldShow(property)) return 0;
 
-            GUIContent fieldLabel = GetLabel(label);
+            GUIContent fieldLabel = GetLabel(property, label);
             float width = Event.current == null
                 ? 320
                 : Mathf.Max(1, EditorGUIUtility.currentViewWidth - 40);
             float spacing = EditorGUIUtility.standardVerticalSpacing;
-            float height = propertySpace?.before ?? 0;
-
+            float height = 0;
             if (horizontalLine != null)
                 height += horizontalLine.margin * 2 + horizontalLine.height;
-            if (title != null) height += GetTitleHeight(width) + spacing;
             for (int i = 0; i < helpBoxes.Length; i++)
                 height += GetHelpBoxHeight(helpBoxes[i].message, width) + spacing;
+            for (int i = 0; i < extensionMessages.Length; i++)
+                if (TryGetExtensionMessage(property, extensionMessages[i],
+                        out ActionMessage message))
+                    height += GetHelpBoxHeight(message.text, width) + spacing;
 
             height += GetFieldHeight(property, fieldLabel, width);
-            if (ShouldDrawColorPalette(property))
-                height += EditorGUIUtility.singleLineHeight + spacing;
             if (ShouldDrawProgressBar(property))
                 height += EditorGUIUtility.singleLineHeight + spacing;
             if (ShouldDrawAssetPreview(property))
                 height += assetPreview.height + spacing;
 
-            if (IsRequiredValueMissing(property))
-                height += GetHelpBoxHeight(GetRequiredMessage(property, fieldLabel),
-                    width) + spacing;
             for (int i = 0; i < validators.Length; i++)
             {
                 if (TryGetValidationError(property, validators[i], fieldLabel,
                     out string message))
                     height += GetHelpBoxHeight(message, width) + spacing;
             }
-            if (TryGetListLengthError(property, out string listError))
-                height += GetHelpBoxHeight(listError, width) + spacing;
-            if (TryGetUniqueListError(property, out string uniqueError))
-                height += GetHelpBoxHeight(uniqueError, width) + spacing;
+            for (int i = 0; i < extensionValidators.Length; i++)
+            {
+                if (TryGetValidationError(property, extensionValidators[i],
+                    out string message))
+                    height += GetHelpBoxHeight(message, width) + spacing;
+            }
             if (TryGetObjectScopeError(property, out string objectError))
                 height += GetHelpBoxHeight(objectError, width) + spacing;
-            height += propertySpace?.after ?? 0;
             return height;
         }
 
@@ -175,7 +136,16 @@ namespace ActionAttribute
             }
             try
             {
-                OnGUICore(position, property, label);
+                GUIContent propertyLabel = EditorGUI.BeginProperty(position,
+                    label, property);
+                try
+                {
+                    OnGUICore(position, property, propertyLabel);
+                }
+                finally
+                {
+                    EditorGUI.EndProperty();
+                }
             }
             finally
             {
@@ -188,15 +158,15 @@ namespace ActionAttribute
         {
             if (IsCollectionElement(property))
             {
-                EditorGUI.PropertyField(position, property, label, true);
+                if (elementTypeDrawer != null)
+                    elementTypeDrawer.OnGUI(position, property, label);
+                else EditorGUI.PropertyField(position, property, label, true);
                 return;
             }
             if (!ShouldShow(property)) return;
 
-            GUIContent fieldLabel = GetLabel(label);
+            GUIContent fieldLabel = GetLabel(property, label);
             float spacing = EditorGUIUtility.standardVerticalSpacing;
-            position.y += propertySpace?.before ?? 0;
-
             if (horizontalLine != null)
             {
                 position.y += horizontalLine.margin;
@@ -208,20 +178,21 @@ namespace ActionAttribute
                 position.y += horizontalLine.height + horizontalLine.margin;
             }
 
-            if (title != null)
-            {
-                float titleHeight = GetTitleHeight(position.width);
-                DrawTitle(new Rect(position.x, position.y, position.width,
-                    titleHeight));
-                position.y += titleHeight + spacing;
-            }
-
             for (int i = 0; i < helpBoxes.Length; i++)
             {
                 HelpBoxAttribute help = helpBoxes[i];
                 float height = GetHelpBoxHeight(help.message, position.width);
                 EditorGUI.HelpBox(new Rect(position.x, position.y, position.width,
                     height), help.message, ToMessageType(help.type));
+                position.y += height + spacing;
+            }
+            for (int i = 0; i < extensionMessages.Length; i++)
+            {
+                if (!TryGetExtensionMessage(property, extensionMessages[i],
+                        out ActionMessage message)) continue;
+                float height = GetHelpBoxHeight(message.text, position.width);
+                EditorGUI.HelpBox(new Rect(position.x, position.y, position.width,
+                    height), message.text, ToMessageType(message.type));
                 position.y += height + spacing;
             }
 
@@ -232,26 +203,9 @@ namespace ActionAttribute
             bool changed;
             using (var changeCheck = new EditorGUI.ChangeCheckScope())
             {
-                float previousLabelWidth = EditorGUIUtility.labelWidth;
-                int previousIndent = EditorGUI.indentLevel;
-                Color previousColor = GUI.color;
-                try
-                {
-                    if (labelWidth != null)
-                        EditorGUIUtility.labelWidth = labelWidth.width;
-                    if (indent != null) EditorGUI.indentLevel += indent.level;
-                    if (guiColor != null) GUI.color = new Color(guiColor.red,
-                        guiColor.green, guiColor.blue, guiColor.alpha);
-                    using (new EditorGUI.DisabledScope(readOnly ||
-                        !ShouldEnable(property)))
-                        invokedMethod = DrawField(fieldRect, property, fieldLabel);
-                }
-                finally
-                {
-                    GUI.color = previousColor;
-                    EditorGUI.indentLevel = previousIndent;
-                    EditorGUIUtility.labelWidth = previousLabelWidth;
-                }
+                using (new EditorGUI.DisabledScope(readOnly ||
+                    !ShouldEnable(property)))
+                    invokedMethod = DrawField(fieldRect, property, fieldLabel);
                 changed = changeCheck.changed;
             }
             if (changed)
@@ -260,13 +214,6 @@ namespace ActionAttribute
                 ApplyObjectScope(property);
             }
             position.y += fieldHeight + spacing;
-
-            if (ShouldDrawColorPalette(property))
-            {
-                DrawColorPalette(new Rect(position.x, position.y,
-                    position.width, EditorGUIUtility.singleLineHeight), property);
-                position.y += EditorGUIUtility.singleLineHeight + spacing;
-            }
 
             if (ShouldDrawProgressBar(property))
             {
@@ -282,18 +229,9 @@ namespace ActionAttribute
                 position.y += assetPreview.height + spacing;
             }
 
-            if (IsRequiredValueMissing(property))
-            {
-                string message = GetRequiredMessage(property, fieldLabel);
-                float height = GetHelpBoxHeight(message, position.width);
-                EditorGUI.HelpBox(new Rect(position.x, position.y, position.width,
-                    height), message, MessageType.Error);
-                position.y += height + spacing;
-            }
-
             for (int i = 0; i < validators.Length; i++)
             {
-                ValidateInputAttribute validator = validators[i];
+                OnValueChangedAttribute validator = validators[i];
                 if (!TryGetValidationError(property, validator, fieldLabel,
                     out string message)) continue;
                 float height = GetHelpBoxHeight(message, position.width);
@@ -301,18 +239,14 @@ namespace ActionAttribute
                     height), message, ToMessageType(validator.type));
                 position.y += height + spacing;
             }
-            if (TryGetListLengthError(property, out string listError))
+            for (int i = 0; i < extensionValidators.Length; i++)
             {
-                float height = GetHelpBoxHeight(listError, position.width);
+                ActionValidationAttribute validator = extensionValidators[i];
+                if (!TryGetValidationError(property, validator,
+                    out string message)) continue;
+                float height = GetHelpBoxHeight(message, position.width);
                 EditorGUI.HelpBox(new Rect(position.x, position.y, position.width,
-                    height), listError, MessageType.Error);
-                position.y += height + spacing;
-            }
-            if (TryGetUniqueListError(property, out string uniqueError))
-            {
-                float height = GetHelpBoxHeight(uniqueError, position.width);
-                EditorGUI.HelpBox(new Rect(position.x, position.y, position.width,
-                    height), uniqueError, MessageType.Error);
+                    height), message, ToMessageType(validator.type));
                 position.y += height + spacing;
             }
             if (TryGetObjectScopeError(property, out string objectError))
@@ -355,101 +289,31 @@ namespace ActionAttribute
                 suffixRect = new Rect(valueRect.xMax + 4, position.y,
                     suffixWidth - 4, EditorGUIUtility.singleLineHeight);
             }
-            if (prefix != null && !string.IsNullOrEmpty(prefix.label))
-            {
-                Rect contentRect = EditorGUI.PrefixLabel(valueRect, label);
-                float prefixWidth = Mathf.Min(contentRect.width * 0.4f,
-                    EditorStyles.miniLabel.CalcSize(
-                        new GUIContent(prefix.label)).x + 6);
-                EditorGUI.LabelField(new Rect(contentRect.x, contentRect.y,
-                    prefixWidth, EditorGUIUtility.singleLineHeight),
-                    prefix.label, EditorStyles.miniLabel);
-                valueRect = new Rect(contentRect.x + prefixWidth,
-                    contentRect.y, Mathf.Max(1, contentRect.width - prefixWidth),
-                    contentRect.height);
-                label = GUIContent.none;
-            }
-
-            if (resizableTextArea != null &&
-                property.propertyType == SerializedPropertyType.String)
-                DrawTextArea(valueRect, property, label);
-            else if (multiline != null &&
-                property.propertyType == SerializedPropertyType.String)
-                DrawTextArea(valueRect, property, label);
-            else if (passwordField != null &&
+            if (text?.mode == TextFieldMode.Password &&
                 property.propertyType == SerializedPropertyType.String)
                 property.stringValue = EditorGUI.PasswordField(valueRect, label,
                     property.stringValue);
-            else if (slider != null &&
+            else if (slider?.mode == SliderMode.Slider &&
                 (property.propertyType == SerializedPropertyType.Integer ||
                  property.propertyType == SerializedPropertyType.Float))
                 DrawSlider(valueRect, property, label);
             else if (eulerAngles != null &&
                 property.propertyType == SerializedPropertyType.Quaternion)
                 DrawEulerAngles(valueRect, property, label);
-            else if (assetPath != null &&
+            else if (path?.type == PathType.Asset &&
                 property.propertyType == SerializedPropertyType.String)
-                DrawAssetIdentifier(valueRect, property, label,
-                    assetPath.assetType, false);
-            else if (assetGuid != null &&
-                property.propertyType == SerializedPropertyType.String)
-                DrawAssetIdentifier(valueRect, property, label,
-                    assetGuid.assetType, true);
-            else if (colorPalette != null &&
-                property.propertyType == SerializedPropertyType.Color)
-                property.colorValue = EditorGUI.ColorField(valueRect, label,
-                    property.colorValue);
-            else if (placeholder != null &&
-                property.propertyType == SerializedPropertyType.String)
-                DrawPlaceholder(valueRect, property, label);
-            else if (enumFlags != null &&
-                property.propertyType == SerializedPropertyType.Enum &&
-                EffectiveFieldInfo?.FieldType.IsEnum == true)
-                DrawEnumFlags(valueRect, property, label);
+                DrawAssetPath(valueRect, property, label, path.assetType);
             else if (minMaxSlider != null &&
                 property.propertyType == SerializedPropertyType.Vector2)
                 DrawMinMaxSlider(valueRect, property, label);
             else if (valueDropdown != null)
-                DrawValueDropdown(valueRect, property, label);
+                DrawValueSelection(valueRect, property, label);
             else if (enumToggleButtons != null &&
                 property.propertyType == SerializedPropertyType.Enum)
                 DrawEnumToggleButtons(valueRect, property, label);
-            else if (enumSearch != null &&
-                property.propertyType == SerializedPropertyType.Enum)
-                DrawEnumSearch(valueRect, property, label);
-            else if (tag != null &&
+            else if (path != null && path.type != PathType.Asset &&
                 property.propertyType == SerializedPropertyType.String)
-                property.stringValue = EditorGUI.TagField(valueRect, label,
-                    property.stringValue);
-            else if (layer != null)
-                DrawLayer(valueRect, property, label);
-            else if (sortingLayer != null)
-                DrawSortingLayer(valueRect, property, label);
-            else if (sceneName != null)
-                DrawScene(valueRect, property, label);
-            else if (inputAxis != null &&
-                property.propertyType == SerializedPropertyType.String)
-                DrawStringPopup(valueRect, property, label,
-                    GetInputAxisNames());
-            else if (animatorParam != null)
-                DrawAnimatorParameter(valueRect, property, label);
-            else if (filePath != null &&
-                property.propertyType == SerializedPropertyType.String)
-                DrawFilePath(valueRect, property, label);
-            else if (folderPath != null &&
-                property.propertyType == SerializedPropertyType.String)
-                DrawFolderPath(valueRect, property, label);
-            else if (curveRange != null &&
-                property.propertyType == SerializedPropertyType.AnimationCurve)
-                property.animationCurveValue = EditorGUI.CurveField(valueRect,
-                    label, property.animationCurveValue,
-                    new Color(curveRange.red, curveRange.green, curveRange.blue),
-                    new Rect(curveRange.minX, curveRange.minY,
-                        curveRange.maxX - curveRange.minX,
-                        curveRange.maxY - curveRange.minY));
-            else if (reorderableList != null && property.isArray &&
-                property.propertyType != SerializedPropertyType.String)
-                GetReorderableList(property, label).DoList(valueRect);
+                DrawPath(valueRect, property, label);
             else if (expandable &&
                 property.propertyType == SerializedPropertyType.ObjectReference)
                 DrawExpandable(valueRect, property, label);
@@ -457,18 +321,20 @@ namespace ActionAttribute
                 property.propertyType == SerializedPropertyType.Boolean)
                 property.boolValue = EditorGUI.ToggleLeft(valueRect,
                     label, property.boolValue);
-            else if (delayed && DrawDelayed(valueRect, property, label))
-            {
-            }
-            else if ((assetsOnly || sceneObjectsOnly ||
-                childGameObjectsOnly != null || parentGameObjectsOnly != null) &&
+            else if (objectsOnly != null &&
                 property.propertyType == SerializedPropertyType.ObjectReference)
                 property.objectReferenceValue = EditorGUI.ObjectField(valueRect,
                     label, property.objectReferenceValue,
                     EffectiveFieldInfo?.FieldType ?? typeof(UnityEngine.Object),
-                    !assetsOnly);
-            else
-                EditorGUI.PropertyField(valueRect, property, label, true);
+                    objectsOnly.source != ObjectSource.Assets);
+            else if (fieldTypeDrawer != null)
+                fieldTypeDrawer.OnGUI(valueRect, property, label);
+            else EditorGUI.PropertyField(valueRect, property, label, true);
+
+            if (text != null && property.propertyType ==
+                    SerializedPropertyType.String && path == null &&
+                valueDropdown == null)
+                DrawPlaceholder(valueRect, property, label);
 
             if (suffixRect.width > 0)
                 EditorGUI.LabelField(suffixRect, suffix.label, EditorStyles.miniLabel);
@@ -525,16 +391,13 @@ namespace ActionAttribute
                 property.quaternionValue = Quaternion.Euler(value);
         }
 
-        private static void DrawAssetIdentifier(Rect position,
-            SerializedProperty property, GUIContent label, Type assetType,
-            bool storeGuid)
+        private static void DrawAssetPath(Rect position,
+            SerializedProperty property, GUIContent label, Type assetType)
         {
             if (assetType == null ||
                 !typeof(UnityEngine.Object).IsAssignableFrom(assetType))
                 assetType = typeof(UnityEngine.Object);
-            string path = storeGuid
-                ? AssetDatabase.GUIDToAssetPath(property.stringValue)
-                : property.stringValue;
+            string path = property.stringValue;
             UnityEngine.Object current = string.IsNullOrEmpty(path)
                 ? null
                 : AssetDatabase.LoadAssetAtPath(path, assetType);
@@ -548,49 +411,19 @@ namespace ActionAttribute
                 return;
             }
             path = AssetDatabase.GetAssetPath(selected);
-            property.stringValue = storeGuid
-                ? AssetDatabase.AssetPathToGUID(path)
-                : path;
-        }
-
-        private void DrawColorPalette(Rect position,
-            SerializedProperty property)
-        {
-            float startX = position.x + Mathf.Min(EditorGUIUtility.labelWidth,
-                position.width * 0.45f);
-            float available = Mathf.Max(1, position.xMax - startX);
-            float width = Mathf.Min(28, (available -
-                (paletteColors.Length - 1) * 2) / paletteColors.Length);
-            for (int i = 0; i < paletteColors.Length; i++)
-            {
-                Rect swatch = new Rect(startX + i * (width + 2), position.y,
-                    width, position.height);
-                EditorGUI.DrawRect(swatch, new Color(0.15f, 0.15f, 0.15f));
-                Rect inner = new Rect(swatch.x + 1, swatch.y + 1,
-                    Mathf.Max(1, swatch.width - 2),
-                    Mathf.Max(1, swatch.height - 2));
-                EditorGUI.DrawRect(inner, paletteColors[i]);
-                string tooltip = "#" +
-                    ColorUtility.ToHtmlStringRGBA(paletteColors[i]);
-                if (GUI.Button(swatch, new GUIContent(string.Empty, tooltip),
-                        GUIStyle.none))
-                    property.colorValue = paletteColors[i];
-            }
+            property.stringValue = path;
         }
 
         private void DrawPlaceholder(Rect position, SerializedProperty property,
             GUIContent label)
         {
-            Rect valueRect = EditorGUI.PrefixLabel(position, label);
-            property.stringValue = EditorGUI.TextField(valueRect,
-                property.stringValue);
             if (!string.IsNullOrEmpty(property.stringValue) ||
-                string.IsNullOrEmpty(placeholder.text) ||
+                string.IsNullOrEmpty(text.Placeholder) ||
                 Event.current.type != EventType.Repaint) return;
 
-            Rect hintRect = valueRect;
+            Rect hintRect = EditorGUI.PrefixLabel(position, label);
             hintRect.xMin += 3;
-            GUI.Label(hintRect, placeholder.text, PlaceholderStyle);
+            GUI.Label(hintRect, text.Placeholder, PlaceholderStyle);
         }
 
         private static GUIStyle PlaceholderStyle
@@ -675,16 +508,73 @@ namespace ActionAttribute
                 : Array.Empty<string>();
         }
 
-        private void DrawValueDropdown(Rect position, SerializedProperty property,
+        private void DrawValueSelection(Rect position,
+            SerializedProperty property, GUIContent label)
+        {
+            switch (valueDropdown.source)
+            {
+                case ValueDropdownSource.Auto:
+                    if (property.propertyType == SerializedPropertyType.Enum &&
+                        string.IsNullOrEmpty(valueDropdown.valuesMember))
+                        DrawEnumSearch(position, property, label);
+                    else DrawMemberDropdown(position, property, label);
+                    break;
+                case ValueDropdownSource.Member:
+                    DrawMemberDropdown(position, property, label);
+                    break;
+                case ValueDropdownSource.Search:
+                    DrawSearchSource(position, property, label);
+                    break;
+                case ValueDropdownSource.Tag:
+                    DrawTag(position, property, label);
+                    break;
+                case ValueDropdownSource.Layer:
+                    DrawLayer(position, property, label);
+                    break;
+                case ValueDropdownSource.SortingLayer:
+                    DrawSortingLayer(position, property, label);
+                    break;
+                case ValueDropdownSource.Scene:
+                    DrawScene(position, property, label);
+                    break;
+                case ValueDropdownSource.InputAxis:
+                    DrawStringSearch(position, property, label,
+                        GetInputAxisNames());
+                    break;
+                case ValueDropdownSource.AnimatorParameter:
+                    DrawAnimatorParameter(position, property, label);
+                    break;
+                default:
+                    EditorGUI.PropertyField(position, property, label, true);
+                    break;
+            }
+        }
+
+        private void DrawMemberDropdown(Rect position,
+            SerializedProperty property,
             GUIContent label)
         {
-            Rect buttonRect = EditorGUI.PrefixLabel(position, label);
             if (!SerializedPropertyMemberUtility.TryGetDropdownValues(property,
                 valueDropdown.valuesMember, out string[] labels,
                 out object[] values))
             {
-                EditorGUI.HelpBox(buttonRect,
+                EditorGUI.HelpBox(position,
                     $"找不到下拉数据 {valueDropdown.valuesMember}",
+                    MessageType.Error);
+                return;
+            }
+            DrawMappedSearchDropdown(position, property, label, labels, values);
+        }
+
+        private void DrawSearchSource(Rect position, SerializedProperty property,
+            GUIContent label)
+        {
+            if (!SerializedPropertyMemberUtility.TryGetSearchValues(property,
+                valueDropdown.valuesMember, string.Empty, out string[] labels,
+                out object[] values))
+            {
+                EditorGUI.HelpBox(position,
+                    $"找不到搜索源 {valueDropdown.valuesMember}",
                     MessageType.Error);
                 return;
             }
@@ -693,17 +583,64 @@ namespace ActionAttribute
             int index = FindDropdownIndex(current, values);
             string text = index >= 0 && index < labels.Length
                 ? labels[index]
-                : "NONE";
+                : current?.ToString() ?? "NONE";
+            Rect buttonRect = EditorGUI.PrefixLabel(position, label);
+            if (!EditorGUI.DropdownButton(buttonRect, new GUIContent(text),
+                FocusType.Keyboard)) return;
+            string path = property.propertyPath;
+            UnityEngine.Object[] targets = property.serializedObject.targetObjects;
+            object selectedValue = index >= 0 && index < values.Length
+                ? values[index]
+                : current;
+            SearchPopupWindow.Show(buttonRect, query =>
+            {
+                var serialized = new SerializedObject(targets);
+                SerializedProperty sourceProperty = serialized.FindProperty(path);
+                if (sourceProperty == null ||
+                    !SerializedPropertyMemberUtility.TryGetSearchValues(
+                        sourceProperty, valueDropdown.valuesMember, query,
+                        out string[] sourceLabels, out object[] sourceValues))
+                    return Array.Empty<SearchPopupItem>();
+                int count = Math.Min(sourceLabels.Length, sourceValues.Length);
+                var items = new SearchPopupItem[count];
+                for (int i = 0; i < count; i++)
+                    items[i] = new SearchPopupItem(sourceLabels[i],
+                        sourceValues[i]);
+                return items;
+            }, selectedValue, item =>
+            {
+                var serialized = new SerializedObject(targets);
+                SerializedProperty selectedProperty = serialized.FindProperty(path);
+                if (selectedProperty == null) return;
+                SerializedPropertyMemberUtility.SetSerializedValue(
+                    selectedProperty, item.Value);
+                serialized.ApplyModifiedProperties();
+            });
+        }
+
+        private static void DrawMappedSearchDropdown(Rect position,
+            SerializedProperty property, GUIContent label, string[] labels,
+            object[] values)
+        {
+            labels = labels ?? Array.Empty<string>();
+            values = values ?? Array.Empty<object>();
+            object current = SerializedPropertyMemberUtility.GetSerializedValue(
+                property);
+            int index = FindDropdownIndex(current, values);
+            string text = index >= 0 && index < labels.Length
+                ? labels[index]
+                : current?.ToString() ?? "NONE";
+            Rect buttonRect = EditorGUI.PrefixLabel(position, label);
             if (!EditorGUI.DropdownButton(buttonRect, new GUIContent(text),
                 FocusType.Keyboard)) return;
             string path = property.propertyPath;
             UnityEngine.Object[] targets = property.serializedObject.targetObjects;
             SearchPopupWindow.Show(buttonRect, labels, index, selected =>
             {
+                if (selected < 0 || selected >= values.Length) return;
                 var serialized = new SerializedObject(targets);
                 SerializedProperty selectedProperty = serialized.FindProperty(path);
-                if (selectedProperty == null || selected < 0 ||
-                    selected >= values.Length) return;
+                if (selectedProperty == null) return;
                 SerializedPropertyMemberUtility.SetSerializedValue(
                     selectedProperty, values[selected]);
                 serialized.ApplyModifiedProperties();
@@ -727,87 +664,108 @@ namespace ActionAttribute
             return -1;
         }
 
+        private static void DrawTag(Rect position, SerializedProperty property,
+            GUIContent label)
+        {
+            if (property.propertyType != SerializedPropertyType.String)
+            {
+                EditorGUI.PropertyField(position, property, label, true);
+                return;
+            }
+            string[] names = UnityEditorInternal.InternalEditorUtility.tags;
+            var values = new object[names.Length];
+            for (int i = 0; i < names.Length; i++) values[i] = names[i];
+            DrawMappedSearchDropdown(position, property, label, names, values);
+        }
+
         private static void DrawLayer(Rect position, SerializedProperty property,
             GUIContent label)
         {
-            if (property.propertyType == SerializedPropertyType.Integer)
-                property.intValue = EditorGUI.LayerField(position, label,
-                    property.intValue);
-            else if (property.propertyType == SerializedPropertyType.String)
+            var names = new List<string>();
+            var indexes = new List<int>();
+            for (int i = 0; i < 32; i++)
             {
-                int selected = LayerMask.NameToLayer(property.stringValue);
-                selected = EditorGUI.LayerField(position, label,
-                    Math.Max(0, selected));
-                property.stringValue = LayerMask.LayerToName(selected);
+                string name = LayerMask.LayerToName(i);
+                if (string.IsNullOrEmpty(name)) continue;
+                names.Add(name);
+                indexes.Add(i);
             }
-            else EditorGUI.PropertyField(position, property, label, true);
+            if (property.propertyType != SerializedPropertyType.Integer &&
+                property.propertyType != SerializedPropertyType.String)
+            {
+                EditorGUI.PropertyField(position, property, label, true);
+                return;
+            }
+            var values = new object[names.Count];
+            for (int i = 0; i < values.Length; i++)
+                values[i] = property.propertyType == SerializedPropertyType.String
+                    ? (object)names[i]
+                    : indexes[i];
+            DrawMappedSearchDropdown(position, property, label,
+                names.ToArray(), values);
         }
 
         private static void DrawSortingLayer(Rect position,
             SerializedProperty property, GUIContent label)
         {
+            if (property.propertyType != SerializedPropertyType.String &&
+                property.propertyType != SerializedPropertyType.Integer)
+            {
+                EditorGUI.PropertyField(position, property, label, true);
+                return;
+            }
             SortingLayer[] layers = SortingLayer.layers;
             string[] names = Array.ConvertAll(layers, value => value.name);
-            int selected = 0;
+            var values = new object[layers.Length];
             for (int i = 0; i < layers.Length; i++)
-            {
-                if ((property.propertyType == SerializedPropertyType.String &&
-                     layers[i].name == property.stringValue) ||
-                    (property.propertyType == SerializedPropertyType.Integer &&
-                     layers[i].id == property.intValue))
-                {
-                    selected = i;
-                    break;
-                }
-            }
-            Rect popupRect = EditorGUI.PrefixLabel(position, label);
-            selected = EditorGUI.Popup(popupRect, selected, names);
-            if (layers.Length == 0) return;
-            if (property.propertyType == SerializedPropertyType.String)
-                property.stringValue = layers[selected].name;
-            else if (property.propertyType == SerializedPropertyType.Integer)
-                property.intValue = layers[selected].id;
+                values[i] = property.propertyType == SerializedPropertyType.String
+                    ? (object)layers[i].name
+                    : layers[i].id;
+            DrawMappedSearchDropdown(position, property, label, names, values);
         }
 
         private void DrawScene(Rect position, SerializedProperty property,
             GUIContent label)
         {
+            if (property.propertyType != SerializedPropertyType.String &&
+                property.propertyType != SerializedPropertyType.Integer)
+            {
+                EditorGUI.PropertyField(position, property, label, true);
+                return;
+            }
             var names = new List<string>();
             var indexes = new List<int>();
             EditorBuildSettingsScene[] scenes = EditorBuildSettings.scenes;
             for (int i = 0; i < scenes.Length; i++)
             {
-                if (!sceneName.includeDisabled && !scenes[i].enabled) continue;
+                if (!valueDropdown.includeDisabled && !scenes[i].enabled)
+                    continue;
                 names.Add(System.IO.Path.GetFileNameWithoutExtension(scenes[i].path));
                 indexes.Add(i);
             }
-            int selected = 0;
-            for (int i = 0; i < names.Count; i++)
-            {
-                if ((property.propertyType == SerializedPropertyType.String &&
-                     property.stringValue == names[i]) ||
-                    (property.propertyType == SerializedPropertyType.Integer &&
-                     property.intValue == indexes[i])) selected = i;
-            }
-            Rect popupRect = EditorGUI.PrefixLabel(position, label);
-            selected = EditorGUI.Popup(popupRect, selected, names.ToArray());
-            if (names.Count == 0) return;
-            if (property.propertyType == SerializedPropertyType.String)
-                property.stringValue = names[selected];
-            else if (property.propertyType == SerializedPropertyType.Integer)
-                property.intValue = indexes[selected];
+            var values = new object[names.Count];
+            for (int i = 0; i < values.Length; i++)
+                values[i] = property.propertyType == SerializedPropertyType.String
+                    ? (object)names[i]
+                    : indexes[i];
+            DrawMappedSearchDropdown(position, property, label,
+                names.ToArray(), values);
         }
 
-        private static void DrawStringPopup(Rect position,
+        private static void DrawStringSearch(Rect position,
             SerializedProperty property, GUIContent label, string[] options)
         {
-            int index = Math.Max(0, Array.IndexOf(options, property.stringValue));
-            Rect popupRect = EditorGUI.PrefixLabel(position, label);
-            index = EditorGUI.Popup(popupRect, index, options);
-            if (options.Length > 0) property.stringValue = options[index];
+            if (property.propertyType != SerializedPropertyType.String)
+            {
+                EditorGUI.PropertyField(position, property, label, true);
+                return;
+            }
+            var values = new object[options.Length];
+            for (int i = 0; i < options.Length; i++) values[i] = options[i];
+            DrawMappedSearchDropdown(position, property, label, options, values);
         }
 
-        private void DrawFilePath(Rect position, SerializedProperty property,
+        private void DrawPath(Rect position, SerializedProperty property,
             GUIContent label)
         {
             Rect valueRect = EditorGUI.PrefixLabel(position, label);
@@ -818,32 +776,17 @@ namespace ActionAttribute
                 property.stringValue);
             if (!GUI.Button(buttonRect, EditorGUIUtility.IconContent("Folder Icon"),
                 EditorStyles.miniButton)) return;
-            string selected = EditorUtility.OpenFilePanel("选择文件",
-                GetInitialDirectory(property.stringValue, true),
-                filePath.extension ?? string.Empty);
+            bool selectFile = path.type == PathType.File;
+            string selected = selectFile
+                ? EditorUtility.OpenFilePanel("选择文件",
+                    GetInitialDirectory(property.stringValue, true),
+                    path.extension ?? string.Empty)
+                : EditorUtility.OpenFolderPanel("选择文件夹",
+                    GetInitialDirectory(property.stringValue, false),
+                    string.Empty);
             if (string.IsNullOrEmpty(selected)) return;
             property.stringValue = NormalizeSelectedPath(selected,
-                filePath.absolutePath);
-            property.serializedObject.ApplyModifiedProperties();
-            GUIUtility.ExitGUI();
-        }
-
-        private void DrawFolderPath(Rect position, SerializedProperty property,
-            GUIContent label)
-        {
-            Rect valueRect = EditorGUI.PrefixLabel(position, label);
-            Rect buttonRect = new Rect(valueRect.xMax - 24, valueRect.y, 24,
-                EditorGUIUtility.singleLineHeight);
-            valueRect.width -= 28;
-            property.stringValue = EditorGUI.TextField(valueRect,
-                property.stringValue);
-            if (!GUI.Button(buttonRect, EditorGUIUtility.IconContent("Folder Icon"),
-                EditorStyles.miniButton)) return;
-            string selected = EditorUtility.OpenFolderPanel("选择文件夹",
-                GetInitialDirectory(property.stringValue, false), string.Empty);
-            if (string.IsNullOrEmpty(selected)) return;
-            property.stringValue = NormalizeSelectedPath(selected,
-                folderPath.absolutePath);
+                path.absolutePath);
             property.serializedObject.ApplyModifiedProperties();
             GUIUtility.ExitGUI();
         }
@@ -909,63 +852,30 @@ namespace ActionAttribute
         private void DrawAnimatorParameter(Rect position,
             SerializedProperty property, GUIContent label)
         {
+            if (property.propertyType != SerializedPropertyType.String &&
+                property.propertyType != SerializedPropertyType.Integer)
+            {
+                EditorGUI.PropertyField(position, property, label, true);
+                return;
+            }
             if (!SerializedPropertyMemberUtility.TryGetMemberValue(property,
-                animatorParam.animatorMember, out object value) ||
+                valueDropdown.valuesMember, out object value) ||
                 !(value is Animator animator) || animator == null)
             {
                 EditorGUI.HelpBox(position,
-                    $"找不到 Animator：{animatorParam.animatorMember}",
+                    $"找不到 Animator：{valueDropdown.valuesMember}",
                     MessageType.Error);
                 return;
             }
             UnityEngine.AnimatorControllerParameter[] parameters =
                 animator.parameters;
             string[] names = Array.ConvertAll(parameters, item => item.name);
-            int selected = 0;
+            var values = new object[parameters.Length];
             for (int i = 0; i < parameters.Length; i++)
-            {
-                if ((property.propertyType == SerializedPropertyType.String &&
-                     property.stringValue == parameters[i].name) ||
-                    (property.propertyType == SerializedPropertyType.Integer &&
-                     property.intValue == parameters[i].nameHash))
-                    selected = i;
-            }
-            Rect popupRect = EditorGUI.PrefixLabel(position, label);
-            selected = EditorGUI.Popup(popupRect, selected, names);
-            if (parameters.Length == 0) return;
-            if (property.propertyType == SerializedPropertyType.String)
-                property.stringValue = parameters[selected].name;
-            else if (property.propertyType == SerializedPropertyType.Integer)
-                property.intValue = parameters[selected].nameHash;
-        }
-
-        private UnityEditorInternal.ReorderableList GetReorderableList(
-            SerializedProperty property, GUIContent label)
-        {
-            string key = property.serializedObject.targetObject.GetInstanceID() +
-                ":" + property.propertyPath;
-            if (reorderableLists.TryGetValue(key, out var list)) return list;
-            list = new UnityEditorInternal.ReorderableList(
-                property.serializedObject, property, reorderableList.draggable,
-                true, reorderableList.add, reorderableList.remove);
-            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, label);
-            list.elementHeightCallback = index =>
-            {
-                if (index < 0 || index >= property.arraySize)
-                    return EditorGUIUtility.singleLineHeight;
-                return EditorGUI.GetPropertyHeight(
-                    property.GetArrayElementAtIndex(index), true) +
-                    EditorGUIUtility.standardVerticalSpacing;
-            };
-            list.drawElementCallback = (rect, index, active, focused) =>
-            {
-                if (index < 0 || index >= property.arraySize) return;
-                SerializedProperty element = property.GetArrayElementAtIndex(index);
-                rect.height = EditorGUI.GetPropertyHeight(element, true);
-                EditorGUI.PropertyField(rect, element, GUIContent.none, true);
-            };
-            reorderableLists.Add(key, list);
-            return list;
+                values[i] = property.propertyType == SerializedPropertyType.String
+                    ? (object)parameters[i].name
+                    : parameters[i].nameHash;
+            DrawMappedSearchDropdown(position, property, label, names, values);
         }
 
         private static void DrawExpandable(Rect position,
@@ -1004,16 +914,6 @@ namespace ActionAttribute
             nested.ApplyModifiedProperties();
         }
 
-        private static void DrawTextArea(Rect position, SerializedProperty property,
-            GUIContent label)
-        {
-            Rect valueRect = label == GUIContent.none
-                ? position
-                : EditorGUI.PrefixLabel(position, label);
-            property.stringValue = EditorGUI.TextArea(valueRect,
-                property.stringValue ?? string.Empty);
-        }
-
         private void DrawEnumFlags(Rect position, SerializedProperty property,
             GUIContent label)
         {
@@ -1023,105 +923,55 @@ namespace ActionAttribute
             property.intValue = Convert.ToInt32(result);
         }
 
-        private bool DrawDelayed(Rect position, SerializedProperty property,
-            GUIContent label)
-        {
-            switch (property.propertyType)
-            {
-                case SerializedPropertyType.Integer when
-                    EffectiveFieldInfo?.FieldType == typeof(int):
-                    property.intValue = EditorGUI.DelayedIntField(position, label,
-                        property.intValue);
-                    return true;
-                case SerializedPropertyType.Float when
-                    EffectiveFieldInfo?.FieldType == typeof(double):
-                    property.doubleValue = EditorGUI.DelayedDoubleField(position,
-                        label, property.doubleValue);
-                    return true;
-                case SerializedPropertyType.Float:
-                    property.floatValue = EditorGUI.DelayedFloatField(position,
-                        label, property.floatValue);
-                    return true;
-                case SerializedPropertyType.String:
-                    property.stringValue = EditorGUI.DelayedTextField(position,
-                        label, property.stringValue);
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
         private float GetFieldHeight(SerializedProperty property, GUIContent label,
             float width)
         {
-            if (minMaxSlider != null || enumToggleButtons != null ||
-                valueDropdown != null || enumSearch != null ||
-                tag != null || layer != null || sortingLayer != null ||
-                sceneName != null || inputAxis != null || filePath != null ||
-                folderPath != null || toggleLeft || animatorParam != null ||
-                slider != null || eulerAngles != null || assetPath != null ||
-                assetGuid != null || colorPalette != null)
+            PropertyKey key = new PropertyKey(property);
+            bool added = MeasuringProperties.Add(key);
+            try
+            {
+                return GetFieldHeightCore(property, label, width);
+            }
+            finally
+            {
+                if (added) MeasuringProperties.Remove(key);
+            }
+        }
+
+        private float GetFieldHeightCore(SerializedProperty property,
+            GUIContent label, float width)
+        {
+            if (UsesSingleLineActionControl(property))
                 return EditorGUIUtility.singleLineHeight;
-            if (reorderableList != null && property.isArray &&
-                property.propertyType != SerializedPropertyType.String)
-                return GetReorderableList(property, label).GetHeight();
             if (expandable &&
                 property.propertyType == SerializedPropertyType.ObjectReference)
                 return GetExpandableHeight(property);
-            if (property.propertyType == SerializedPropertyType.String)
-            {
-                if (resizableTextArea != null)
-                {
-                    float min = EditorGUIUtility.singleLineHeight *
-                        resizableTextArea.minLines;
-                    float max = EditorGUIUtility.singleLineHeight *
-                        resizableTextArea.maxLines;
-                    float valueWidth = label == GUIContent.none
-                        ? width
-                        : Mathf.Max(1, width - EditorGUIUtility.labelWidth);
-                    float calculated = EditorStyles.textArea.CalcHeight(
-                        new GUIContent(property.stringValue ?? string.Empty),
-                        valueWidth);
-                    return Mathf.Clamp(calculated, min, max);
-                }
-                if (multiline != null)
-                    return EditorGUIUtility.singleLineHeight * multiline.lines;
-            }
-            if (explicitFieldInfo != null)
-                return GetUndecoratedPropertyHeight(property);
+            if (fieldTypeDrawer != null)
+                return fieldTypeDrawer.GetPropertyHeight(property, label);
             return EditorGUI.GetPropertyHeight(property, label, true);
         }
 
-        private static float GetUndecoratedPropertyHeight(
-            SerializedProperty property)
+        private bool UsesSingleLineActionControl(SerializedProperty property)
         {
-            float height = EditorGUIUtility.singleLineHeight;
-            if (!property.isExpanded || !HasExpandableChildren(property))
-                return height;
-
-            SerializedProperty child = property.Copy();
-            SerializedProperty end = child.GetEndProperty();
-            int childDepth = property.depth + 1;
-            bool enterChildren = true;
-            while (child.NextVisible(enterChildren) &&
-                   !SerializedProperty.EqualContents(child, end))
-            {
-                enterChildren = false;
-                if (child.depth != childDepth) continue;
-                height += EditorGUIUtility.standardVerticalSpacing +
-                    EditorGUI.GetPropertyHeight(child, true);
-            }
-            return height;
-        }
-
-        private static bool HasExpandableChildren(SerializedProperty property)
-        {
-            if (property.isArray &&
-                property.propertyType != SerializedPropertyType.String)
-                return true;
-            return property.propertyType == SerializedPropertyType.Generic ||
-                   property.propertyType ==
-                   SerializedPropertyType.ManagedReference;
+            bool numeric = property.propertyType ==
+                SerializedPropertyType.Integer || property.propertyType ==
+                SerializedPropertyType.Float;
+            return (text?.mode == TextFieldMode.Password && property.propertyType ==
+                     SerializedPropertyType.String) ||
+                (slider?.mode == SliderMode.Slider && numeric) ||
+                (eulerAngles != null && property.propertyType ==
+                    SerializedPropertyType.Quaternion) ||
+                (path != null && property.propertyType ==
+                    SerializedPropertyType.String) ||
+                (minMaxSlider != null && property.propertyType ==
+                    SerializedPropertyType.Vector2) ||
+                valueDropdown != null ||
+                (enumToggleButtons != null && property.propertyType ==
+                    SerializedPropertyType.Enum) ||
+                (toggleLeft && property.propertyType ==
+                    SerializedPropertyType.Boolean) ||
+                (objectsOnly != null && property.propertyType ==
+                    SerializedPropertyType.ObjectReference);
         }
 
         private static float GetExpandableHeight(SerializedProperty property)
@@ -1144,60 +994,77 @@ namespace ActionAttribute
 
         private void ApplyValueLimits(SerializedProperty property)
         {
-            if (maxLength != null &&
-                property.propertyType == SerializedPropertyType.String)
-                property.stringValue = ValueConstraintUtility.Truncate(
-                    property.stringValue, maxLength.length);
-
-            if (step != null && step.step > 0)
+            if (slider != null)
             {
+                if (slider.Step > 0)
+                {
+                    if (property.propertyType == SerializedPropertyType.Integer)
+                    {
+                        double value = ValueConstraintUtility.Snap(
+                            property.longValue, slider.Step, slider.Origin);
+                        property.longValue = value <= long.MinValue
+                            ? long.MinValue
+                            : value >= long.MaxValue
+                                ? long.MaxValue
+                                : (long)value;
+                    }
+                    else if (property.propertyType ==
+                        SerializedPropertyType.Float)
+                        property.doubleValue = ValueConstraintUtility.Snap(
+                            property.doubleValue, slider.Step, slider.Origin);
+                }
+                ApplySliderLimits(property);
+            }
+
+            ApplyValueModifiers(property);
+            if (text != null &&
+                property.propertyType == SerializedPropertyType.String)
+                property.stringValue = text.Apply(property.stringValue);
+        }
+
+        private void ApplySliderLimits(SerializedProperty property)
+        {
+            if (slider.mode == SliderMode.Wrap)
+            {
+                double range = slider.max - slider.min;
                 if (property.propertyType == SerializedPropertyType.Integer)
                 {
-                    double value = ValueConstraintUtility.Snap(property.longValue,
-                        step.step, step.origin);
-                    property.longValue = value <= long.MinValue
-                        ? long.MinValue
-                        : value >= long.MaxValue
-                            ? long.MaxValue
-                            : (long)value;
+                    long minimum = (long)Math.Ceiling(slider.min);
+                    long maximum = (long)Math.Floor(slider.max);
+                    long integerRange = maximum - minimum + 1;
+                    if (integerRange > 0)
+                    {
+                        long value = property.longValue;
+                        property.longValue = minimum +
+                            ((value - minimum) % integerRange + integerRange) %
+                            integerRange;
+                    }
                 }
-                else if (property.propertyType == SerializedPropertyType.Float)
-                    property.doubleValue = ValueConstraintUtility.Snap(
-                        property.doubleValue, step.step, step.origin);
+                else if (property.propertyType == SerializedPropertyType.Float &&
+                    range > 0)
+                {
+                    double value = property.doubleValue;
+                    property.doubleValue = slider.min +
+                        ((value - slider.min) % range + range) % range;
+                }
+                return;
             }
 
-            bool hasMin = false;
-            bool hasMax = false;
-            double min = double.MinValue;
-            double max = double.MaxValue;
-            if (clamp != null)
-            {
-                min = clamp.min;
-                max = clamp.max;
-                hasMin = hasMax = true;
-            }
-            if (minValue != null)
-            {
-                min = Math.Max(min, minValue.value);
-                hasMin = true;
-            }
-            if (maxValue != null)
-            {
-                max = Math.Min(max, maxValue.value);
-                hasMax = true;
-            }
-            if (nonNegative)
-            {
-                min = Math.Max(min, 0);
-                hasMin = true;
-            }
-            if (positive)
-            {
-                double positiveMinimum = property.propertyType ==
-                    SerializedPropertyType.Integer ? 1 : float.Epsilon;
-                min = Math.Max(min, positiveMinimum);
-                hasMin = true;
-            }
+            bool hasMin = slider.mode == SliderMode.Slider ||
+                slider.mode == SliderMode.Clamp ||
+                slider.mode == SliderMode.Minimum ||
+                slider.mode == SliderMode.NonNegative ||
+                slider.mode == SliderMode.Positive;
+            bool hasMax = slider.mode == SliderMode.Slider ||
+                slider.mode == SliderMode.Clamp ||
+                slider.mode == SliderMode.Maximum;
+            double min = slider.min;
+            double max = slider.max;
+            if (slider.mode == SliderMode.NonNegative) min = 0;
+            else if (slider.mode == SliderMode.Positive)
+                min = property.propertyType == SerializedPropertyType.Integer
+                    ? 1
+                    : float.Epsilon;
             if ((hasMin || hasMax) &&
                 property.propertyType == SerializedPropertyType.Integer)
             {
@@ -1214,63 +1081,85 @@ namespace ActionAttribute
                 if (hasMax) value = Math.Min(max, value);
                 property.doubleValue = value;
             }
-
-            if (wrap != null)
-            {
-                double range = wrap.max - wrap.min;
-                if (property.propertyType == SerializedPropertyType.Integer)
-                {
-                    long minValue = (long)Math.Ceiling(wrap.min);
-                    long maxValue = (long)Math.Floor(wrap.max);
-                    long integerRange = maxValue - minValue + 1;
-                    if (integerRange > 0)
-                    {
-                        long value = property.longValue;
-                        property.longValue = minValue +
-                            ((value - minValue) % integerRange + integerRange) %
-                            integerRange;
-                    }
-                }
-                else if (property.propertyType == SerializedPropertyType.Float &&
-                    range > 0)
-                {
-                    double value = property.doubleValue;
-                    property.doubleValue = wrap.min +
-                        ((value - wrap.min) % range + range) % range;
-                }
-            }
         }
 
         private bool ShouldShow(SerializedProperty property)
         {
             Initialize();
-            if (hideInEditorMode && !EditorApplication.isPlaying) return false;
-            if (hideInPlayMode && EditorApplication.isPlaying) return false;
-            for (int i = 0; i < showConditions.Length; i++)
-                if (!EvaluateConditions(property, showConditions[i].conditions,
-                    showConditions[i].conditionOperator,
-                    showConditions[i].expected)) return false;
-            for (int i = 0; i < hideConditions.Length; i++)
-                if (EvaluateConditions(property, hideConditions[i].conditions,
-                    hideConditions[i].conditionOperator,
-                    hideConditions[i].expected)) return false;
+            for (int i = 0; i < conditions.Length; i++)
+            {
+                ConditionAttribute condition = conditions[i];
+                if (condition.mode != ConditionMode.Show &&
+                    condition.mode != ConditionMode.Hide) continue;
+                bool matched = IsConditionMatched(property, condition);
+                if (condition.mode == ConditionMode.Show ? !matched : matched)
+                    return false;
+            }
+            for (int i = 0; i < extensionConditions.Length; i++)
+            {
+                ActionConditionAttribute condition = extensionConditions[i];
+                if (condition.mode != ConditionMode.Show &&
+                    condition.mode != ConditionMode.Hide) continue;
+                bool matched = EvaluateExtensionCondition(property, condition);
+                if (condition.mode == ConditionMode.Show ? !matched : matched)
+                    return false;
+            }
             return true;
         }
 
         private bool ShouldEnable(SerializedProperty property)
         {
             Initialize();
-            if (disableInEditorMode && !EditorApplication.isPlaying) return false;
-            if (disableInPlayMode && EditorApplication.isPlaying) return false;
-            for (int i = 0; i < enableConditions.Length; i++)
-                if (!EvaluateConditions(property, enableConditions[i].conditions,
-                    enableConditions[i].conditionOperator,
-                    enableConditions[i].expected)) return false;
-            for (int i = 0; i < disableConditions.Length; i++)
-                if (EvaluateConditions(property, disableConditions[i].conditions,
-                    disableConditions[i].conditionOperator,
-                    disableConditions[i].expected)) return false;
+            for (int i = 0; i < conditions.Length; i++)
+            {
+                ConditionAttribute condition = conditions[i];
+                if (condition.mode != ConditionMode.Enable &&
+                    condition.mode != ConditionMode.Disable) continue;
+                bool matched = IsConditionMatched(property, condition);
+                if (condition.mode == ConditionMode.Enable ? !matched : matched)
+                    return false;
+            }
+            for (int i = 0; i < extensionConditions.Length; i++)
+            {
+                ActionConditionAttribute condition = extensionConditions[i];
+                if (condition.mode != ConditionMode.Enable &&
+                    condition.mode != ConditionMode.Disable) continue;
+                bool matched = EvaluateExtensionCondition(property, condition);
+                if (condition.mode == ConditionMode.Enable ? !matched : matched)
+                    return false;
+            }
             return true;
+        }
+
+        private static bool IsConditionMatched(SerializedProperty property,
+            ConditionAttribute condition)
+        {
+            return condition.usesInspectorMode
+                ? IsInspectorMode(condition.inspectorMode)
+                : EvaluateConditions(property, condition.conditions,
+                    condition.conditionOperator, condition.expected);
+        }
+
+        private bool EvaluateExtensionCondition(SerializedProperty property,
+            ActionConditionAttribute condition)
+        {
+            try
+            {
+                return condition.Evaluate(CreateExtensionContext(property));
+            }
+            catch (Exception exception)
+            {
+                ReportExtensionFailure(condition, exception);
+                return condition.mode == ConditionMode.Show ||
+                    condition.mode == ConditionMode.Enable;
+            }
+        }
+
+        private static bool IsInspectorMode(InspectorMode mode)
+        {
+            return mode == InspectorMode.Always ||
+                (mode == InspectorMode.PlayMode && EditorApplication.isPlaying) ||
+                (mode == InspectorMode.EditMode && !EditorApplication.isPlaying);
         }
 
         private static bool EvaluateConditions(SerializedProperty property,
@@ -1289,110 +1178,73 @@ namespace ActionAttribute
             return isAnd;
         }
 
-        private bool IsRequiredValueMissing(SerializedProperty property)
-        {
-            Initialize();
-            if (required == null) return false;
-            switch (property.propertyType)
-            {
-                case SerializedPropertyType.ObjectReference:
-                    return property.objectReferenceValue == null;
-                case SerializedPropertyType.String:
-                    return string.IsNullOrWhiteSpace(property.stringValue);
-                case SerializedPropertyType.ManagedReference:
-                    return property.managedReferenceValue == null;
-                default:
-                    return false;
-            }
-        }
-
-        private bool TryGetListLengthError(SerializedProperty property,
-            out string message)
-        {
-            message = null;
-            if (requiredListLength == null || !property.isArray ||
-                property.propertyType == SerializedPropertyType.String)
-                return false;
-            int count = property.arraySize;
-            if (count >= requiredListLength.min && count <= requiredListLength.max)
-                return false;
-            message = requiredListLength.max == int.MaxValue
-                ? $"集合至少需要 {requiredListLength.min} 个元素，当前为 {count} 个。"
-                : $"集合元素数量必须在 {requiredListLength.min} 到 " +
-                  $"{requiredListLength.max} 之间，当前为 {count} 个。";
-            return true;
-        }
-
         private bool TryGetObjectScopeError(SerializedProperty property,
             out string message)
         {
             message = null;
-            if ((!assetsOnly && !sceneObjectsOnly &&
-                childGameObjectsOnly == null && parentGameObjectsOnly == null) ||
+            if (objectsOnly == null ||
                 property.propertyType != SerializedPropertyType.ObjectReference ||
                 property.objectReferenceValue == null) return false;
             bool persistent = EditorUtility.IsPersistent(
                 property.objectReferenceValue);
-            if (assetsOnly && !persistent)
+            if (objectsOnly.source == ObjectSource.Assets && !persistent)
                 message = "该字段只允许引用 Project 中的资源。";
-            else if (sceneObjectsOnly && persistent)
+            else if (objectsOnly.source == ObjectSource.Scene && persistent)
                 message = "该字段只允许引用当前场景中的对象。";
-            else if (!persistent && childGameObjectsOnly != null &&
-                !IsAllowedHierarchyObject(property, true,
-                    childGameObjectsOnly.includeSelf))
-                message = "该字段只允许引用当前对象的子层级。";
-            else if (!persistent && parentGameObjectsOnly != null &&
-                !IsAllowedHierarchyObject(property, false,
-                    parentGameObjectsOnly.includeSelf))
-                message = "该字段只允许引用当前对象的父层级。";
+            else if (IsHierarchySource(objectsOnly.source) &&
+                (persistent || !IsAllowedHierarchyObject(property,
+                    objectsOnly.source, objectsOnly.includeSelf)))
+                message = objectsOnly.source == ObjectSource.Children
+                    ? "该字段只允许引用当前对象的子层级。"
+                    : "该字段只允许引用当前对象的父层级。";
             return message != null;
-        }
-
-        private bool TryGetUniqueListError(SerializedProperty property,
-            out string message)
-        {
-            message = null;
-            if (uniqueList == null || !property.isArray ||
-                property.propertyType == SerializedPropertyType.String)
-                return false;
-            if (!(SerializedPropertyMemberUtility.GetSerializedValue(property)
-                is IList values)) return false;
-            for (int i = 0; i < values.Count; i++)
-            {
-                for (int j = i + 1; j < values.Count; j++)
-                {
-                    if (!Equals(values[i], values[j])) continue;
-                    message = string.IsNullOrEmpty(uniqueList.message)
-                        ? $"集合中第 {i + 1} 与第 {j + 1} 个元素重复。"
-                        : uniqueList.message;
-                    return true;
-                }
-            }
-            return false;
         }
 
         private void ApplyObjectScope(SerializedProperty property)
         {
             if (property.propertyType != SerializedPropertyType.ObjectReference ||
                 property.objectReferenceValue == null) return;
-            if (childGameObjectsOnly != null &&
-                !IsAllowedHierarchyObject(property, true,
-                    childGameObjectsOnly.includeSelf))
-                property.objectReferenceValue = null;
-            else if (parentGameObjectsOnly != null &&
-                !IsAllowedHierarchyObject(property, false,
-                    parentGameObjectsOnly.includeSelf))
+            if (objectsOnly == null) return;
+            bool persistent = EditorUtility.IsPersistent(
+                property.objectReferenceValue);
+            bool valid;
+            switch (objectsOnly.source)
+            {
+                case ObjectSource.Assets:
+                    valid = persistent;
+                    break;
+                case ObjectSource.Scene:
+                    valid = !persistent;
+                    break;
+                case ObjectSource.Children:
+                case ObjectSource.Parents:
+                    valid = !persistent && IsAllowedHierarchyObject(property,
+                        objectsOnly.source, objectsOnly.includeSelf);
+                    break;
+                default:
+                    valid = false;
+                    break;
+            }
+            if (!valid)
                 property.objectReferenceValue = null;
         }
 
+        private static bool IsHierarchySource(ObjectSource source)
+        {
+            return source == ObjectSource.Children ||
+                source == ObjectSource.Parents;
+        }
+
         private static bool IsAllowedHierarchyObject(SerializedProperty property,
-            bool child, bool includeSelf)
+            ObjectSource source, bool includeSelf)
         {
             Transform owner = GetTransform(property.serializedObject.targetObject);
             Transform selected = GetTransform(property.objectReferenceValue);
             if (owner == null || selected == null) return false;
             if (ReferenceEquals(owner, selected)) return includeSelf;
-            return child ? selected.IsChildOf(owner) : owner.IsChildOf(selected);
+            return source == ObjectSource.Children
+                ? selected.IsChildOf(owner)
+                : owner.IsChildOf(selected);
         }
 
         private static Transform GetTransform(UnityEngine.Object value)
@@ -1421,7 +1273,8 @@ namespace ActionAttribute
         }
 
         private bool TryGetValidationError(SerializedProperty property,
-            ValidateInputAttribute validator, GUIContent label, out string message)
+            OnValueChangedAttribute validator, GUIContent label,
+            out string message)
         {
             if (SerializedPropertyMemberUtility.TryValidate(property,
                 validator.callback, out bool valid))
@@ -1437,12 +1290,88 @@ namespace ActionAttribute
             return true;
         }
 
-        private string GetRequiredMessage(SerializedProperty property,
-            GUIContent label)
+        private bool TryGetValidationError(SerializedProperty property,
+            ActionValidationAttribute validator, out string message)
         {
-            return string.IsNullOrEmpty(required?.message)
-                ? $"{label?.text ?? property.displayName}不能为空。"
-                : required.message;
+            try
+            {
+                ActionAttributeContext context = CreateExtensionContext(property);
+                if (validator.IsValid(context))
+                {
+                    message = null;
+                    return false;
+                }
+                message = validator.GetMessage(context);
+                if (string.IsNullOrEmpty(message))
+                    message = $"{context.MemberName} 的值无效。";
+                return true;
+            }
+            catch (Exception exception)
+            {
+                ReportExtensionFailure(validator, exception);
+                message = null;
+                return false;
+            }
+        }
+
+        private bool TryGetExtensionMessage(SerializedProperty property,
+            ActionMessageAttribute provider, out ActionMessage message)
+        {
+            try
+            {
+                message = provider.GetMessage(CreateExtensionContext(property));
+                return !string.IsNullOrEmpty(message.text);
+            }
+            catch (Exception exception)
+            {
+                ReportExtensionFailure(provider, exception);
+                message = default;
+                return false;
+            }
+        }
+
+        private void ApplyValueModifiers(SerializedProperty property)
+        {
+            for (int i = 0; i < valueModifiers.Length; i++)
+            {
+                ActionValueModifierAttribute modifier = valueModifiers[i];
+                try
+                {
+                    ActionAttributeContext context = CreateExtensionContext(
+                        property);
+                    object modified = modifier.Modify(context);
+                    if (Equals(context.Value, modified)) continue;
+                    if (!SerializedPropertyMemberUtility.TrySetSerializedValue(
+                        property, modified))
+                        ReportExtensionFailure(modifier, new InvalidCastException(
+                            $"无法将返回值写入 {context.ValueType}。"));
+                }
+                catch (Exception exception)
+                {
+                    ReportExtensionFailure(modifier, exception);
+                }
+            }
+        }
+
+        private ActionAttributeContext CreateExtensionContext(
+            SerializedProperty property)
+        {
+            return SerializedPropertyMemberUtility.CreateActionAttributeContext(
+                property, EffectiveFieldInfo);
+        }
+
+        private static void ReportExtensionFailure(ActionAttributeBase extension,
+            Exception exception)
+        {
+            Exception cause = exception is TargetInvocationException invocation &&
+                invocation.InnerException != null
+                    ? invocation.InnerException
+                    : exception;
+            string key = extension.GetType().AssemblyQualifiedName + "|" +
+                cause.GetType().FullName + "|" + cause.Message;
+            if (!ReportedExtensionFailures.Add(key)) return;
+            Debug.LogWarning($"ActionAttribute 扩展 {extension.GetType().FullName} " +
+                $"执行失败：{cause.Message}");
         }
 
         private bool ShouldDrawProgressBar(SerializedProperty property)
@@ -1451,10 +1380,6 @@ namespace ActionAttribute
                 (property.propertyType == SerializedPropertyType.Integer ||
                  property.propertyType == SerializedPropertyType.Float);
         }
-
-        private bool ShouldDrawColorPalette(SerializedProperty property) =>
-            colorPalette != null && paletteColors.Length > 0 &&
-            property.propertyType == SerializedPropertyType.Color;
 
         private void DrawProgressBar(Rect position, SerializedProperty property)
         {
@@ -1469,38 +1394,39 @@ namespace ActionAttribute
             EditorGUI.ProgressBar(position, Mathf.Clamp01(normalized), text);
         }
 
-        private float GetTitleHeight(float width)
-        {
-            float height = EditorGUIUtility.singleLineHeight;
-            if (!string.IsNullOrEmpty(title.subtitle))
-                height += EditorStyles.wordWrappedMiniLabel.CalcHeight(
-                    new GUIContent(title.subtitle), width) +
-                    EditorGUIUtility.standardVerticalSpacing;
-            return height;
-        }
-
-        private void DrawTitle(Rect position)
-        {
-            Rect titleRect = new Rect(position.x, position.y, position.width,
-                EditorGUIUtility.singleLineHeight);
-            EditorGUI.LabelField(titleRect, title.title, EditorStyles.boldLabel);
-            if (string.IsNullOrEmpty(title.subtitle)) return;
-            Rect subtitleRect = new Rect(position.x,
-                titleRect.yMax + EditorGUIUtility.standardVerticalSpacing,
-                position.width, position.yMax - titleRect.yMax);
-            EditorGUI.LabelField(subtitleRect, title.subtitle,
-                EditorStyles.wordWrappedMiniLabel);
-        }
-
-        private GUIContent GetLabel(GUIContent original)
+        private GUIContent GetLabel(SerializedProperty property,
+            GUIContent original)
         {
             Initialize();
-            if (hideLabel) return GUIContent.none;
-            if (nameLabel == null) return original;
-            nameLabel.image = original?.image;
-            if (string.IsNullOrEmpty(nameLabel.tooltip))
-                nameLabel.tooltip = original?.tooltip;
-            return nameLabel;
+            GUIContent result = nameLabel ?? original;
+            if (nameLabel != null)
+            {
+                nameLabel.image = original?.image;
+                if (string.IsNullOrEmpty(nameLabel.tooltip))
+                    nameLabel.tooltip = original?.tooltip;
+            }
+            if (extensionLabels.Length == 0) return result;
+
+            var dynamicLabel = result == null
+                ? new GUIContent()
+                : new GUIContent(result);
+            ActionAttributeContext context = CreateExtensionContext(property);
+            for (int i = 0; i < extensionLabels.Length; i++)
+            {
+                ActionLabelAttribute provider = extensionLabels[i];
+                try
+                {
+                    string text = provider.GetLabel(context);
+                    string tooltip = provider.GetTooltip(context);
+                    if (text != null) dynamicLabel.text = text;
+                    if (tooltip != null) dynamicLabel.tooltip = tooltip;
+                }
+                catch (Exception exception)
+                {
+                    ReportExtensionFailure(provider, exception);
+                }
+            }
+            return dynamicLabel;
         }
 
         private bool IsCollectionElement(SerializedProperty property)
@@ -1513,8 +1439,19 @@ namespace ActionAttribute
         {
             float minimum = EditorGUIUtility.singleLineHeight * 2;
             if (string.IsNullOrEmpty(message)) return minimum;
-            return Mathf.Max(minimum, EditorStyles.helpBox.CalcHeight(
-                new GUIContent(message), Mathf.Max(1, width)));
+            GUIStyle style;
+            try
+            {
+                style = EditorStyles.helpBox;
+            }
+            catch (NullReferenceException)
+            {
+                style = null;
+            }
+            return style == null
+                ? minimum
+                : Mathf.Max(minimum, style.CalcHeight(new GUIContent(message),
+                    Mathf.Max(1, width)));
         }
 
         private static MessageType ToMessageType(InspectorMessageType type)
@@ -1531,17 +1468,27 @@ namespace ActionAttribute
         private void Initialize()
         {
             if (initialized) return;
-            var shows = new List<ShowIfAttribute>();
-            var hides = new List<HideIfAttribute>();
-            var enables = new List<EnableIfAttribute>();
-            var disables = new List<DisableIfAttribute>();
+            var fieldConditions = new List<ConditionAttribute>();
+            var customConditions = new List<ActionConditionAttribute>();
+            var customLabels = new List<ActionLabelAttribute>();
+            var customMessages = new List<ActionMessageAttribute>();
             var helps = new List<HelpBoxAttribute>();
-            var validations = new List<ValidateInputAttribute>();
+            var validations = new List<OnValueChangedAttribute>();
+            var customValidations = new List<ActionValidationAttribute>();
+            var modifiers = new List<ActionValueModifierAttribute>();
             var callbacks = new List<OnValueChangedAttribute>();
             var buttons = new List<InlineButtonAttribute>();
             FieldInfo currentField = EffectiveFieldInfo;
+            if (currentField != null)
+            {
+                fieldTypeDrawer = UnityFieldTypeDrawerBridge.Create(
+                    currentField.FieldType, currentField);
+                elementTypeDrawer = UnityFieldTypeDrawerBridge.Create(
+                    GetCollectionElementType(currentField.FieldType),
+                    currentField);
+            }
             IEnumerable<ActionAttributeBase> attributes = currentField == null
-                ? new[] { attribute as ActionAttributeBase }
+                ? new[] { (object)attribute as ActionAttributeBase }
                 : currentField.GetCustomAttributes<ActionAttributeBase>(true);
 
             foreach (ActionAttributeBase item in attributes)
@@ -1553,81 +1500,42 @@ namespace ActionAttribute
                         nameLabel = new GUIContent(value.name, value.comment);
                         break;
                     case ReadOnlyAttribute _: readOnly = true; break;
-                    case HideLabelAttribute _: hideLabel = true; break;
-                    case DelayedInputAttribute _: delayed = true; break;
-                    case HideInEditorModeAttribute _: hideInEditorMode = true; break;
-                    case HideInPlayModeAttribute _: hideInPlayMode = true; break;
-                    case DisableInEditorModeAttribute _:
-                        disableInEditorMode = true; break;
-                    case DisableInPlayModeAttribute _:
-                        disableInPlayMode = true; break;
                     case ToggleLeftAttribute _: toggleLeft = true; break;
-                    case AssetsOnlyAttribute _: assetsOnly = true; break;
-                    case SceneObjectsOnlyAttribute _: sceneObjectsOnly = true; break;
-                    case NonNegativeAttribute _: nonNegative = true; break;
-                    case PositiveAttribute _: positive = true; break;
+                    case ObjectsOnlyAttribute value: objectsOnly = value; break;
                     case ExpandableAttribute _: expandable = true; break;
-                    case ShowIfAttribute value: shows.Add(value); break;
-                    case HideIfAttribute value: hides.Add(value); break;
-                    case EnableIfAttribute value: enables.Add(value); break;
-                    case DisableIfAttribute value: disables.Add(value); break;
+                    case ConditionAttribute value:
+                        fieldConditions.Add(value); break;
+                    case ActionConditionAttribute value:
+                        customConditions.Add(value); break;
+                    case ActionLabelAttribute value:
+                        customLabels.Add(value); break;
+                    case ActionMessageAttribute value:
+                        customMessages.Add(value); break;
                     case HelpBoxAttribute value: helps.Add(value); break;
-                    case ValidateInputAttribute value: validations.Add(value); break;
-                    case OnValueChangedAttribute value: callbacks.Add(value); break;
-                    case ClampAttribute value: clamp = value; break;
-                    case MinValueAttribute value: minValue = value; break;
-                    case MaxValueAttribute value: maxValue = value; break;
-                    case MultilineTextAttribute value: multiline = value; break;
-                    case ResizableTextAreaAttribute value:
-                        resizableTextArea = value;
+                    case TextAttribute value:
+                        text = value;
+                        customValidations.Add(value);
                         break;
-                    case RequiredAttribute value: required = value; break;
-                    case TitleAttribute value: title = value; break;
+                    case OnValueChangedAttribute value:
+                        if (value.mode == ValueChangedMode.Validate)
+                            validations.Add(value);
+                        else callbacks.Add(value);
+                        break;
+                    case ActionValidationAttribute value:
+                        customValidations.Add(value); break;
+                    case ActionValueModifierAttribute value:
+                        modifiers.Add(value); break;
                     case SuffixLabelAttribute value: suffix = value; break;
-                    case PrefixLabelAttribute value: prefix = value; break;
-                    case PropertySpaceAttribute value: propertySpace = value; break;
                     case ProgressBarAttribute value: progressBar = value; break;
-                    case EnumFlagsAttribute value: enumFlags = value; break;
-                    case EnumSearchAttribute value: enumSearch = value; break;
                     case EnumToggleButtonsAttribute value:
                         enumToggleButtons = value; break;
                     case ValueDropdownAttribute value: valueDropdown = value; break;
                     case MinMaxSliderAttribute value: minMaxSlider = value; break;
                     case HorizontalLineAttribute value: horizontalLine = value; break;
                     case ShowAssetPreviewAttribute value: assetPreview = value; break;
-                    case TagAttribute value: tag = value; break;
-                    case LayerAttribute value: layer = value; break;
-                    case SortingLayerAttribute value: sortingLayer = value; break;
-                    case SceneNameAttribute value: sceneName = value; break;
-                    case InputAxisAttribute value: inputAxis = value; break;
-                    case AnimatorParamAttribute value: animatorParam = value; break;
-                    case PropertyTooltipAttribute value:
-                        propertyTooltip = value; break;
-                    case LabelWidthAttribute value: labelWidth = value; break;
-                    case IndentAttribute value: indent = value; break;
-                    case GUIColorAttribute value: guiColor = value; break;
-                    case FilePathAttribute value: filePath = value; break;
-                    case FolderPathAttribute value: folderPath = value; break;
-                    case RequiredListLengthAttribute value:
-                        requiredListLength = value; break;
-                    case UniqueListAttribute value: uniqueList = value; break;
-                    case ChildGameObjectsOnlyAttribute value:
-                        childGameObjectsOnly = value; break;
-                    case ParentGameObjectsOnlyAttribute value:
-                        parentGameObjectsOnly = value; break;
-                    case WrapAttribute value: wrap = value; break;
-                    case CurveRangeAttribute value: curveRange = value; break;
-                    case ReorderableListAttribute value:
-                        reorderableList = value; break;
-                    case PasswordFieldAttribute value: passwordField = value; break;
-                    case PlaceholderAttribute value: placeholder = value; break;
-                    case MaxLengthAttribute value: maxLength = value; break;
-                    case StepAttribute value: step = value; break;
+                    case PathAttribute value: path = value; break;
                     case SliderAttribute value: slider = value; break;
                     case EulerAnglesAttribute value: eulerAngles = value; break;
-                    case AssetPathAttribute value: assetPath = value; break;
-                    case AssetGuidAttribute value: assetGuid = value; break;
-                    case ColorPaletteAttribute value: colorPalette = value; break;
                     case InlineButtonAttribute value: buttons.Add(value); break;
                 }
             }
@@ -1635,41 +1543,48 @@ namespace ActionAttribute
             if (currentField != null)
                 collectionField = typeof(IList).IsAssignableFrom(
                     currentField.FieldType);
-            showConditions = shows.ToArray();
-            hideConditions = hides.ToArray();
-            enableConditions = enables.ToArray();
-            disableConditions = disables.ToArray();
+            SortByPriority(customConditions);
+            SortByPriority(customLabels);
+            SortByPriority(customMessages);
+            SortByPriority(customValidations);
+            SortByPriority(modifiers);
+            conditions = fieldConditions.ToArray();
+            extensionConditions = customConditions.ToArray();
+            extensionLabels = customLabels.ToArray();
+            extensionMessages = customMessages.ToArray();
             helpBoxes = helps.ToArray();
             validators = validations.ToArray();
+            extensionValidators = customValidations.ToArray();
+            valueModifiers = modifiers.ToArray();
             valueChangedCallbacks = callbacks.ToArray();
             inlineButtons = buttons.ToArray();
-            paletteColors = ParsePaletteColors(colorPalette);
-            if (propertyTooltip != null)
-            {
-                if (nameLabel == null)
-                    nameLabel = new GUIContent(currentField == null
-                        ? string.Empty
-                        : ObjectNames.NicifyVariableName(currentField.Name),
-                        propertyTooltip.tooltip);
-                else nameLabel.tooltip = propertyTooltip.tooltip;
-            }
             initialized = true;
         }
 
-        private static Color[] ParsePaletteColors(ColorPaletteAttribute palette)
+        private static Type GetCollectionElementType(Type type)
         {
-            if (palette?.colors == null || palette.colors.Length == 0)
-                return Array.Empty<Color>();
-            var colors = new List<Color>(palette.colors.Length);
-            for (int i = 0; i < palette.colors.Length; i++)
+            if (type == null) return null;
+            if (type.IsArray) return type.GetElementType();
+            if (type.IsGenericType && type.GetGenericTypeDefinition() ==
+                typeof(List<>))
+                return type.GetGenericArguments()[0];
+            return null;
+        }
+
+        private static void SortByPriority<T>(List<T> values)
+            where T : ActionAttributeBase
+        {
+            for (int i = 1; i < values.Count; i++)
             {
-                string value = palette.colors[i];
-                if (string.IsNullOrWhiteSpace(value)) continue;
-                if (value[0] != '#') value = "#" + value;
-                if (ColorUtility.TryParseHtmlString(value, out Color color))
-                    colors.Add(color);
+                T current = values[i];
+                int index = i - 1;
+                while (index >= 0 && values[index].Priority > current.Priority)
+                {
+                    values[index + 1] = values[index];
+                    index--;
+                }
+                values[index + 1] = current;
             }
-            return colors.ToArray();
         }
 
         private readonly struct PropertyKey : IEquatable<PropertyKey>
@@ -1699,8 +1614,198 @@ namespace ActionAttribute
             }
         }
 
+        private sealed class UnityFieldTypeDrawerBridge
+        {
+            private delegate float GetPropertyHeightSafeDelegate(
+                PropertyDrawer drawer, SerializedProperty property,
+                GUIContent label);
+            private delegate void OnGUISafeDelegate(PropertyDrawer drawer,
+                Rect position, SerializedProperty property, GUIContent label);
+
+            private const BindingFlags InstanceFields = BindingFlags.Instance |
+                BindingFlags.NonPublic;
+            private const BindingFlags StaticMethods = BindingFlags.Static |
+                BindingFlags.NonPublic | BindingFlags.Public;
+
+            private static readonly MethodInfo GetDrawerTypeMethod =
+                FindGetDrawerTypeMethod();
+            private static readonly FieldInfo DrawerFieldInfoField =
+                typeof(PropertyDrawer).GetField("m_FieldInfo", InstanceFields);
+            private static readonly GetPropertyHeightSafeDelegate
+                GetPropertyHeightSafe = CreateGetPropertyHeightSafeDelegate();
+            private static readonly OnGUISafeDelegate OnGUISafe =
+                CreateOnGUISafeDelegate();
+
+            private readonly PropertyDrawer drawer;
+
+            private UnityFieldTypeDrawerBridge(PropertyDrawer drawer)
+            {
+                this.drawer = drawer;
+            }
+
+            internal static UnityFieldTypeDrawerBridge Create(Type fieldType,
+                FieldInfo field)
+            {
+                Type drawerType = GetDrawerType(fieldType);
+                if (drawerType == null ||
+                    !typeof(PropertyDrawer).IsAssignableFrom(drawerType) ||
+                    typeof(ActionPropertyDrawer).IsAssignableFrom(drawerType))
+                    return null;
+                try
+                {
+                    var instance = Activator.CreateInstance(drawerType, true) as
+                        PropertyDrawer;
+                    if (instance == null) return null;
+                    DrawerFieldInfoField?.SetValue(instance, field);
+                    return new UnityFieldTypeDrawerBridge(instance);
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            }
+
+            internal float GetPropertyHeight(SerializedProperty property,
+                GUIContent label)
+            {
+                return GetPropertyHeightSafe != null
+                    ? GetPropertyHeightSafe(drawer, property, label)
+                    : drawer.GetPropertyHeight(property, label);
+            }
+
+            internal void OnGUI(Rect position, SerializedProperty property,
+                GUIContent label)
+            {
+                if (OnGUISafe != null)
+                    OnGUISafe(drawer, position, property, label);
+                else drawer.OnGUI(position, property, label);
+            }
+
+            private static Type GetDrawerType(Type targetType)
+            {
+                if (targetType == null || GetDrawerTypeMethod == null)
+                    return null;
+                try
+                {
+                    ParameterInfo[] parameters =
+                        GetDrawerTypeMethod.GetParameters();
+                    var arguments = new object[parameters.Length];
+                    arguments[0] = targetType;
+                    for (int i = 1; i < parameters.Length; i++)
+                    {
+                        Type parameterType = parameters[i].ParameterType;
+                        if (parameterType == typeof(Type[]))
+                            arguments[i] = Array.Empty<Type>();
+                        else if (parameterType == typeof(bool))
+                            arguments[i] = false;
+                        else arguments[i] = parameters[i].HasDefaultValue
+                            ? parameters[i].DefaultValue
+                            : null;
+                    }
+                    return GetDrawerTypeMethod.Invoke(null, arguments) as Type;
+                }
+                catch (TargetInvocationException)
+                {
+                    return null;
+                }
+                catch (ArgumentException)
+                {
+                    return null;
+                }
+                catch (TargetParameterCountException)
+                {
+                    return null;
+                }
+            }
+
+            private static MethodInfo FindGetDrawerTypeMethod()
+            {
+                Type utility = typeof(EditorGUI).Assembly.GetType(
+                    "UnityEditor.ScriptAttributeUtility");
+                if (utility == null) return null;
+                MethodInfo[] methods = utility.GetMethods(StaticMethods);
+                MethodInfo best = null;
+                for (int i = 0; i < methods.Length; i++)
+                {
+                    MethodInfo method = methods[i];
+                    if (method.Name != "GetDrawerTypeForType") continue;
+                    ParameterInfo[] parameters = method.GetParameters();
+                    if (parameters.Length == 0 ||
+                        parameters[0].ParameterType != typeof(Type)) continue;
+                    bool supported = true;
+                    for (int j = 1; j < parameters.Length; j++)
+                    {
+                        Type parameterType = parameters[j].ParameterType;
+                        if (parameterType != typeof(Type[]) &&
+                            parameterType != typeof(bool) &&
+                            !parameters[j].HasDefaultValue)
+                        {
+                            supported = false;
+                            break;
+                        }
+                    }
+                    if (supported && (best == null || parameters.Length <
+                        best.GetParameters().Length))
+                        best = method;
+                }
+                return best;
+            }
+
+            private static GetPropertyHeightSafeDelegate
+                CreateGetPropertyHeightSafeDelegate()
+            {
+                MethodInfo method = typeof(PropertyDrawer).GetMethod(
+                    "GetPropertyHeightSafe", BindingFlags.Instance |
+                    BindingFlags.NonPublic, null,
+                    new[] { typeof(SerializedProperty), typeof(GUIContent) },
+                    null);
+                if (method == null) return null;
+                try
+                {
+                    return (GetPropertyHeightSafeDelegate)
+                        Delegate.CreateDelegate(
+                            typeof(GetPropertyHeightSafeDelegate), method);
+                }
+                catch (ArgumentException)
+                {
+                    return null;
+                }
+                catch (MemberAccessException)
+                {
+                    return null;
+                }
+            }
+
+            private static OnGUISafeDelegate CreateOnGUISafeDelegate()
+            {
+                MethodInfo method = typeof(PropertyDrawer).GetMethod(
+                    "OnGUISafe", BindingFlags.Instance |
+                    BindingFlags.NonPublic, null,
+                    new[]
+                    {
+                        typeof(Rect), typeof(SerializedProperty),
+                        typeof(GUIContent)
+                    }, null);
+                if (method == null) return null;
+                try
+                {
+                    return (OnGUISafeDelegate)Delegate.CreateDelegate(
+                        typeof(OnGUISafeDelegate), method);
+                }
+                catch (ArgumentException)
+                {
+                    return null;
+                }
+                catch (MemberAccessException)
+                {
+                    return null;
+                }
+            }
+        }
+
         private sealed class CombinedActionPropertyDrawer : ActionPropertyDrawer
         {
         }
     }
+
 }

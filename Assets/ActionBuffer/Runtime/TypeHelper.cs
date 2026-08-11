@@ -69,6 +69,8 @@ namespace ActionBuffer
                 public object GetValue(object target) => _access.GetValue(target);
                 public void SetValue(object target, object value) =>
                     _access.SetValue(target, value);
+                public void CopyValue(object source, object destination) =>
+                    _access.CopyValue(source, destination);
                 internal void SetDefaultValue(object target) => _access.SetDefaultValue(target);
                 internal bool Capture(BufferScan scan, object target, BuffConverter converter,
                     bool fullField, out BufferScan.CachedField cached) =>
@@ -81,6 +83,8 @@ namespace ActionBuffer
             {
                 internal abstract object GetValue(object target);
                 internal abstract void SetValue(object target, object value);
+                internal abstract void CopyValue(object source,
+                    object destination);
                 internal abstract void SetDefaultValue(object target);
                 internal abstract bool Capture(BufferScan scan, Field field, object target,
                     BuffConverter converter, bool fullField,
@@ -147,6 +151,9 @@ namespace ActionBuffer
                 internal override object GetValue(object target) => _field.GetValue(target);
                 internal override void SetValue(object target, object value) =>
                     _field.SetValue(target, value);
+                internal override void CopyValue(object source,
+                    object destination) =>
+                    _field.SetValue(destination, _field.GetValue(source));
                 internal override void SetDefaultValue(object target) =>
                     _field.SetValue(target, _defaultValue);
 
@@ -184,6 +191,10 @@ namespace ActionBuffer
                     _property.GetValue(target, null);
                 internal override void SetValue(object target, object value) =>
                     _property.SetValue(target, value, null);
+                internal override void CopyValue(object source,
+                    object destination) =>
+                    _property.SetValue(destination,
+                        _property.GetValue(source, null), null);
                 internal override void SetDefaultValue(object target) =>
                     _property.SetValue(target, _defaultValue, null);
 
@@ -243,6 +254,8 @@ namespace ActionBuffer
                 internal override object GetValue(object target) => Read(target);
                 internal override void SetValue(object target, object value) =>
                     Write(target, (TValue)value);
+                internal override void CopyValue(object source,
+                    object destination) => Write(destination, Read(source));
                 internal override void SetDefaultValue(object target) => Write(target, default);
 
                 internal override bool Capture(BufferScan scan, Field field, object target,
@@ -298,6 +311,8 @@ namespace ActionBuffer
                 internal override object GetValue(object target) => Read(target);
                 internal override void SetValue(object target, object value) =>
                     Write(target, (TValue)value);
+                internal override void CopyValue(object source,
+                    object destination) => Write(destination, Read(source));
                 internal override void SetDefaultValue(object target) =>
                     Write(target, default);
 

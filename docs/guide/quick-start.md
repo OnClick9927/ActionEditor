@@ -76,16 +76,19 @@ public sealed class GameBlackboard : Blackboard
 public sealed class GameTree : BTTree
 {
     private readonly GameBlackboard data = new GameBlackboard();
-    protected override Blackboard blackboard => data;
+    public override Blackboard blackboard => data;
     public GameBlackboard Data => data;
 }
 
 GameTree tree = LoadTreeBytes();
-tree.PrepareForRuntime(path => LoadSubTree(path));
-BTNode.State result = tree.Update();
+BTTree.loader = path => LoadSubTree(path);
+tree.PrepareForRuntime();
+GameBlackboard actorBlackboard =
+    ((GameBlackboard)tree.blackboard).DeepCopyByBuffer();
+actorBlackboard.Initialize(tree);
+BTNode.State result = tree.Update(actorBlackboard);
 
-List<int> snapshot = tree.CollectStatus();
-tree.ReadStatus(snapshot);
+restoredBlackboard.Initialize(tree, actorBlackboard.RuntimeValues);
 ```
 
 主树必须正好有一个连接完整的 `BTRoot`。子树由 loader 返回、必须是同一具体 `BTTree` 类型并设置 `IsSubTree`。固定 Tick 中每次调用一次 `Update`；确定性逻辑使用 Tick 节点和整数黑板字段，不读取真实时间和随机数。
@@ -98,13 +101,13 @@ using UnityEngine;
 
 public sealed class CharacterConfig : MonoBehaviour
 {
-    [Title("基础数值")]
     [Name("生命值", "角色可承受的伤害总量。")]
-    [Clamp(0, 100), ProgressBar(0, 100), SuffixLabel("点")]
+    [Slider(0, 100, SliderMode.Clamp)]
+    [ProgressBar(0, 100), SuffixLabel("点")]
     [SerializeField] private int health = 100;
 
-    [ShowIf(nameof(advanced))]
-    [FolderPath, Name("输出目录")]
+    [Condition(ConditionMode.Show, nameof(advanced))]
+    [Path(PathType.Folder), Name("输出目录")]
     [SerializeField] private string output = "Assets";
 
     [SerializeField] private bool advanced;

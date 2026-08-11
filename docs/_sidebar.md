@@ -14,6 +14,7 @@
   * [Inspector 特性概览](/attribute/overview.md)
   * [特性分类手册](/attribute/catalog.md)
   * [组合、布局与扩展](/attribute/composition.md)
+  * [Runtime 逻辑特性扩展](/attribute/extensions.md)
 * ActionEditor Timeline
   * [资源模型与编辑器](/timeline/editor.md)
   * [自定义 Group/Track/Clip](/timeline/extensions.md)

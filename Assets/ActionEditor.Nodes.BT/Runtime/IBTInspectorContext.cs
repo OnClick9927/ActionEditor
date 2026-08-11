@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using ActionAttribute;
 using ActionBuffer;
 
@@ -35,13 +37,27 @@ namespace ActionEditor.Nodes.BT
                 .FindField(fieldName)?.FieldType;
         }
 
+        internal static ValueDropdownList<string> GetEnumValues(
+            Type blackboardType, string fieldName)
+        {
+            var result = new ValueDropdownList<string>();
+            Type enumType = GetFieldType(blackboardType, fieldName);
+            if (enumType == null || !enumType.IsEnum) return result;
+            string[] names = Enum.GetNames(enumType);
+            for (int i = 0; i < names.Length; i++)
+                result.Add(names[i], names[i]);
+            return result;
+        }
+
         internal static bool IsDeterministicType(Type type)
         {
-            BTVariableCondition.VariableType variableType =
-                BTVariableCondition.GetVariableType(type);
-            return variableType != BTVariableCondition.VariableType.None &&
-                variableType != BTVariableCondition.VariableType.Float &&
-                variableType != BTVariableCondition.VariableType.Double;
+            return type == typeof(bool) ||
+                type == typeof(sbyte) || type == typeof(byte) ||
+                type == typeof(short) || type == typeof(ushort) ||
+                type == typeof(int) || type == typeof(uint) ||
+                type == typeof(long) || type == typeof(ulong) ||
+                type == typeof(decimal) || type == typeof(char) ||
+                type == typeof(string) || (type != null && type.IsEnum);
         }
 
         internal static ValueDropdownList<string> GetDeterministicFields(
@@ -57,6 +73,32 @@ namespace ActionEditor.Nodes.BT
                     !IsDeterministicType(field.FieldType)) continue;
                 result.Add(field.name, field.name);
             }
+            return result;
+        }
+    }
+
+    internal static class BTEnumValueUtility
+    {
+        private static readonly ConcurrentDictionary<Type,
+            IReadOnlyDictionary<string, object>> Values = new();
+
+        internal static bool TryGetValue(Type enumType, string name,
+            out object value)
+        {
+            value = null;
+            if (enumType == null || !enumType.IsEnum ||
+                string.IsNullOrEmpty(name)) return false;
+            return Values.GetOrAdd(enumType, CreateValues)
+                .TryGetValue(name, out value);
+        }
+
+        private static IReadOnlyDictionary<string, object> CreateValues(
+            Type enumType)
+        {
+            var result = new Dictionary<string, object>(StringComparer.Ordinal);
+            string[] names = Enum.GetNames(enumType);
+            for (int i = 0; i < names.Length; i++)
+                result.Add(names[i], Enum.Parse(enumType, names[i], false));
             return result;
         }
     }

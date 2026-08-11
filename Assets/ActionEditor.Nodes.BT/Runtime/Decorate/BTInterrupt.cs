@@ -14,13 +14,12 @@ namespace ActionEditor.Nodes.BT
         private bool abortLower;
         private bool abortSelf;
         private BTComposite CompositeParent;
-        [ReadOnly, Name("中断标识", "运行树中查找该中断节点的唯一键，由编辑器统一维护；同一主树内重复标识会在初始化时报错。")]
+        [ReadOnly, Name("中断标识", "运行树中查找该中断节点的唯一键，由编辑器统一维护；同一主树内重复标识会在准备运行时报错。")]
         public string flag;
 
-        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             CompositeParent = null;
             abortLower = abortType == AbortType.Both || abortType == AbortType.LowerPriority;
             abortSelf = abortType == AbortType.Both || abortType == AbortType.Self;
@@ -31,16 +30,17 @@ namespace ActionEditor.Nodes.BT
                     throw new System.Exception($" {this.abortType} need {nameof(CompositeParent)}");
             }
             if (abortSelf || abortLower)
-                tree.AddSpecialNode(this);
+                context.RegisterInterrupt(flag);
         }
-        public void Interrupt()
+        internal bool CanInterrupt => abortSelf || abortLower;
+        public void Interrupt(Blackboard blackboard)
         {
             if (abortLower)
-                CompositeParent.Abort();
-            if (abortSelf && state == State.Running)
-                Abort();
+                CompositeParent.Abort(blackboard);
+            if (abortSelf && GetStateFast(blackboard) == State.Running)
+                Abort(blackboard);
         }
-        protected override State Decorate(State state)
+        protected override State Decorate(Blackboard blackboard, State state)
         {
             return state;
         }

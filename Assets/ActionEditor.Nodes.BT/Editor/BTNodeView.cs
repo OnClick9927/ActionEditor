@@ -10,13 +10,14 @@ namespace ActionEditor.Nodes.BT
     interface IBTNodeView
     {
         bool IsTreeNodeRunning { get; }
-        void OnBTTreeChanged(BTTree tree);
+        void OnBTTreeChanged(BTTree tree, Blackboard blackboard);
     }
     public class BTNodeView<T> : GraphNode<T>, IBTNodeView where T : BTNode, new()
     {
         private GraphConnection flow;
         ProgressBar progress;
         public BTNode runningNode { get; protected set; }
+        private Blackboard runningBlackboard;
         bool IBTNodeView.IsTreeNodeRunning => IsRunning();
         protected new Port GeneratePort(Direction portDir, Type type, Port.Capacity capacity = Port.Capacity.Single, string name = "")
         {
@@ -51,8 +52,8 @@ namespace ActionEditor.Nodes.BT
 
         protected virtual bool IsRunning()
         {
-            return runningNode != null &&
-                runningNode.state == BTNode.State.Running;
+            return runningNode != null && runningBlackboard != null &&
+                runningBlackboard.GetState(runningNode) == BTNode.State.Running;
         }
         public override void OnUpdate()
         {
@@ -72,8 +73,9 @@ namespace ActionEditor.Nodes.BT
 
         }
 
-        public virtual void OnBTTreeChanged(BTTree tree)
+        public virtual void OnBTTreeChanged(BTTree tree, Blackboard blackboard)
         {
+            runningBlackboard = blackboard;
             if (flow == null)
                 flow = this.connections.FirstOrDefault(x => x.input.node == this);
             if (tree == null)
@@ -87,13 +89,16 @@ namespace ActionEditor.Nodes.BT
             {
                 runningNode = tree.FindRuntimeTreeNode<BTNode>(this.GUID);
             }
+            OnBTTreeChanged(tree);
         }
+
+        public virtual void OnBTTreeChanged(BTTree tree) { }
 
         public override void OnInspectorGUI()
         {
             if (data is IBTInspectorContext context)
                 context.SetInspectorBlackboard(
-                    (App.asset as BTTree)?.Blackboard?.GetType());
+                    (App.asset as BTTree)?.blackboard?.GetType());
             base.OnInspectorGUI();
         }
     }

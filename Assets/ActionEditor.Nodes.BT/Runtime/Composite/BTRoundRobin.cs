@@ -1,6 +1,5 @@
 using ActionAttribute;
 using System;
-using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
@@ -14,44 +13,39 @@ namespace ActionEditor.Nodes.BT
         public bool advanceOnFailure = true;
         [Name("中止时重置", "节点处于运行中并被父级中止时，将已保存的轮询索引恢复为零；关闭时保留中止前的位置。")]
         public bool resetOnAbort;
-        [NonSerialized] private int currentIndex;
+        private int GetCurrentIndex(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetCurrentIndex(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        protected override void OnInitialized()
-        {
-            currentIndex = 0;
-        }
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) =>
+            Math.Max(0, ChildCount - 1);
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
             if (ChildCount == 0) return State.Failure;
-            if (currentIndex >= ChildCount) currentIndex = 0;
+            int currentIndex = GetCurrentIndex(blackboard);
+            if (currentIndex >= ChildCount)
+            {
+                currentIndex = 0;
+                SetCurrentIndex(blackboard, 0);
+            }
 
-            State result = ChildAt(currentIndex).Update();
+            State result = ChildAt(currentIndex).Update(blackboard);
             if (result == State.Running) return State.Running;
             if ((result == State.Success && advanceOnSuccess) ||
                 (result == State.Failure && advanceOnFailure))
-                currentIndex = (currentIndex + 1) % ChildCount;
+                SetCurrentIndex(blackboard, (currentIndex + 1) % ChildCount);
             return result;
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
-            base.OnAbort();
-            if (resetOnAbort) currentIndex = 0;
+            base.OnAbort(blackboard);
+            if (resetOnAbort) SetCurrentIndex(blackboard, 0);
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(currentIndex);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < 0 || value > Math.Max(0, ChildCount - 1))
-                throw new ArgumentException("Invalid round-robin runtime status",
-                    nameof(values));
-            currentIndex = value;
-        }
     }
 }

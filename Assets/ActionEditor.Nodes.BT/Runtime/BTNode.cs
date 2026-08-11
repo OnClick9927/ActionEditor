@@ -1,7 +1,33 @@
+using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace ActionEditor.Nodes.BT
 {
+    internal sealed class BTPrepareContext
+    {
+        private readonly HashSet<string> interruptFlags =
+            new HashSet<string>(StringComparer.Ordinal);
+
+        internal BTPrepareContext(BTTree tree)
+        {
+            Tree = tree ?? throw new ArgumentNullException(nameof(tree));
+        }
+
+        internal BTTree Tree { get; }
+        internal object LayoutToken { get; } = new object();
+        internal int RuntimeValueCount { get; set; }
+
+        internal void RegisterInterrupt(string flag)
+        {
+            if (string.IsNullOrEmpty(flag))
+                throw new InvalidOperationException(
+                    "A behavior-tree interrupt requires a flag");
+            if (!interruptFlags.Add(flag))
+                throw new InvalidOperationException($"Same Flag {flag}");
+        }
+    }
+
     [System.Serializable]
     public abstract class BTNode : NodeData
     {
@@ -12,114 +38,174 @@ namespace ActionEditor.Nodes.BT
             Failure,
             Running
         }
-        [System.NonSerialized] private Blackboard _blackboard;
-        [System.NonSerialized] private BTNode _parent;
-        [System.NonSerialized] private BTTree _runtimeTree;
-        [System.NonSerialized] private State _state;
 
-        protected Blackboard blackboard => _blackboard;
+        [NonSerialized] private BTNode _parent;
+        [NonSerialized] private BTTree _runtimeTree;
+        [NonSerialized] private object _runtimeLayoutToken;
+        [NonSerialized] private int _runtimeOffset = -1;
+        [NonSerialized] private int _runtimeValueCount;
+
         internal BTNode parent => _parent;
         internal BTTree runtimeTree => _runtimeTree;
-        public State state => _state;
 
-        internal State Update()
+        internal State Update(Blackboard blackboard)
         {
-            if (_state == State.Inactive)
+            State current = GetStateFast(blackboard);
+            if (current == State.Inactive)
             {
-                OnStart();
-                _state = State.Running;
+                OnStart(blackboard);
+                SetState(blackboard, State.Running);
+                current = State.Running;
             }
-            var result = OnUpdate();
-            _state = result;
-            if (_state != State.Running)
+            State result = OnUpdate(blackboard);
+            if (result == State.Running)
             {
-                OnStop();
-                _state = State.Inactive;
+                if (current != State.Running)
+                    SetState(blackboard, State.Running);
+                return result;
+            }
+
+            if (result != State.Success && result != State.Failure)
+                throw new InvalidOperationException(
+                    $"{GetType()} returned invalid state {result}");
+
+            SetState(blackboard, result);
+            try
+            {
+                OnStop(blackboard);
+            }
+            finally
+            {
+                SetState(blackboard, State.Inactive);
             }
             return result;
         }
-        protected abstract State OnUpdate();
-        protected virtual void OnStart() { }
-        protected virtual void OnStop() { }
-        public void Abort()
+
+        protected abstract State OnUpdate(Blackboard blackboard);
+        protected virtual void OnStart(Blackboard blackboard) { }
+        protected virtual void OnStop(Blackboard blackboard) { }
+
+        public void Abort(Blackboard blackboard)
         {
-            if (_state != State.Running) return;
-            OnAbort();
-            _state = State.Inactive;
+            if (GetStateFast(blackboard) != State.Running) return;
+            try
+            {
+                OnAbort(blackboard);
+            }
+            finally
+            {
+                SetState(blackboard, State.Inactive);
+            }
         }
 
-        protected abstract void OnAbort();
+        protected abstract void OnAbort(Blackboard blackboard);
+
         protected BTComposite FindParentComposite()
         {
-            var _node = _parent;
-            while (_node != null)
+            BTNode node = _parent;
+            while (node != null)
             {
-                if (_node is BTComposite composite)
-                {
-                    return composite;
-                }
-                _node = _node.parent;
+                if (node is BTComposite composite) return composite;
+                node = node.parent;
             }
             return null;
         }
 
-        internal virtual void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        internal virtual void Init(BTNode parent, BTPrepareContext context)
         {
-            _blackboard = blackboard;
+            if (context == null) throw new ArgumentNullException(nameof(context));
             _parent = parent;
-            _runtimeTree = tree;
-            _state = State.Inactive;
+            _runtimeTree = context.Tree;
+            _runtimeLayoutToken = context.LayoutToken;
+            _runtimeOffset = context.RuntimeValueCount;
+
+            int dataSize = RuntimeDataSize;
+            if (dataSize < 0)
+                throw new InvalidOperationException(
+                    $"{GetType()} has a negative runtime data size");
+            for (int i = 0; i < dataSize; i++)
+            {
+                int minimum = GetMinRuntimeData(i);
+                int maximum = GetMaxRuntimeData(i);
+                int initial = GetInitialRuntimeData(i);
+                if (minimum > maximum || initial < minimum || initial > maximum)
+                    throw new InvalidOperationException(
+                        $"{GetType()} has an invalid runtime data rule at {i}");
+            }
+            context.RuntimeValueCount += 1 + dataSize;
         }
+
+        internal virtual void ValidateBlackboard(Blackboard blackboard) { }
+
+        protected virtual int RuntimeDataSize => 0;
+        protected virtual int GetInitialRuntimeData(int index) => 0;
+        protected virtual int GetMinRuntimeData(int index) => int.MinValue;
+        protected virtual int GetMaxRuntimeData(int index) => int.MaxValue;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        protected int GetRuntimeData(Blackboard blackboard, int index) =>
+            blackboard.GetRuntimeValue(_runtimeOffset + 1 + index);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        protected void SetRuntimeData(Blackboard blackboard, int index, int value) =>
+            blackboard.SetRuntimeValue(_runtimeOffset + 1 + index, value);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal State GetStateFast(Blackboard blackboard) =>
+            (State)blackboard.GetRuntimeValue(_runtimeOffset);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void SetState(Blackboard blackboard, State value) =>
+            blackboard.SetRuntimeValue(_runtimeOffset, (int)value);
 
         protected virtual int RuntimeChildCount => 0;
         protected virtual BTNode GetRuntimeChild(int index) => null;
         internal int RuntimeChildrenCount => RuntimeChildCount;
         internal BTNode GetRuntimeChildAt(int index) => GetRuntimeChild(index);
-        protected virtual void OnCollectStatus(List<int> values) { }
-        protected virtual void OnReadStatus(List<int> values, ref int index) { }
 
-        protected static int ReadStatusValue(List<int> values, ref int index)
+        internal void WriteRuntimeRules(
+            int[] defaultRuntimeValues,
+            int[] minimumValues, int[] maximumValues)
         {
-            if (index >= values.Count)
-                throw new System.ArgumentException(
-                    "Runtime status does not contain enough values",
-                    nameof(values));
-            return values[index++];
-        }
-
-        internal void CollectRuntimeStatus(List<int> values)
-        {
-            values.Add((int)_state);
-            OnCollectStatus(values);
-            int childCount = RuntimeChildCount;
-            for (int i = 0; i < childCount; i++)
+            defaultRuntimeValues[_runtimeOffset] = (int)State.Inactive;
+            minimumValues[_runtimeOffset] = (int)State.Inactive;
+            maximumValues[_runtimeOffset] = (int)State.Running;
+            int dataSize = RuntimeDataSize;
+            for (int i = 0; i < dataSize; i++)
             {
-                BTNode child = GetRuntimeChild(i);
-                if (child == null)
-                    throw new System.InvalidOperationException(
-                        $"{GetType()} runtime child {i} is null");
-                child.CollectRuntimeStatus(values);
+                int offset = _runtimeOffset + 1 + i;
+                defaultRuntimeValues[offset] = GetInitialRuntimeData(i);
+                minimumValues[offset] = GetMinRuntimeData(i);
+                maximumValues[offset] = GetMaxRuntimeData(i);
             }
         }
 
-        internal void ReadRuntimeStatus(List<int> values, ref int index)
+        internal bool BelongsTo(BTTree tree, object layoutToken) =>
+            ReferenceEquals(_runtimeTree, tree) &&
+            ReferenceEquals(_runtimeLayoutToken, layoutToken) &&
+            _runtimeOffset >= 0;
+        internal bool IsPreparedFor(BTTree tree) =>
+            ReferenceEquals(_runtimeTree, tree) &&
+            _runtimeLayoutToken != null && _runtimeOffset >= 0 &&
+            _runtimeValueCount > 0;
+        internal int RuntimeOffset => _runtimeOffset;
+        internal object RuntimeLayoutToken => _runtimeLayoutToken;
+        internal int RuntimeValueCount => _runtimeValueCount;
+
+        internal void CompleteRuntimeLayout(int runtimeValueCount)
         {
-            int value = ReadStatusValue(values, ref index);
-            if (value < (int)State.Inactive || value > (int)State.Running)
-                throw new System.ArgumentException(
-                    $"Invalid runtime status for {GetType()}",
-                    nameof(values));
-            _state = (State)value;
-            OnReadStatus(values, ref index);
-            int childCount = RuntimeChildCount;
-            for (int i = 0; i < childCount; i++)
-            {
-                BTNode child = GetRuntimeChild(i);
-                if (child == null)
-                    throw new System.InvalidOperationException(
-                        $"{GetType()} runtime child {i} is null");
-                child.ReadRuntimeStatus(values, ref index);
-            }
+            if (_parent != null)
+                throw new InvalidOperationException(
+                    "Only the behavior-tree root can complete a runtime layout");
+            _runtimeValueCount = runtimeValueCount;
+        }
+
+        internal void ResetPreparedData()
+        {
+            _parent = null;
+            _runtimeTree = null;
+            _runtimeLayoutToken = null;
+            _runtimeOffset = -1;
+            _runtimeValueCount = 0;
         }
     }
 }

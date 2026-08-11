@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Windows;
 namespace ActionEditor.Nodes.BT
 {
 
@@ -26,7 +27,7 @@ namespace ActionEditor.Nodes.BT
     }
     public class TestBT : BT.BTTree
     {
-        protected override Blackboard blackboard => _blackboard;
+        public override Blackboard blackboard => _blackboard;
         [Buffer] private TestBlackBorad _blackboard = new TestBlackBorad();
     }
     [Attachable(typeof(TestBT)), Node(BTNodeTypes.Action)]
@@ -34,10 +35,10 @@ namespace ActionEditor.Nodes.BT
     class BTRset : BTWaitTime
     {
         public override float time => 100;
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
             (blackboard as TestBlackBorad).Money -= Time.deltaTime * 5;
-            return base.OnUpdate();
+            return base.OnUpdate(blackboard);
         }
     }
     [System.Serializable, Attachable(typeof(TestBT)), Node(BTNodeTypes.Action)]
@@ -45,10 +46,10 @@ namespace ActionEditor.Nodes.BT
     class BTWork : BTWaitTime
     {
         public override float time => 2;
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
             (blackboard as TestBlackBorad).Money += Time.deltaTime * 10;
-            return base.OnUpdate();
+            return base.OnUpdate(blackboard);
         }
     }
 
@@ -62,59 +63,67 @@ namespace ActionEditor.Nodes.BT
             [System.Runtime.InteropServices.FieldOffset(0)] public int Int;
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
             Debug.Log($"{GetType()} OnAbort");
         }
         public virtual float time { get; }
-        private float end;
+        private float GetEnd(Blackboard blackboard) =>
+            new FloatStatusValue { Int = GetRuntimeData(blackboard, 0) }.Float;
+        private void SetEnd(Blackboard blackboard, float value) =>
+            SetRuntimeData(blackboard, 0,
+                new FloatStatusValue { Float = value }.Int);
 
-        protected override void OnStart()
+        protected override int RuntimeDataSize => 1;
+
+        protected override void OnStart(Blackboard blackboard)
         {
-            base.OnStart();
-            end = time + Time.time;
+            base.OnStart(blackboard);
+            SetEnd(blackboard, time + Time.time);
         }
 
 
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
-            return end > Time.time ? State.Running : State.Success;
+            return GetEnd(blackboard) > Time.time
+                ? State.Running
+                : State.Success;
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(new FloatStatusValue { Float = end }.Int);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            end = new FloatStatusValue
-            {
-                Int = ReadStatusValue(values, ref index)
-            }.Float;
-        }
     }
     public class BTTest : MonoBehaviour
     {
         private BTTree tree;
+        private TestBlackBorad runtimeBlackboard;
         public TextAsset txt;
         void Start()
         {
             tree = TestBT.FromBytes(typeof(TestBT), txt.bytes) as TestBT;
-            tree.PrepareForRuntime((path) =>
+            BTTree.loader = path =>
             {
                 var txt = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
                 return TestBT.FromBytes(typeof(BTTree), txt.bytes) as BTTree;
-            });
-            tree.SetAsInstance();
+            };
+            tree.PrepareForRuntime();
+            runtimeBlackboard = new TestBlackBorad();
+            runtimeBlackboard.CopyFieldsFrom(tree.blackboard);
+            runtimeBlackboard.Initialize(tree);
+            BTTree.SetAsInstance(tree, runtimeBlackboard);
         }
         // Update is called once per frame
         void Update()
         {
             if (tree == null) return;
-            var result = tree.Update();
-
+            var result = tree.Update(runtimeBlackboard);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Space))
+            {
+                var nextBlackboard = new TestBlackBorad();
+                nextBlackboard.Initialize(tree);
+                nextBlackboard.CopyFieldsFrom(runtimeBlackboard);
+                BTTree.SetAsInstance(tree, nextBlackboard);
+                runtimeBlackboard = nextBlackboard;
+            }
             //if (result == BTNode.State.Success)
             //{
             //    tree = null;

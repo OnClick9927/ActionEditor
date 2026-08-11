@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -12,38 +11,46 @@ namespace ActionEditor.Nodes.BT
         public bool conditionTrue = true;
         [Name("每次更新检查", "开启后，行为分支运行期间每个逻辑 Tick 都重新求值条件；条件失效会中止正在运行的行为分支。")]
         public bool CheckEachUpdate = true;
-        [NonSerialized] private bool eveFirst;
+        private bool HasEvaluatedFirst(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0) != 0;
+        private void SetEvaluatedFirst(Blackboard blackboard, bool value) =>
+            SetRuntimeData(blackboard, 0, value ? 1 : 0);
 
-        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) => 1;
+
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             if (ChildCount != 2)
                 throw new System.Exception("BTIF children must be two");
             var first = ChildAt(0);
             if (!(first is BTCondition))
                 throw new System.Exception("BTIF first child must be BTCondition");
         }
-        protected override void OnStart()
+        protected override void OnStart(Blackboard blackboard)
         {
-            base.OnStart();
-            eveFirst = false;
+            base.OnStart(blackboard);
+            SetEvaluatedFirst(blackboard, false);
         }
 
-        protected override int GetStartIndex()
+        protected override int GetStartIndex(Blackboard blackboard)
         {
             if (CheckEachUpdate) return 0;
-            return eveFirst ? 1 : 0;
+            return HasEvaluatedFirst(blackboard) ? 1 : 0;
         }
-        protected override bool Decorate(int index, ref State src, State state)
+        protected override bool Decorate(Blackboard blackboard, int index,
+            ref State src, State state)
         {
             if (index == 0)
             {
-                eveFirst = true;
+                SetEvaluatedFirst(blackboard, true);
                 State target = conditionTrue ? State.Success : State.Failure;
                 if (state != target)
                 {
                     src = State.Failure;
-                    AbortRunningChildren();
+                    AbortRunningChildren(blackboard);
                     return false;
                 }
                 else
@@ -57,18 +64,5 @@ namespace ActionEditor.Nodes.BT
             return true;
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(eveFirst ? 1 : 0);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value != 0 && value != 1)
-                throw new ArgumentException("Invalid IF runtime status",
-                    nameof(values));
-            eveFirst = value != 0;
-        }
     }
 }

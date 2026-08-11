@@ -31,6 +31,18 @@ MonoBehaviour:
       ownerType: 
       color: {r: 0.27231595, g: 0.3560255, b: 0.35027403, a: 1}
       attach: []
+    - type: ActionEditor.Nodes.BT.Tests.BehaviorTreeRuntimeTests+NonZeroInitialValueAction
+      ownerType: 
+      color: {r: 0.075927414, g: 0.03892144, b: 0.09611286, a: 1}
+      attach: []
+    - type: ActionEditor.Nodes.BT.Tests.BehaviorTreeRuntimeTests+ThrowOnAbort
+      ownerType: 
+      color: {r: 0.36390933, g: 0.47927028, b: 0.2636903, a: 1}
+      attach: []
+    - type: ActionEditor.Nodes.BT.Tests.BehaviorTreeRuntimeTests+ThrowOnStop
+      ownerType: 
+      color: {r: 0.13853157, g: 0.16641165, b: 0.11229066, a: 1}
+      attach: []
     - type: ActionEditor.Nodes.BT.BTSubTree
       ownerType: 
       color: {r: 0.15258722, g: 0.07894683, b: 0.69570047, a: 1}

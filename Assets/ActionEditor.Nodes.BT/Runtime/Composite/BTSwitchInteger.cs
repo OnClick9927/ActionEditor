@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -20,24 +19,33 @@ namespace ActionEditor.Nodes.BT
         public string fieldName;
         [Name("越界处理", "索引小于零或大于最后一个子节点时，可直接失败、直接成功，或钳制到最近的有效子节点。")]
         public InvalidIndexResult invalidIndexResult;
-        [NonSerialized] private int runningIndex;
+        private int GetRunningIndex(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetRunningIndex(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        protected override void OnInitialized()
+        protected override int RuntimeDataSize => 1;
+        protected override int GetInitialRuntimeData(int index) => -1;
+        protected override int GetMinRuntimeData(int index) => -1;
+        protected override int GetMaxRuntimeData(int index) => ChildCount - 1;
+
+        internal override void ValidateBlackboard(Blackboard blackboard)
         {
+            base.ValidateBlackboard(blackboard);
             Type valueType = blackboard.GetValueType(fieldName);
             if (valueType != typeof(int) && (valueType == null || !valueType.IsEnum))
                 throw new InvalidOperationException(
                     $"{GetType()} requires integer or enum Blackboard field " +
                     $"'{fieldName}'");
-            runningIndex = -1;
         }
 
-        protected override void OnStart()
+        protected override void OnStart(Blackboard blackboard)
         {
-            runningIndex = -1;
+            if (GetRunningIndex(blackboard) != -1)
+                SetRunningIndex(blackboard, -1);
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
             int index = Convert.ToInt32(blackboard.GetValue(fieldName));
             if (index < 0 || index >= ChildCount)
@@ -46,49 +54,37 @@ namespace ActionEditor.Nodes.BT
                     index = Math.Max(0, Math.Min(ChildCount - 1, index));
                 else
                 {
-                    AbortRunningSelection();
+                    AbortRunningSelection(blackboard);
                     return invalidIndexResult == InvalidIndexResult.Success
                         ? State.Success
                         : State.Failure;
                 }
             }
 
+            int runningIndex = GetRunningIndex(blackboard);
             if (runningIndex >= 0 && runningIndex != index)
-                ChildAt(runningIndex).Abort();
-            State result = ChildAt(index).Update();
-            runningIndex = result == State.Running ? index : -1;
+                ChildAt(runningIndex).Abort(blackboard);
+            State result = ChildAt(index).Update(blackboard);
+            int nextIndex = result == State.Running ? index : -1;
+            if (runningIndex != nextIndex)
+                SetRunningIndex(blackboard, nextIndex);
             return result;
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
-            base.OnAbort();
-            runningIndex = -1;
+            base.OnAbort(blackboard);
+            if (GetRunningIndex(blackboard) != -1)
+                SetRunningIndex(blackboard, -1);
         }
 
-        private void AbortRunningSelection()
+        private void AbortRunningSelection(Blackboard blackboard)
         {
+            int runningIndex = GetRunningIndex(blackboard);
             if (runningIndex >= 0 && runningIndex < ChildCount)
-                ChildAt(runningIndex).Abort();
-            runningIndex = -1;
+                ChildAt(runningIndex).Abort(blackboard);
+            SetRunningIndex(blackboard, -1);
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(runningIndex);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < -1 || value >= ChildCount)
-                throw new ArgumentException("Invalid integer-switch runtime status",
-                    nameof(values));
-            if ((state == State.Running) != (value >= 0))
-                throw new ArgumentException(
-                    "Integer-switch state and running child do not match",
-                    nameof(values));
-            runningIndex = value;
-        }
     }
 }

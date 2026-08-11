@@ -328,6 +328,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 90f48f10e84d430ea5afdc47a30f0004, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  A: 
+  B: 
   showAdvanced: 0
   mode: 2
   advancedModeValue: 0
@@ -337,24 +339,22 @@ MonoBehaviour:
   conditionalValue: 0
   health: 75
   teamSize: 1
+  retryCount: 3
+  batchSize: 1
   GG0: 0
-  progress: 31
+  progress: 35
   GG: 0
   positiveEven: 10
   delayedText: 5
   fixedTextArea: 
-  resizableTextArea: 
   accessToken: 
   shortIdentifier: 
   gridValue: 10
   sliderValue: 4.5
   eulerRotation: {x: 0, y: 0, z: 0, w: 1}
-  paletteColor: {r: 0.14194465, g: 1, b: 0, a: 1}
   texturePath: 
-  textureGuid: 
   requiredTarget: {fileID: 1415125287}
   options: -1
-  labelFreeText: "\u8FD9\u662F\u4E00\u4E2A\u9690\u85CF\u6807\u7B7E\u7684\u5B57\u6BB5"
   lastCallbackValue: "\u5DF2\u5173\u95ED\u9AD8\u7EA7\u914D\u7F6E"
   moveSpeed: -3
   attack: 10
@@ -366,9 +366,19 @@ MonoBehaviour:
   expertOption: 
   enableOptional: 0
   optionalValue: 0
+  foldoutBoxA: 0
+  foldoutBoxB: 0
+  gridA: 0
+  gridB: 0
+  indentedValue: 
+  scrollValueA: 
+  scrollValueB: 
   difficulty: normal
+  searchCommand: reload_config
   checkpoints: []
-  integerRange: {x: 2.0172415, y: 62.017235}
+  childTarget: {fileID: 0}
+  parentTarget: {fileID: 0}
+  integerRange: {x: 0, y: 60}
   responseCurve:
     serializedVersion: 2
     m_Curve:
@@ -393,9 +403,13 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  previewTexture: {fileID: 2800000, guid: 70c5807489979744fbdd1baca46b4233, type: 3}
+  previewTexture: {fileID: 2800000, guid: c707b595da7314e41b1b03f9b6470469, type: 3}
   targetTag: Untagged
   targetLayer: 5
+  targetSortingLayer: Default
   sceneName: SampleScene
+  inputAxis: Debug Persistent
   outputFolder: Assets/Editor
+  parameterAnimator: {fileID: 0}
+  animatorParameter: 
   inlineMessage: 

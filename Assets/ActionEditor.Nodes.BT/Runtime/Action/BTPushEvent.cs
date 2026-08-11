@@ -1,4 +1,5 @@
 using ActionAttribute;
+using System;
 
 namespace ActionEditor.Nodes.BT
 {
@@ -9,9 +10,17 @@ namespace ActionEditor.Nodes.BT
         [ReadOnly, Name("事件名称", "广播使用的精确事件键；必须与接收节点登记的名称完全一致，由树资源的事件列表统一维护。")]
         public string eventName;
 
-        protected override State OnUpdate()
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            var succ = this.runtimeTree.PushEvent(eventName);
+            base.Init(parent, context);
+            if (string.IsNullOrEmpty(eventName))
+                throw new InvalidOperationException(
+                    $"{GetType()} requires an event name");
+        }
+
+        protected override State OnUpdate(Blackboard blackboard)
+        {
+            var succ = blackboard.PushEvent(eventName);
             return succ ? State.Success : State.Failure;
         }
     }

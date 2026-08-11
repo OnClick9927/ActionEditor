@@ -7,7 +7,7 @@ namespace ActionEditor.Nodes.BT
 
     public class BTSuccess : BTDecorateSingle
     {
-        protected override State Decorate(State state)
+        protected override State Decorate(Blackboard blackboard, State state)
         {
             if (state == State.Running)
                 return State.Running;

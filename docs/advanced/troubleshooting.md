@@ -14,19 +14,25 @@
 
 ## Inspector 没有 Script 行
 
-fallback Inspector 默认绘制只读 Script ObjectField，可双击定位。确认类型没有 `[HideMonoScript]`，CustomEditor 是否调用了 ActionAttribute 渲染/base，脚本对象能由 MonoScript/AssetDatabase 找到。Timeline/BT 自定义 Inspector 应先画 Script，再画标题和 TypeInfoBox。
+fallback Inspector 始终绘制只读 Script ObjectField，可双击定位。确认 CustomEditor 是否调用了 ActionAttribute 渲染/base，脚本对象能由 MonoScript/AssetDatabase 找到。Timeline/BT 自定义 Inspector 应先画 Script，再画标题和 TypeInfoBox。
 
 ## TypeInfoBox 不显示或重复
 
 派生类声明会覆盖继承查找；没有声明时才从基类继承。完全自定义 OnInspectorGUI 可能绕过类型头。不要在自定义 Inspector 手工再画同一 TypeInfoBox。
 
-## FolderPath 报错或没有生效
+## Path 报错或没有生效
 
-字段必须是 string。工程相对模式选择项目外目录时不能转换为 Assets 路径；需要外部目录使用 `FolderPath(absolutePath: true)`。路径选择后不要把返回值再次传给只接受绝对路径的 API。
+字段必须是 string。工程相对模式选择项目外目录时不能转换为 Assets 路径；需要外部目录使用 `[Path(PathType.Folder, absolutePath: true)]`。路径选择后不要把返回值再次传给只接受绝对路径的 API。
 
 ## InlineButton 看不到
 
-方法名用 `nameof`，方法应位于当前字段 owning object，参数签名必须受支持。Inspector 太窄时按钮会保留最小宽度并压缩字段；确认没有 HideIf 和禁用 Group 把整行隐藏。
+方法名用 `nameof`，方法应位于当前字段 owning object，参数签名必须受支持。Inspector 太窄时按钮会保留最小宽度并压缩字段；确认没有隐藏模式的 Condition 和禁用 Group 把整行隐藏。
+
+## Runtime 逻辑特性没有执行
+
+确认扩展直接继承 `ActionConditionAttribute`、`ActionValidationAttribute` 或 `ActionValueModifierAttribute`，并实现对应抽象方法。具体特性和 `ActionAttributeBase` 不能作为外部父类。扩展应位于 Runtime 程序集并引用 `ActionAttribute`；不要把特性本体放进仅 Editor 编译的目录，也不要额外注册 PropertyDrawer。
+
+条件和校验会在 Inspector 测量、Layout 和 Repaint 中重复调用。若 Console 只出现一次“ActionAttribute 扩展执行失败”警告，检查扩展内部异常；框架会去重同类警告并采用开放回退。值修正没有写回时，确认返回对象能转换为 `context.ValueType`，无法处理时应原样返回 `context.Value`。
 
 ## 黑板区域高度不能调整
 

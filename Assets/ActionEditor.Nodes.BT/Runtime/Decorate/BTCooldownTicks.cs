@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -21,48 +20,42 @@ namespace ActionEditor.Nodes.BT
         [Name("冷却期结果", "处于冷却期时直接返回的固定结果，不会更新子节点。")]
         public CooldownResult cooldownResult;
 
-        [NonSerialized] private int remainingTicks;
+        private int GetRemainingTicks(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetRemainingTicks(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        internal override void Init(Blackboard blackboard, BTNode parent,
-            BTTree tree)
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) => tickCount;
+
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             if (tickCount < 0)
                 throw new InvalidOperationException(
                     $"{GetType()} {nameof(tickCount)} cannot be negative");
-            remainingTicks = 0;
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
+            int remainingTicks = GetRemainingTicks(blackboard);
             if (remainingTicks > 0)
             {
-                remainingTicks--;
+                SetRemainingTicks(blackboard, remainingTicks - 1);
                 return cooldownResult == CooldownResult.Success
                     ? State.Success
                     : State.Failure;
             }
 
-            State result = child.Update();
-            if (result != State.Running) remainingTicks = tickCount;
+            State result = child.Update(blackboard);
+            if (result != State.Running)
+                SetRemainingTicks(blackboard, tickCount);
             return result;
         }
 
-        protected override State Decorate(State state) => state;
+        protected override State Decorate(Blackboard blackboard, State state) =>
+            state;
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(remainingTicks);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < 0 || value > tickCount ||
-                (state == State.Running && value != 0))
-                throw new ArgumentException("Invalid cooldown runtime status",
-                    nameof(values));
-            remainingTicks = value;
-        }
     }
 }

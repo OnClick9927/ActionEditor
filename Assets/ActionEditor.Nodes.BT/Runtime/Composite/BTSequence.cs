@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -7,26 +6,38 @@ namespace ActionEditor.Nodes.BT
     [Name("序列"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite),Icon("Sequence")]
     public class BTSequence : BTComposite
     {
-        [System.NonSerialized] private int _current;
-        public int current => _current;
+        public int GetCurrent(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetCurrent(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        protected override void OnStart()
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) =>
+            System.Math.Max(0, ChildCount - 1);
+
+        protected override void OnStart(Blackboard blackboard)
         {
-            base.OnStart();
-            _current = 0;
+            base.OnStart(blackboard);
+            SetCurrent(blackboard, 0);
         }
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
-            base.OnAbort();
-            _current = 0;
+            base.OnAbort(blackboard);
+            SetCurrent(blackboard, 0);
         }
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
-            for (int i = _current; i < ChildCount; i++)
+            int current = GetCurrent(blackboard);
+            for (int i = current; i < ChildCount; i++)
             {
-                _current = i;
+                if (i != current)
+                {
+                    SetCurrent(blackboard, i);
+                    current = i;
+                }
                 var child = ChildAt(i);
-                switch (child.Update())
+                switch (child.Update(blackboard))
                 {
 
                     case State.Success:
@@ -40,18 +51,5 @@ namespace ActionEditor.Nodes.BT
             return State.Success;
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(_current);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < 0 || value > System.Math.Max(0, ChildCount - 1))
-                throw new System.ArgumentException(
-                    "Invalid sequence runtime status", nameof(values));
-            _current = value;
-        }
     }
 }

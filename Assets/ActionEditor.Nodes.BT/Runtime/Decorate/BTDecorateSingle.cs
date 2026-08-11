@@ -11,19 +11,20 @@ namespace ActionEditor.Nodes.BT
 
         internal void SetRuntimeChild(BTNode child) => _child = child;
 
-        protected override void OnAbort() => _child.Abort();
-        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        protected override void OnAbort(Blackboard blackboard) =>
+            _child.Abort(blackboard);
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             if (_child == null)
                 throw new System.Exception($"{GetType()} {nameof(child)} is Null");
-            _child.Init(blackboard, this, tree);
+            _child.Init(this, context);
         }
 
-        protected abstract State Decorate(State state);
-        protected override State OnUpdate()
+        protected abstract State Decorate(Blackboard blackboard, State state);
+        protected override State OnUpdate(Blackboard blackboard)
         {
-            return Decorate(_child.Update());
+            return Decorate(blackboard, _child.Update(blackboard));
         }
 
         protected override int RuntimeChildCount => _child == null ? 0 : 1;

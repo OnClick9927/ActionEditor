@@ -48,19 +48,33 @@ Resolver：`IUnityObjectResolver.GetReferenceId/ResolveReference`，`RuntimeUnit
 ## Behavior Tree
 
 ```csharp
-tree.PrepareForRuntime(subTreeLoader)
-tree.Update()
-tree.Abort()
-tree.Abort(flag)
-tree.PushEvent(name)
+BTTree.loader = subTreeLoader
+tree.PrepareForRuntime()
+blackboard.Initialize(tree)
+blackboard.Initialize(tree, otherBlackboard.RuntimeValues)
+blackboard.CopyFieldsFrom(otherBlackboard)
+tree.Update(blackboard)
+tree.Abort(blackboard)
+tree.Abort(blackboard, flag)
+tree.PushEvent(blackboard, name)
 tree.FindRuntimeTreeNode<T>(guid)
-tree.CollectStatus(optionalDestination)
-tree.ReadStatus(source)
-tree.Blackboard
+blackboard.GetState(node) // 节点无可用状态时返回 null
+tree.blackboard // 仅编辑器字段描述和业务默认值 helper
 ```
 
-自定义：继承 `BTAction`、`BTCondition`、`BTComposite` 或 Decorator 基类；实现 `OnUpdate/OnAbort`，必要时实现 `OnCollectStatus/OnReadStatus`。
+每个外部黑板保存完整实例运行状态并可直接驱动行为树；树上的驱动方法仅作无状态转发。`tree.blackboard` 不保存任何节点运行状态。
+
+自定义：继承 `BTAction`、`BTCondition`、`BTComposite` 或 Decorator 基类；实现带 `Blackboard` 参数的生命周期方法，必要时声明 `RuntimeDataSize` 并通过带黑板参数的 `GetRuntimeData/SetRuntimeData` 访问运行状态。
 
 ## ActionAttribute
 
-运行时公共面是 `ActionAttributeBase` 派生的 100+ Attribute 与 `ValueDropdownList<T>`。Editor Drawer 是 internal，不作为外部继承点。业务扩展优先组合已有特性；需要专用 Inspector 时调用共享默认绘制流程，保留 Script 定位和 TypeInfoBox。
+运行时公共面包括：
+
+- `ActionConditionAttribute.Evaluate(context)`：自定义可见性或编辑状态。
+- `ActionValidationAttribute.IsValid(context)`：自定义校验；可覆盖 `GetMessage(context)`。
+- `ActionValueModifierAttribute.Modify(context)`：提交后修正值。
+- `ActionAttributeContext`：`Target/Owner/Value/ValueType/PropertyPath/MemberName/IsPlaying`，并提供 `TryGetValue<T>`。
+- `ActionAttributeBase.Priority`：同类扩展规则的稳定执行优先级，较小值先执行。
+- `ValueDropdownList<T>`、`ValueDropdownItem<T>`：下拉候选数据。
+
+具体特性均为 `sealed`，`ActionAttributeBase` 也不能从外部直接继承；不提供别名特性。Editor Drawer 是 internal，不作为外部继承点。根组合 Drawer 会自动处理三个抽象行为父类的 Runtime 派生特性；只有需要全新 IMGUI 控件时才需要 Editor 侧实现。完整用法见 [Runtime 逻辑特性扩展](../attribute/extensions.md)。

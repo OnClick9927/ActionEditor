@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -8,73 +7,54 @@ namespace ActionEditor.Nodes.BT
 
     public class BTParallel : BTComposite
     {
-        [System.NonSerialized] private State[] running;
+        protected override int RuntimeDataSize => ChildCount;
+        protected override int GetMinRuntimeData(int index) =>
+            (int)State.Inactive;
+        protected override int GetMaxRuntimeData(int index) =>
+            (int)State.Running;
 
-        protected override void OnAbort()
-        {
-            base.OnAbort();
-            for (int i = 0; i < running.Length; i++)
-                running[i] = State.Running;
-        }
-        protected override void OnStart()
-        {
-            base.OnStart();
-            EnsureRunningState();
-            for (int i = 0; i < running.Length; i++)
-                running[i] = State.Running;
-        }
+        private State GetRunning(Blackboard blackboard, int index) =>
+            (State)GetRuntimeData(blackboard, index);
+        private void SetRunning(Blackboard blackboard, int index, State value) =>
+            SetRuntimeData(blackboard, index, (int)value);
 
-        private void EnsureRunningState()
+        protected override void OnAbort(Blackboard blackboard)
         {
-            if (running == null || running.Length != ChildCount)
-                running = new State[ChildCount];
+            base.OnAbort(blackboard);
+            for (int i = 0; i < ChildCount; i++)
+                SetRunning(blackboard, i, State.Running);
         }
-        protected override State OnUpdate()
+        protected override void OnStart(Blackboard blackboard)
+        {
+            base.OnStart(blackboard);
+            for (int i = 0; i < ChildCount; i++)
+                SetRunning(blackboard, i, State.Running);
+        }
+        protected override State OnUpdate(Blackboard blackboard)
         {
             bool stillRunning = false;
-            for (int i = 0; i < running.Length; ++i)
+            for (int i = 0; i < ChildCount; ++i)
             {
-                if (running[i] == State.Running)
+                if (GetRunning(blackboard, i) == State.Running)
                 {
-                    var status = ChildAt(i).Update();
+                    var status = ChildAt(i).Update(blackboard);
                     if (status == State.Failure)
                     {
-                        AbortRunningChildren();
+                        AbortRunningChildren(blackboard);
                         return State.Failure;
                     }
 
                     if (status == State.Running)
                     {
                         stillRunning = true;
+                        continue;
                     }
-                    running[i] = status;
+                    SetRunning(blackboard, i, status);
                 }
             }
 
             return stillRunning ? State.Running : State.Success;
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            int count = ChildCount;
-            for (int i = 0; i < count; i++)
-                values.Add(running == null
-                    ? (int)State.Inactive
-                    : (int)running[i]);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            EnsureRunningState();
-            for (int i = 0; i < running.Length; i++)
-            {
-                int value = ReadStatusValue(values, ref index);
-                if (value < (int)State.Inactive ||
-                    value > (int)State.Running)
-                    throw new System.ArgumentException(
-                        "Invalid parallel runtime status", nameof(values));
-                running[i] = (State)value;
-            }
-        }
     }
 }

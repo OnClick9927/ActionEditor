@@ -18,14 +18,13 @@ namespace ActionEditor.Nodes.BT
 
         [NonSerialized] private Type inspectorBlackboardType;
 
-        internal override void Init(Blackboard blackboard, BTNode parent,
-            BTTree tree)
+        internal override void ValidateBlackboard(Blackboard blackboard)
         {
-            base.Init(blackboard, parent, tree);
+            base.ValidateBlackboard(blackboard);
             ValidateFields(blackboard, sourceField, destinationField);
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
             blackboard.SetValue(destinationField,
                 blackboard.GetValue(sourceField));

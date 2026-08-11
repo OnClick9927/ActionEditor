@@ -6,7 +6,7 @@ namespace ActionEditor.Nodes.BT
     [Name("直到成功"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("UtilSuccess")]
     public class BTUtilSuccess : BTDecorateSingle
     {
-        protected override State Decorate(State state)
+        protected override State Decorate(Blackboard blackboard, State state)
         {
             if (state == State.Success)
                 return state;

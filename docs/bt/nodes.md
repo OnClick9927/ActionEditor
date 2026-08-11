@@ -27,17 +27,28 @@
 
 | 节点 | 行为 |
 | --- | --- |
-| BTVariableCondition | 黑板字段与配置值比较，支持多种基础类型 |
+| BTVariableCondition | 黑板字段与配置值比较，仅支持 bool、int、float、string |
 | BTCompareVariables | 两个同类型确定性字段 Equal/NotEqual |
 | BTRecEventCondition | 检查并消费命名事件标记 |
 
-BTVariableCondition 对字符串使用 Ordinal；整数不经浮点转换；float/double 路径仅用于不要求跨平台帧同步的树。
+### BTVariableCondition
+
+| 字段类型 | 可用比较 |
+| --- | --- |
+| bool | Equals、NotEquals |
+| int | Equals、NotEquals、LessThan、LessOrEquals、GreaterThan、GreaterOrEquals |
+| float | Equals、NotEquals、LessThan、LessOrEquals、GreaterThan、GreaterOrEquals |
+| string | Equals、NotEquals、LessThan、LessOrEquals、GreaterThan、GreaterOrEquals |
+
+字符串固定使用 `StringComparison.Ordinal` 语义，不受系统语言和区域设置影响；整数直接比较，不转换为浮点数。float 遵循 C# 浮点比较规则，包括 NaN 的行为，因此只应用于不要求跨平台帧同步的树。
+
+Inspector 的字段下拉框只列出黑板中的 bool、int、float、string 公开字段。选择字段后，“参数类型”会自动同步并保持只读，同时只显示与该类型对应的值控件；bool 使用复选框。选择 bool 字段时，比较方式下拉框只显示 Equals 和 NotEquals。
 
 ## Action
 
 | 节点 | 行为 |
 | --- | --- |
-| BTSetVariable | 设置/修改基础类型黑板字段；整数 unchecked 回绕 |
+| BTSetVariable | 设置/修改 bool、int、float、string 黑板字段；整数 unchecked 回绕 |
 | BTCopyVariable | 复制同类型确定性字段，拒绝浮点 |
 | BTSwapVariables | 交换同类型确定性字段，拒绝浮点 |
 | BTWaitTicks | 等待固定 Update 次数 |
@@ -45,7 +56,24 @@ BTVariableCondition 对字符串使用 Ordinal；整数不经浮点转换；floa
 | BTPushEvent | 同步广播命名事件并成功 |
 | BTPerformInterrupt | 按 flag 触发中断节点 |
 
-BTSetVariable 支持 bool、全部整数、enum、char、string、decimal，也可显式使用 float/double。帧同步树只选整数、布尔、枚举、字符、Ordinal 字符串或经过业务确认的 decimal 路径。
+### BTSetVariable
+
+| 字段类型 | 可用操作 |
+| --- | --- |
+| bool | Set、Not |
+| int | Set、Add、Subtract、Multiply、Divide、Remainder、Power、Absolute、Max、Min、Negate |
+| float | Set、Add、Subtract、Multiply、Divide、Remainder、Power、Absolute、Max、Min、Negate |
+| string | Set、Add |
+
+`Set` 直接覆盖字段；`Add` 对 string 表示拼接。int 运算使用 unchecked 回绕，`Divide` 和 `Remainder` 拒绝零操作数，整数 `Power` 拒绝负指数。float 使用 C#/.NET 浮点运算语义，只适合非帧同步业务。
+
+Inspector 会根据字段类型过滤“运算方式”，并只显示当前类型的操作数控件；bool 使用复选框，`Not`、`Negate`、`Absolute` 这类不需要操作数的操作不会显示值控件。“参数类型”由所选字段自动维护，不能手工指定。
+
+旧版本把 bool 操作数复用在整数槽（早期 `BTSetVariable` 还可能复用浮点槽）。加载旧资源后，节点会在 Inspector 同步或运行时初始化时将该值一次性迁移到新的 bool 字段；迁移完成后复选框中的值就是唯一有效配置。
+
+### 不支持类型的处理
+
+两个变量节点都不支持 byte、sbyte、short、ushort、uint、long、ulong、double、decimal、char、enum、对象或其他自定义类型。这些字段不会出现在 Inspector 的字段下拉框中，也不会被隐式转换为受支持类型。旧资源仍记录不支持的类型，或黑板字段在资源保存后被改成不支持/不匹配的类型时，行为树初始化会抛出配置错误；应在编辑器中重新选择字段并保存资源。
 
 ## 单子装饰
 

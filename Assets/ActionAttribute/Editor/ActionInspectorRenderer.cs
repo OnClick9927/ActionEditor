@@ -13,22 +13,24 @@ namespace ActionAttribute
         private static readonly Dictionary<Type, TypeMetadata> Metadata = new();
         private readonly List<SerializedProperty> properties = new();
         private readonly List<PropertyEntry> entries = new();
-        private readonly Dictionary<FieldInfo, ActionPropertyDrawer> drawers = new();
+        private readonly Dictionary<FieldInfo, ActionPropertyDrawer> drawers =
+            new();
+        private readonly Dictionary<string, Vector2> scrollPositions = new();
         private object currentTarget;
 
         internal void SetTarget(object value)
         {
             if (ReferenceEquals(currentTarget, value)) return;
-            InvokeLifecycle<OnInspectorDisposeAttribute>(currentTarget);
             currentTarget = value;
             drawers.Clear();
-            InvokeLifecycle<OnInspectorInitAttribute>(currentTarget);
+            scrollPositions.Clear();
         }
 
         internal void Dispose()
         {
-            InvokeLifecycle<OnInspectorDisposeAttribute>(currentTarget);
             currentTarget = null;
+            drawers.Clear();
+            scrollPositions.Clear();
         }
 
         internal void DrawRoot(SerializedObject serializedObject, object target)
@@ -83,14 +85,11 @@ namespace ActionAttribute
             object target, List<SerializedProperty> source)
         {
             TypeMetadata metadata = GetMetadata(target?.GetType());
-            if (!metadata.HideMonoScript)
+            for (int i = 0; i < source.Count; i++)
             {
-                for (int i = 0; i < source.Count; i++)
-                {
-                    if (source[i].propertyPath != "m_Script") continue;
-                    DrawProperty(new PropertyEntry(source[i], null, i));
-                    break;
-                }
+                if (source[i].propertyPath != "m_Script") continue;
+                DrawProperty(new PropertyEntry(source[i], null));
+                break;
             }
             for (int i = 0; i < metadata.TypeInfoBoxes.Length; i++)
             {
@@ -105,9 +104,8 @@ namespace ActionAttribute
                 metadata.Fields.TryGetValue(property.name, out FieldInfo field);
                 if (field != null &&
                     field.IsDefined(typeof(HideInInspector), true)) continue;
-                entries.Add(new PropertyEntry(property, field, i));
+                entries.Add(new PropertyEntry(property, field));
             }
-            entries.Sort(PropertyEntry.Compare);
 
             var renderedGroups = new HashSet<string>();
             for (int i = 0; i < entries.Count; i++)
@@ -131,7 +129,6 @@ namespace ActionAttribute
             }
 
             DrawReflectedMembers(target, metadata, entries);
-            InvokeGuiMethods(target, metadata);
             DrawButtons(target, metadata);
             serializedObject.ApplyModifiedProperties();
         }
@@ -150,12 +147,11 @@ namespace ActionAttribute
                 return;
             }
             if (!drawers.TryGetValue(entry.Field,
-                out ActionPropertyDrawer drawer))
+                    out ActionPropertyDrawer drawer))
             {
                 drawer = ActionPropertyDrawer.Create(entry.Field);
                 drawers.Add(entry.Field, drawer);
             }
-
             GUIContent label = new GUIContent(entry.Property.displayName,
                 entry.Property.tooltip);
             float height = drawer.GetPropertyHeight(entry.Property, label);
@@ -164,30 +160,32 @@ namespace ActionAttribute
             drawer.OnGUI(position, entry.Property, label);
         }
 
-        private void DrawGroup(object target, GroupAttributeBase group,
+        private void DrawGroup(object target, GroupAttribute group,
             List<PropertyEntry> groupEntries)
         {
-            if (group is ShowIfGroupAttribute show &&
-                !GetBooleanMember(target, show.condition)) return;
-            if (group is HideIfGroupAttribute hide &&
-                GetBooleanMember(target, hide.condition)) return;
-            if (group is FoldoutGroupAttribute foldout)
+            if (group.type == GroupType.Foldout ||
+                group.type == GroupType.FoldoutBox)
             {
                 string key = GetStateKey(target, "foldout", group.group);
-                bool expanded = SessionState.GetBool(key, foldout.expanded);
-                expanded = EditorGUILayout.Foldout(expanded, group.group, true);
+                bool expanded = SessionState.GetBool(key, group.Expanded);
+                bool foldoutBoxed = group.type == GroupType.FoldoutBox;
+                if (foldoutBoxed)
+                    EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                expanded = EditorGUILayout.Foldout(expanded,
+                    group.ShowLabel ? group.group : string.Empty, true);
                 SessionState.SetBool(key, expanded);
-                if (!expanded) return;
-                using (new EditorGUI.IndentLevelScope())
-                    DrawGroupEntries(groupEntries);
+                if (expanded)
+                    using (new EditorGUI.IndentLevelScope())
+                        DrawGroupEntries(groupEntries);
+                if (foldoutBoxed) EditorGUILayout.EndVertical();
                 return;
             }
-            if (group is TabGroupAttribute)
+            if (group.type == GroupType.Tab)
             {
                 DrawTabGroup(target, group.group, groupEntries);
                 return;
             }
-            if (group is HorizontalGroupAttribute)
+            if (group.type == GroupType.Horizontal)
             {
                 if (!string.IsNullOrEmpty(group.group))
                     EditorGUILayout.LabelField(group.group,
@@ -195,8 +193,7 @@ namespace ActionAttribute
                 EditorGUILayout.BeginHorizontal();
                 for (int i = 0; i < groupEntries.Count; i++)
                 {
-                    float width = (groupEntries[i].Group as
-                        HorizontalGroupAttribute)?.width ?? 0;
+                    float width = groupEntries[i].Group.Width;
                     if (width > 0)
                         EditorGUILayout.BeginVertical(GUILayout.Width(width));
                     else EditorGUILayout.BeginVertical();
@@ -206,23 +203,42 @@ namespace ActionAttribute
                 EditorGUILayout.EndHorizontal();
                 return;
             }
-            if (group is ToggleGroupAttribute toggle)
+            if (group.type == GroupType.Grid)
             {
-                DrawToggleGroup(target, toggle, groupEntries);
+                DrawGridGroup(group, groupEntries);
+                return;
+            }
+            if (group.type == GroupType.Indent)
+            {
+                if (group.ShowLabel && !string.IsNullOrEmpty(group.group))
+                    EditorGUILayout.LabelField(group.group,
+                        EditorStyles.boldLabel);
+                using (new EditorGUI.IndentLevelScope())
+                    DrawGroupEntries(groupEntries);
+                return;
+            }
+            if (group.type == GroupType.Scroll)
+            {
+                DrawScrollGroup(target, group, groupEntries);
+                return;
+            }
+            if (group.type == GroupType.Toggle)
+            {
+                DrawToggleGroup(target, group, groupEntries);
                 return;
             }
 
-            bool boxed = group is BoxGroupAttribute;
+            bool boxed = group.type == GroupType.Box;
             if (boxed) EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             else EditorGUILayout.BeginVertical();
-            if (group is BoxGroupAttribute box && box.showLabel &&
+            if (boxed && group.ShowLabel &&
                 !string.IsNullOrEmpty(group.group))
                 EditorGUILayout.LabelField(group.group, EditorStyles.boldLabel);
-            else if (group is TitleGroupAttribute title)
+            else if (group.type == GroupType.Title)
             {
                 EditorGUILayout.LabelField(group.group, EditorStyles.boldLabel);
-                if (!string.IsNullOrEmpty(title.subtitle))
-                    EditorGUILayout.LabelField(title.subtitle,
+                if (!string.IsNullOrEmpty(group.Subtitle))
+                    EditorGUILayout.LabelField(group.Subtitle,
                         EditorStyles.wordWrappedMiniLabel);
             }
             DrawGroupEntries(groupEntries);
@@ -234,14 +250,56 @@ namespace ActionAttribute
             for (int i = 0; i < entries.Count; i++) DrawProperty(entries[i]);
         }
 
+        private void DrawGridGroup(GroupAttribute group,
+            List<PropertyEntry> entries)
+        {
+            if (group.ShowLabel && !string.IsNullOrEmpty(group.group))
+                EditorGUILayout.LabelField(group.group, EditorStyles.boldLabel);
+            int columns = Math.Max(1, group.Columns);
+            for (int index = 0; index < entries.Count; index += columns)
+            {
+                EditorGUILayout.BeginHorizontal();
+                for (int column = 0; column < columns; column++)
+                {
+                    int entryIndex = index + column;
+                    if (entryIndex >= entries.Count)
+                    {
+                        GUILayout.FlexibleSpace();
+                        continue;
+                    }
+                    float width = entries[entryIndex].Group.Width;
+                    if (width > 0)
+                        EditorGUILayout.BeginVertical(GUILayout.Width(width));
+                    else EditorGUILayout.BeginVertical();
+                    DrawProperty(entries[entryIndex]);
+                    EditorGUILayout.EndVertical();
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+
+        private void DrawScrollGroup(object target, GroupAttribute group,
+            List<PropertyEntry> entries)
+        {
+            if (group.ShowLabel && !string.IsNullOrEmpty(group.group))
+                EditorGUILayout.LabelField(group.group, EditorStyles.boldLabel);
+            string key = GetStateKey(target, "scroll", group.group);
+            scrollPositions.TryGetValue(key, out Vector2 position);
+            position = EditorGUILayout.BeginScrollView(position,
+                GUILayout.Height(Mathf.Max(EditorGUIUtility.singleLineHeight,
+                    group.Height)));
+            DrawGroupEntries(entries);
+            EditorGUILayout.EndScrollView();
+            scrollPositions[key] = position;
+        }
+
         private void DrawTabGroup(object target, string group,
             List<PropertyEntry> entries)
         {
             var tabs = new List<string>();
             for (int i = 0; i < entries.Count; i++)
             {
-                string tab = (entries[i].Group as TabGroupAttribute)?.tab ??
-                    string.Empty;
+                string tab = entries[i].Group.Tab ?? string.Empty;
                 if (!tabs.Contains(tab)) tabs.Add(tab);
             }
             string key = GetStateKey(target, "tab", group);
@@ -254,22 +312,21 @@ namespace ActionAttribute
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             for (int i = 0; i < entries.Count; i++)
             {
-                string tab = (entries[i].Group as TabGroupAttribute)?.tab ??
-                    string.Empty;
+                string tab = entries[i].Group.Tab ?? string.Empty;
                 if (tabs.IndexOf(tab) == selected) DrawProperty(entries[i]);
             }
             EditorGUILayout.EndVertical();
         }
 
         private void DrawToggleGroup(object target,
-            ToggleGroupAttribute group, List<PropertyEntry> entries)
+            GroupAttribute group, List<PropertyEntry> entries)
         {
             PropertyEntry toggleEntry = null;
             for (int i = 0; i < entries.Count; i++)
-                if (entries[i].Property.name == group.toggleMember)
+                if (entries[i].Property.name == group.ToggleMember)
                     toggleEntry = entries[i];
 
-            bool enabled = GetBooleanMember(target, group.toggleMember);
+            bool enabled = GetBooleanMember(target, group.ToggleMember);
             if (toggleEntry != null && toggleEntry.Property.propertyType ==
                 SerializedPropertyType.Boolean)
             {
@@ -339,29 +396,23 @@ namespace ActionAttribute
             }
         }
 
-        private static void InvokeGuiMethods(object target, TypeMetadata metadata)
-        {
-            for (int i = 0; i < metadata.GuiMethods.Count; i++)
-                InvokeMethod(target, metadata.GuiMethods[i]);
-        }
-
         private static void DrawButtons(object target, TypeMetadata metadata)
         {
             var renderedGroups = new HashSet<string>();
             for (int i = 0; i < metadata.Buttons.Count; i++)
             {
                 MethodInfo method = metadata.Buttons[i];
-                ButtonGroupAttribute group =
-                    method.GetCustomAttribute<ButtonGroupAttribute>();
-                if (group != null)
+                GroupAttribute group = method.GetCustomAttribute<GroupAttribute>();
+                if (group?.type == GroupType.Button)
                 {
                     if (!renderedGroups.Add(group.group)) continue;
                     EditorGUILayout.BeginHorizontal();
                     for (int j = 0; j < metadata.Buttons.Count; j++)
                     {
-                        ButtonGroupAttribute candidate = metadata.Buttons[j]
-                            .GetCustomAttribute<ButtonGroupAttribute>();
-                        if (candidate?.group == group.group)
+                        GroupAttribute candidate = metadata.Buttons[j]
+                            .GetCustomAttribute<GroupAttribute>();
+                        if (candidate?.type == GroupType.Button &&
+                            candidate.group == group.group)
                             DrawButton(target, metadata.Buttons[j]);
                     }
                     EditorGUILayout.EndHorizontal();
@@ -375,10 +426,10 @@ namespace ActionAttribute
         {
                 ButtonAttribute button = method.GetCustomAttribute<ButtonAttribute>();
                 if (button == null) return;
-                bool enabled = button.enableMode == ButtonEnableMode.Always ||
-                    (button.enableMode == ButtonEnableMode.Editor &&
+                bool enabled = button.mode == InspectorMode.Always ||
+                    (button.mode == InspectorMode.EditMode &&
                      !EditorApplication.isPlaying) ||
-                    (button.enableMode == ButtonEnableMode.PlayMode &&
+                    (button.mode == InspectorMode.PlayMode &&
                      EditorApplication.isPlaying);
                 string text = string.IsNullOrEmpty(button.text)
                     ? ObjectNames.NicifyVariableName(method.Name)
@@ -391,17 +442,6 @@ namespace ActionAttribute
                     if (target is UnityEngine.Object unityObject)
                         EditorUtility.SetDirty(unityObject);
                 }
-        }
-
-        private static void InvokeLifecycle<T>(object target)
-            where T : Attribute
-        {
-            if (target == null) return;
-            TypeMetadata metadata = GetMetadata(target.GetType());
-            List<MethodInfo> methods = typeof(T) == typeof(OnInspectorInitAttribute)
-                ? metadata.InitMethods
-                : metadata.DisposeMethods;
-            for (int i = 0; i < methods.Count; i++) InvokeMethod(target, methods[i]);
         }
 
         private static void InvokeMethod(object target, MethodInfo method)
@@ -422,16 +462,16 @@ namespace ActionAttribute
             if (type == null) return TypeMetadata.Empty;
             if (Metadata.TryGetValue(type, out TypeMetadata result)) return result;
             result = new TypeMetadata();
-            result.HideMonoScript = type.IsDefined(typeof(HideMonoScriptAttribute),
-                true);
             object[] typeInfoBoxes = type.GetCustomAttributes(
                 typeof(TypeInfoBoxAttribute), false);
             if (typeInfoBoxes.Length == 0)
                 typeInfoBoxes = type.GetCustomAttributes(
                     typeof(TypeInfoBoxAttribute), true);
-            result.TypeInfoBoxes = new TypeInfoBoxAttribute[typeInfoBoxes.Length];
+            result.TypeInfoBoxes =
+                new TypeInfoBoxAttribute[typeInfoBoxes.Length];
             for (int i = 0; i < typeInfoBoxes.Length; i++)
-                result.TypeInfoBoxes[i] = (TypeInfoBoxAttribute)typeInfoBoxes[i];
+                result.TypeInfoBoxes[i] =
+                    (TypeInfoBoxAttribute)typeInfoBoxes[i];
             var methods = new List<MethodInfo>();
             for (Type current = type; current != null; current = current.BaseType)
             {
@@ -455,28 +495,18 @@ namespace ActionAttribute
                 methods.AddRange(current.GetMethods(Flags |
                     BindingFlags.DeclaredOnly));
             }
-            methods.Sort((left, right) => GetOrder(left).CompareTo(GetOrder(right)));
             for (int i = 0; i < methods.Count; i++)
             {
                 MethodInfo method = methods[i];
                 if (method.IsDefined(typeof(ButtonAttribute), true))
                     result.Buttons.Add(method);
-                if (method.IsDefined(typeof(OnInspectorInitAttribute), true))
-                    result.InitMethods.Add(method);
-                if (method.IsDefined(typeof(OnInspectorGUIAttribute), true))
-                    result.GuiMethods.Add(method);
-                if (method.IsDefined(typeof(OnInspectorDisposeAttribute), true))
-                    result.DisposeMethods.Add(method);
             }
             Metadata.Add(type, result);
             return result;
         }
 
-        private static int GetOrder(MemberInfo member) =>
-            member.GetCustomAttribute<PropertyOrderAttribute>()?.value ?? 0;
-
-        private static string GetGroupKey(GroupAttributeBase group) =>
-            group.GetType().FullName + ":" + group.group;
+        private static string GetGroupKey(GroupAttribute group) =>
+            group.type + ":" + group.group;
 
         private static string GetStateKey(object target, string kind,
             string group) => "ActionAttribute." + kind + "." +
@@ -497,26 +527,13 @@ namespace ActionAttribute
         {
             internal readonly SerializedProperty Property;
             internal readonly FieldInfo Field;
-            internal readonly GroupAttributeBase Group;
-            private readonly int sourceIndex;
-            private readonly int order;
+            internal readonly GroupAttribute Group;
 
-            internal PropertyEntry(SerializedProperty property, FieldInfo field,
-                int sourceIndex)
+            internal PropertyEntry(SerializedProperty property, FieldInfo field)
             {
                 Property = property;
                 Field = field;
-                this.sourceIndex = sourceIndex;
-                Group = field?.GetCustomAttribute<GroupAttributeBase>(true);
-                order = field?.GetCustomAttribute<PropertyOrderAttribute>(true)
-                    ?.value ?? 0;
-            }
-
-            internal static int Compare(PropertyEntry left, PropertyEntry right)
-            {
-                int value = left.order.CompareTo(right.order);
-                return value != 0 ? value : left.sourceIndex.CompareTo(
-                    right.sourceIndex);
+                Group = field?.GetCustomAttribute<GroupAttribute>(true);
             }
         }
 
@@ -526,10 +543,6 @@ namespace ActionAttribute
             internal readonly Dictionary<string, FieldInfo> Fields = new();
             internal readonly List<MemberInfo> ReflectedMembers = new();
             internal readonly List<MethodInfo> Buttons = new();
-            internal readonly List<MethodInfo> InitMethods = new();
-            internal readonly List<MethodInfo> GuiMethods = new();
-            internal readonly List<MethodInfo> DisposeMethods = new();
-            internal bool HideMonoScript;
             internal TypeInfoBoxAttribute[] TypeInfoBoxes =
                 Array.Empty<TypeInfoBoxAttribute>();
         }

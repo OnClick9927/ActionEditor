@@ -4,7 +4,7 @@ namespace ActionAttribute
 {
     /// <summary>在对象引用字段下方显示指定尺寸的资源预览。</summary>
     [AttributeUsage(AttributeTargets.Field)]
-    public class ShowAssetPreviewAttribute : ActionAttributeBase
+    public sealed class ShowAssetPreviewAttribute : ActionAttributeBase
     {
         public readonly int width;
         public readonly int height;

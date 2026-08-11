@@ -3,15 +3,42 @@ using System.Collections.Generic;
 
 namespace ActionAttribute
 {
-    /// <summary>从目标对象的指定成员读取候选值，并将字段绘制为下拉列表。</summary>
-    [AttributeUsage(AttributeTargets.Field)]
-    public class ValueDropdownAttribute : ActionAttributeBase
+    /// <summary>指定可搜索下拉列表的候选值来源。</summary>
+    public enum ValueDropdownSource
     {
-        public readonly string valuesMember;
+        Auto,
+        Member,
+        Search,
+        Tag,
+        Layer,
+        SortingLayer,
+        Scene,
+        InputAxis,
+        AnimatorParameter
+    }
 
-        public ValueDropdownAttribute(string valuesMember)
+    /// <summary>从成员或 Unity 项目数据读取候选值并绘制可搜索列表。</summary>
+    [AttributeUsage(AttributeTargets.Field)]
+    public sealed class ValueDropdownAttribute : ActionAttributeBase
+    {
+        public readonly ValueDropdownSource source;
+        public readonly string valuesMember;
+        public readonly bool includeDisabled;
+
+        public ValueDropdownAttribute(string valuesMember = null)
         {
             this.valuesMember = valuesMember;
+            source = string.IsNullOrEmpty(valuesMember)
+                ? ValueDropdownSource.Auto
+                : ValueDropdownSource.Member;
+        }
+
+        public ValueDropdownAttribute(ValueDropdownSource source,
+            string sourceMember = null, bool includeDisabled = false)
+        {
+            this.source = source;
+            valuesMember = sourceMember;
+            this.includeDisabled = includeDisabled;
         }
     }
 
