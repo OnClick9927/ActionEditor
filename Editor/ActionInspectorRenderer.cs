@@ -146,6 +146,11 @@ namespace ActionAttribute
                 EditorGUILayout.PropertyField(entry.Property, true);
                 return;
             }
+            if (!RequiresActionDrawer(entry.Field))
+            {
+                EditorGUILayout.PropertyField(entry.Property, true);
+                return;
+            }
             if (!drawers.TryGetValue(entry.Field,
                     out ActionPropertyDrawer drawer))
             {
@@ -159,6 +164,9 @@ namespace ActionAttribute
             Rect position = EditorGUILayout.GetControlRect(true, height);
             drawer.OnGUI(position, entry.Property, label);
         }
+
+        private static bool RequiresActionDrawer(FieldInfo field) =>
+            field != null && field.IsDefined(typeof(ActionAttributeBase), true);
 
         private void DrawGroup(object target, GroupAttribute group,
             List<PropertyEntry> groupEntries)
