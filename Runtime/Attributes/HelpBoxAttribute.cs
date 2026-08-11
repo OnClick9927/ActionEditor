@@ -12,8 +12,9 @@ namespace ActionAttribute
     }
 
     /// <summary>在字段附近显示指定级别的帮助提示框。</summary>
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = true)]
-    public class HelpBoxAttribute : ActionAttributeBase
+    [AttributeUsage(AttributeTargets.Field, AllowMultiple = true,
+        Inherited = true)]
+    public sealed class HelpBoxAttribute : ActionAttributeBase
     {
         public readonly string message;
         public readonly InspectorMessageType type;

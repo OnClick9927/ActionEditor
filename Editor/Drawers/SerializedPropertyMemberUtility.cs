@@ -15,6 +15,8 @@ namespace ActionAttribute
             MemberCache = new();
         private static readonly Dictionary<Type, Dictionary<string, MethodInfo>>
             MethodCache = new();
+        private static readonly Dictionary<Type, Dictionary<string, MethodInfo>>
+            SearchMethodCache = new();
 
         public static bool TryGetMemberValue(SerializedProperty property,
             string memberName, out object value)
@@ -57,8 +59,67 @@ namespace ActionAttribute
             labels = Array.Empty<string>();
             values = Array.Empty<object>();
             if (!TryGetMemberValue(property, memberName, out object raw) ||
-                !(raw is IEnumerable enumerable) || raw is string)
+                !TryUnpackDropdownValues(raw, out labels, out values))
                 return false;
+            return true;
+        }
+
+        public static bool TryGetSearchValues(SerializedProperty property,
+            string memberName, string query, out string[] labels,
+            out object[] values)
+        {
+            labels = Array.Empty<string>();
+            values = Array.Empty<object>();
+            object parent = GetParentObject(
+                property.serializedObject.targetObject,
+                property.propertyPath);
+            if (parent == null || string.IsNullOrEmpty(memberName)) return false;
+
+            MethodInfo method = GetSearchMethod(parent.GetType(), memberName);
+            try
+            {
+                object raw = method == null
+                    ? TryGetMemberValue(parent, memberName, out object value)
+                        ? value
+                        : null
+                    : method.Invoke(method.IsStatic ? null : parent,
+                        new object[] { query ?? string.Empty });
+                if (!TryUnpackDropdownValues(raw, out labels, out values))
+                    return false;
+                if (method == null && !string.IsNullOrEmpty(query))
+                    FilterDropdownValues(query, ref labels, ref values);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception.InnerException ?? exception);
+                return false;
+            }
+        }
+
+        private static void FilterDropdownValues(string query,
+            ref string[] labels, ref object[] values)
+        {
+            var filteredLabels = new List<string>();
+            var filteredValues = new List<object>();
+            int count = Math.Min(labels.Length, values.Length);
+            for (int i = 0; i < count; i++)
+            {
+                if ((labels[i] ?? string.Empty).IndexOf(query,
+                    StringComparison.OrdinalIgnoreCase) < 0) continue;
+                filteredLabels.Add(labels[i]);
+                filteredValues.Add(values[i]);
+            }
+            labels = filteredLabels.ToArray();
+            values = filteredValues.ToArray();
+        }
+
+        private static bool TryUnpackDropdownValues(object raw,
+            out string[] labels, out object[] values)
+        {
+            labels = Array.Empty<string>();
+            values = Array.Empty<object>();
+            if (!(raw is IEnumerable enumerable) || raw is string) return false;
 
             var labelList = new List<string>();
             var valueList = new List<object>();
@@ -118,8 +179,39 @@ namespace ActionAttribute
             }
         }
 
+        public static ActionAttributeContext CreateActionAttributeContext(
+            SerializedProperty property, FieldInfo field)
+        {
+            object target = property.serializedObject.targetObject;
+            object owner = GetParentObject(target, property.propertyPath);
+            Type valueType = field?.FieldType;
+            object value;
+            if (valueType == null || !TryGetSerializedValue(property, valueType,
+                out value))
+            {
+                value = GetSerializedValue(property);
+                valueType = value?.GetType() ?? typeof(object);
+            }
+
+            return new ActionAttributeContext(target, owner, value, valueType,
+                property.propertyPath, field?.Name ?? property.name,
+                EditorApplication.isPlaying);
+        }
+
         public static bool SetSerializedValue(SerializedProperty property,
             object value)
+        {
+            return SetSerializedValue(property, value, true);
+        }
+
+        public static bool TrySetSerializedValue(SerializedProperty property,
+            object value)
+        {
+            return SetSerializedValue(property, value, false);
+        }
+
+        private static bool SetSerializedValue(SerializedProperty property,
+            object value, bool logException)
         {
             try
             {
@@ -169,7 +261,7 @@ namespace ActionAttribute
             }
             catch (Exception exception)
             {
-                Debug.LogException(exception);
+                if (logException) Debug.LogException(exception);
                 return false;
             }
         }
@@ -424,6 +516,38 @@ namespace ActionAttribute
                         continue;
                     result = candidate;
                     if (candidate.GetParameters().Length == 0) break;
+                }
+            }
+            methods[name] = result;
+            return result;
+        }
+
+        private static MethodInfo GetSearchMethod(Type type, string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            if (!SearchMethodCache.TryGetValue(type, out var methods))
+            {
+                methods = new Dictionary<string, MethodInfo>();
+                SearchMethodCache.Add(type, methods);
+            }
+            if (methods.TryGetValue(name, out MethodInfo cached)) return cached;
+
+            MethodInfo result = null;
+            for (Type current = type; current != null && result == null;
+                current = current.BaseType)
+            {
+                MethodInfo[] candidates = current.GetMethods(Flags |
+                    BindingFlags.DeclaredOnly);
+                for (int i = 0; i < candidates.Length; i++)
+                {
+                    MethodInfo candidate = candidates[i];
+                    ParameterInfo[] parameters = candidate.GetParameters();
+                    if (candidate.Name == name && parameters.Length == 1 &&
+                        parameters[0].ParameterType == typeof(string))
+                    {
+                        result = candidate;
+                        break;
+                    }
                 }
             }
             methods[name] = result;

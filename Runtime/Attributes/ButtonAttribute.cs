@@ -2,11 +2,11 @@ using System;
 
 namespace ActionAttribute
 {
-    /// <summary>指定检查器按钮在编辑模式、运行模式或任何状态下是否可用。</summary>
-    public enum ButtonEnableMode
+    /// <summary>指定检查器行为应用于编辑模式、运行模式或全部模式。</summary>
+    public enum InspectorMode
     {
         Always,
-        Editor,
+        EditMode,
         PlayMode
     }
 
@@ -15,13 +15,13 @@ namespace ActionAttribute
     public sealed class ButtonAttribute : ActionAttributeBase
     {
         public readonly string text;
-        public readonly ButtonEnableMode enableMode;
+        public readonly InspectorMode mode;
 
         public ButtonAttribute(string text = null,
-            ButtonEnableMode enableMode = ButtonEnableMode.Always)
+            InspectorMode mode = InspectorMode.Always)
         {
             this.text = text;
-            this.enableMode = enableMode;
+            this.mode = mode;
         }
     }
 }
