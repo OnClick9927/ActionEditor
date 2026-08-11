@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -19,48 +18,39 @@ namespace ActionEditor.Nodes.BT
         public int maxExecutions = 1;
         [Name("耗尽结果", "累计完成次数达到上限后，不再执行子节点并直接返回的固定状态，可配置为成功或失败。")]
         public LimitResult exhaustedResult;
-        [NonSerialized] private int completedExecutions;
+        private int GetCompletedExecutions(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetCompletedExecutions(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        internal override void Init(Blackboard blackboard, BTNode parent,
-            BTTree tree)
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) => maxExecutions;
+
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             if (maxExecutions <= 0)
                 throw new InvalidOperationException(
                     $"{GetType()} {nameof(maxExecutions)} must be positive");
-            completedExecutions = 0;
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
+            int completedExecutions = GetCompletedExecutions(blackboard);
             if (completedExecutions >= maxExecutions)
                 return exhaustedResult == LimitResult.Success
                     ? State.Success
                     : State.Failure;
 
-            State result = child.Update();
-            if (result != State.Running) completedExecutions++;
+            State result = child.Update(blackboard);
+            if (result != State.Running)
+                SetCompletedExecutions(blackboard, completedExecutions + 1);
             return result;
         }
 
-        protected override State Decorate(State state) => state;
+        protected override State Decorate(Blackboard blackboard, State state) =>
+            state;
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(completedExecutions);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < 0 || value > maxExecutions)
-                throw new ArgumentException(
-                    "Invalid execution-limit runtime status", nameof(values));
-            if (state == State.Running && value >= maxExecutions)
-                throw new ArgumentException(
-                    "A running execution-limit node must have capacity",
-                    nameof(values));
-            completedExecutions = value;
-        }
     }
 }

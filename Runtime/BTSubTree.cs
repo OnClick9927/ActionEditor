@@ -2,7 +2,7 @@ using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
 {
-    [TypeInfoBox("加载并执行另一份同类型行为树资源，共享父树黑板；初始化会拒绝缺失、类型不符或形成循环引用的子树。")]
+    [TypeInfoBox("加载并执行另一份同类型行为树资源，共享调用方传入的黑板；准备运行时会拒绝缺失、类型不符或形成循环引用的子树。")]
     [System.Serializable, Name("子树"), Attachable(typeof(BTTree)), Icon("sub")]
     public class BTSubTree : BTNode
     {
@@ -22,22 +22,21 @@ namespace ActionEditor.Nodes.BT
             _tree = null;
         }
 
-        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            //base.Init(blackboard, parent, tree);
             if (_tree == null)
                 throw new System.Exception($"{GetType()} runtime tree is Null");
             if (_tree.root == null || _tree.root.child == null)
                 throw new System.Exception("Invalid  SubTree");
-            _tree.root.child.Init(blackboard, parent, tree);
+            _tree.root.child.Init(parent, context);
         }
-        protected sealed override void OnAbort()
+        protected sealed override void OnAbort(Blackboard blackboard)
         {
-            _tree.root.child.Abort();
+            _tree.root.child.Abort(blackboard);
         }
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
-            return _tree.root.child.Update();
+            return _tree.root.child.Update(blackboard);
         }
     }
 }

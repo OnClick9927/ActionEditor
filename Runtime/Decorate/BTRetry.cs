@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -11,55 +10,45 @@ namespace ActionEditor.Nodes.BT
     {
         [Name("最大尝试次数", "包含首次执行在内的总尝试次数，必须大于零；达到上限后的最后一次失败会直接结束节点。")]
         public int maxAttempts = 1;
-        [NonSerialized] private int failedAttempts;
+        private int GetFailedAttempts(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetFailedAttempts(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        internal override void Init(Blackboard blackboard, BTNode parent,
-            BTTree tree)
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) => maxAttempts;
+
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             if (maxAttempts <= 0)
                 throw new InvalidOperationException(
                     $"{GetType()} {nameof(maxAttempts)} must be positive");
-            failedAttempts = 0;
         }
 
-        protected override void OnStart()
+        protected override void OnStart(Blackboard blackboard)
         {
-            failedAttempts = 0;
+            SetFailedAttempts(blackboard, 0);
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
-            State result = child.Update();
+            State result = child.Update(blackboard);
             if (result != State.Failure) return result;
-            failedAttempts++;
+            int failedAttempts = GetFailedAttempts(blackboard) + 1;
+            SetFailedAttempts(blackboard, failedAttempts);
             return failedAttempts < maxAttempts ? State.Running : State.Failure;
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
-            base.OnAbort();
-            failedAttempts = 0;
+            base.OnAbort(blackboard);
+            SetFailedAttempts(blackboard, 0);
         }
 
-        protected override State Decorate(State state) => state;
+        protected override State Decorate(Blackboard blackboard, State state) =>
+            state;
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(failedAttempts);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < 0 || value > maxAttempts)
-                throw new ArgumentException("Invalid retry runtime status",
-                    nameof(values));
-            if (state == State.Running && value >= maxAttempts)
-                throw new ArgumentException(
-                    "A running retry node must have an attempt remaining",
-                    nameof(values));
-            failedAttempts = value;
-        }
     }
 }

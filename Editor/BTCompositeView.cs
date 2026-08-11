@@ -36,13 +36,13 @@ namespace ActionEditor.Nodes.BT
                 case BTComposite.AbortType.Self:
                     if (_abortSelfIcon == null)
                         _abortSelfIcon = Resources.Load<Texture2D>(
-                            "ConditionalAbortLowerPriorityIcon");
+                            "ConditionalAbortSelfIcon");
                     icon = _abortSelfIcon;
                     break;
                 case BTComposite.AbortType.LowerPriority:
                     if (_abortLowerPriorityIcon == null)
                         _abortLowerPriorityIcon = Resources.Load<Texture2D>(
-                            "ConditionalAbortSelfIcon");
+                            "ConditionalAbortLowerPriorityIcon");
                     icon = _abortLowerPriorityIcon;
                     break;
                 case BTComposite.AbortType.Both:

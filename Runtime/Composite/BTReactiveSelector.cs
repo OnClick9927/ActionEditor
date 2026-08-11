@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -9,63 +8,53 @@ namespace ActionEditor.Nodes.BT
      Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("ReactiveSelector")]
     public sealed class BTReactiveSelector : BTComposite
     {
-        [NonSerialized] private int runningIndex;
+        private int GetRunningIndex(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetRunningIndex(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        protected override void OnInitialized()
+        protected override int RuntimeDataSize => 1;
+        protected override int GetInitialRuntimeData(int index) => -1;
+        protected override int GetMinRuntimeData(int index) => -1;
+        protected override int GetMaxRuntimeData(int index) => ChildCount - 1;
+
+        protected override void OnStart(Blackboard blackboard)
         {
-            runningIndex = -1;
+            if (GetRunningIndex(blackboard) != -1)
+                SetRunningIndex(blackboard, -1);
         }
 
-        protected override void OnStart()
-        {
-            runningIndex = -1;
-        }
-
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
             for (int i = 0; i < ChildCount; i++)
             {
-                State result = ChildAt(i).Update();
+                State result = ChildAt(i).Update(blackboard);
                 if (result == State.Failure) continue;
-                AbortPreviousRunningChild(i);
-                if (result == State.Running) runningIndex = i;
-                else runningIndex = -1;
+                SwitchRunningChild(blackboard,
+                    result == State.Running ? i : -1);
                 return result;
             }
-            AbortPreviousRunningChild(-1);
-            runningIndex = -1;
+            SwitchRunningChild(blackboard, -1);
             return State.Failure;
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
-            base.OnAbort();
-            runningIndex = -1;
+            base.OnAbort(blackboard);
+            if (GetRunningIndex(blackboard) != -1)
+                SetRunningIndex(blackboard, -1);
         }
 
-        private void AbortPreviousRunningChild(int nextIndex)
+        private void SwitchRunningChild(Blackboard blackboard,
+            int nextIndex)
         {
+            int runningIndex = GetRunningIndex(blackboard);
             if (runningIndex >= 0 && runningIndex != nextIndex &&
                 runningIndex < ChildCount)
-                ChildAt(runningIndex).Abort();
+                ChildAt(runningIndex).Abort(blackboard);
+            if (runningIndex != nextIndex)
+                SetRunningIndex(blackboard, nextIndex);
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(runningIndex);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < -1 || value >= ChildCount)
-                throw new ArgumentException(
-                    "Invalid reactive-selector runtime status", nameof(values));
-            if ((state == State.Running) != (value >= 0))
-                throw new ArgumentException(
-                    "Reactive-selector state and running child do not match",
-                    nameof(values));
-            runningIndex = value;
-        }
     }
 }

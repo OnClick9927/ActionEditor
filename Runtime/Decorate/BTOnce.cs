@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -9,49 +8,38 @@ namespace ActionEditor.Nodes.BT
      Node(BTNodeTypes.Decorate), Icon("Once")]
     public sealed class BTOnce : BTDecorateSingle
     {
-        [NonSerialized] private bool completed;
-        [NonSerialized] private State completedState;
+        private bool IsCompleted(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0) != 0;
+        private void SetCompleted(Blackboard blackboard, bool value) =>
+            SetRuntimeData(blackboard, 0, value ? 1 : 0);
+        private State GetCompletedState(Blackboard blackboard) =>
+            (State)GetRuntimeData(blackboard, 1);
+        private void SetCompletedState(Blackboard blackboard, State value) =>
+            SetRuntimeData(blackboard, 1, (int)value);
 
-        internal override void Init(Blackboard blackboard, BTNode parent,
-            BTTree tree)
+        protected override int RuntimeDataSize => 2;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) =>
+            index == 0 ? 1 : (int)State.Running;
+
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
-            completed = false;
-            completedState = State.Inactive;
+            base.Init(parent, context);
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
-            if (completed) return completedState;
-            State result = child.Update();
+            if (IsCompleted(blackboard))
+                return GetCompletedState(blackboard);
+            State result = child.Update(blackboard);
             if (result == State.Running) return result;
-            completed = true;
-            completedState = result;
+            SetCompleted(blackboard, true);
+            SetCompletedState(blackboard, result);
             return result;
         }
 
-        protected override State Decorate(State state) => state;
+        protected override State Decorate(Blackboard blackboard, State state) =>
+            state;
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(completed ? 1 : 0);
-            values.Add((int)completedState);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int completedValue = ReadStatusValue(values, ref index);
-            int resultValue = ReadStatusValue(values, ref index);
-            if ((completedValue != 0 && completedValue != 1) ||
-                resultValue < (int)State.Inactive ||
-                resultValue > (int)State.Running ||
-                (completedValue == 0 && resultValue != (int)State.Inactive) ||
-                (completedValue != 0 && resultValue != (int)State.Success &&
-                 resultValue != (int)State.Failure))
-                throw new ArgumentException("Invalid once runtime status",
-                    nameof(values));
-            completed = completedValue != 0;
-            completedState = (State)resultValue;
-        }
     }
 }

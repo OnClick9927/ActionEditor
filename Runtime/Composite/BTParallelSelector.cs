@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -8,77 +7,57 @@ namespace ActionEditor.Nodes.BT
 
     public class BTParallelSelector : BTComposite
     {
-        [System.NonSerialized] private State[] running;
+        protected override int RuntimeDataSize => ChildCount;
+        protected override int GetMinRuntimeData(int index) =>
+            (int)State.Inactive;
+        protected override int GetMaxRuntimeData(int index) =>
+            (int)State.Running;
 
-        protected override void OnAbort()
+        private State GetRunning(Blackboard blackboard, int index) =>
+            (State)GetRuntimeData(blackboard, index);
+        private void SetRunning(Blackboard blackboard, int index, State value) =>
+            SetRuntimeData(blackboard, index, (int)value);
+
+        protected override void OnAbort(Blackboard blackboard)
         {
-            base.OnAbort();
-            for (int i = 0; i < running.Length; i++)
-                running[i] = State.Running;
+            base.OnAbort(blackboard);
+            for (int i = 0; i < ChildCount; i++)
+                SetRunning(blackboard, i, State.Running);
         }
-        protected override void OnStart()
+        protected override void OnStart(Blackboard blackboard)
         {
-            base.OnStart();
-            EnsureRunningState();
-            for (int i = 0; i < running.Length; i++)
-                running[i] = State.Running;
-        }
-
-        private void EnsureRunningState()
-        {
-            if (running == null || running.Length != ChildCount)
-                running = new State[ChildCount];
+            base.OnStart(blackboard);
+            for (int i = 0; i < ChildCount; i++)
+                SetRunning(blackboard, i, State.Running);
         }
 
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
             bool stillRunning = false;
             
-            for (int i = 0; i < running.Length; ++i)
+            for (int i = 0; i < ChildCount; ++i)
             {
-                if (running[i] == State.Running)
+                if (GetRunning(blackboard, i) == State.Running)
                 {
-                    var status = ChildAt(i).Update();
+                    var status = ChildAt(i).Update(blackboard);
                     if (status == State.Success)
                     {
-                        AbortRunningChildren();
+                        AbortRunningChildren(blackboard);
                         return State.Success;
                     }
 
                     if (status == State.Running)
                     {
                         stillRunning = true;
+                        continue;
                     }
-                    running[i] = status;
+                    SetRunning(blackboard, i, status);
                 }
             }
 
             return stillRunning ? State.Running : State.Failure;
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            int count = ChildCount;
-            for (int i = 0; i < count; i++)
-                values.Add(running == null
-                    ? (int)State.Inactive
-                    : (int)running[i]);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            EnsureRunningState();
-            for (int i = 0; i < running.Length; i++)
-            {
-                int value = ReadStatusValue(values, ref index);
-                if (value < (int)State.Inactive ||
-                    value > (int)State.Running)
-                    throw new System.ArgumentException(
-                        "Invalid parallel selector runtime status",
-                        nameof(values));
-                running[i] = (State)value;
-            }
-        }
     }
 }

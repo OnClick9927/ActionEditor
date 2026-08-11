@@ -79,13 +79,13 @@ namespace ActionEditor.Nodes.BT
             });
         }
 
-        public override void OnBTTreeChanged(BTTree tree)
+        public override void OnBTTreeChanged(BTTree tree, Blackboard blackboard)
         {
-            base.OnBTTreeChanged(tree);
+            base.OnBTTreeChanged(tree, blackboard);
             if (tree != null)
             {
                 var node_sub = tree.FindRuntimeTreeNode<BTSubTree>(this.data.guid);
-                runningNode = node_sub.runtimeNode;
+                runningNode = node_sub?.runtimeNode;
             }
         }
    

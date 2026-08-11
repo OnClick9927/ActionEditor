@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
-using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.UIElements;
 using IMGUIControls = UnityEditor.IMGUI.Controls;
@@ -19,6 +18,7 @@ namespace ActionEditor.Nodes.BT
     public class BTTreeView<T> : Nodes.NodeGraphView<T>, IBTTreeHierarchy where T : BTTree
     {
         protected BTTree runningTree { get; private set; }
+        protected Blackboard runningBlackboard { get; private set; }
 
         private sealed class NodeTreeEntry
         {
@@ -106,7 +106,10 @@ namespace ActionEditor.Nodes.BT
 
             protected override IMGUIControls.TreeViewItem BuildRoot()
             {
-                var root = new IMGUIControls.TreeViewItem(0, -1, "Root");
+                var root = new IMGUIControls.TreeViewItem(0, -1, "Root")
+                {
+                    children = new List<IMGUIControls.TreeViewItem>()
+                };
                 for (int i = 0; i < _owner._allTreeItems.Count; i++)
                 {
                     var entry = _owner._allTreeItems[i];
@@ -340,6 +343,7 @@ namespace ActionEditor.Nodes.BT
         private static int _Runing_BlackBoard = -1;
         private static float _graphInspectorHeight = -1f;
         private static bool _resizingBlackboard;
+        private float _graphInspectorContentHeight = -1f;
         private static GUIStyle _blackboardHeaderStyle;
         private static GUIContent _blackboardPlayContent;
         private static GUIContent _treeToolbarContent;
@@ -407,8 +411,11 @@ namespace ActionEditor.Nodes.BT
                 _blackboardPlayContent = EditorGUIUtility.IconContent("PlayButton");
             }
 
-            var run = Runing_BlackBoard && view.runningTree != null;
-            var blackboard = run ? view.runningTree.Blackboard : view.graph.Blackboard;
+            var run = Runing_BlackBoard && view.runningTree != null &&
+                view.runningBlackboard != null;
+            var blackboard = run
+                ? view.runningBlackboard
+                : view.graph.blackboard;
 
             GUI.color = Color.black;
             GUILayout.Box("", GUILayout.Height(30), GUILayout.ExpandWidth(true));
@@ -493,83 +500,40 @@ namespace ActionEditor.Nodes.BT
         }
         private static Vector2 _graphInspectorScroll;
         private static Vector2 _blackboardScroll;
-        private ReorderableList _eventsInspectorList;
-        private ReorderableList _interruptsInspectorList;
-        private ReorderableList _semaphoresInspectorList;
-        private BTTree _inspectorListTarget;
-
         protected override void OnInspectorGUI()
         {
             DrawInspectorHeader(graph.GetType());
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
 
+            float availableHeight = layout.height;
+            if (float.IsNaN(availableHeight) || availableHeight <= 0f)
+                availableHeight = 600f;
+            float graphHeight = Mathf.Min(GraphInspectorHeight,
+                Mathf.Max(80f, availableHeight - 180f));
+            if (_graphInspectorContentHeight > 0f)
+                graphHeight = Mathf.Min(graphHeight,
+                    Mathf.Max(80f, _graphInspectorContentHeight));
             _graphInspectorScroll = GUILayout.BeginScrollView(
                 _graphInspectorScroll,
-                GUILayout.Height(GraphInspectorHeight));
+                GUILayout.Height(graphHeight));
 
-            var editor = EditorEX.CreateEditor(this.graph,
-                nameof(graph.events), nameof(graph.interruptFlags),
-                nameof(graph.semaphores));
+            GUILayout.BeginVertical();
+            var editor = EditorEX.CreateEditor(this.graph);
             editor.OnInspectorGUI();
-            using (new EditorGUI.DisabledScope(this.graph.IsSubTree))
-            {
-                var p = editor.serializedObject.FindProperty("obj");
-                editor.serializedObject.UpdateIfRequiredOrScript();
-                EnsureInspectorLists(editor.serializedObject, p);
-                _eventsInspectorList.DoLayoutList();
-                GUILayout.Space(EditorGUIUtility.standardVerticalSpacing + 2f);
-                _interruptsInspectorList.DoLayoutList();
-                GUILayout.Space(EditorGUIUtility.standardVerticalSpacing + 2f);
-                _semaphoresInspectorList.DoLayoutList();
-                editor.serializedObject.ApplyModifiedProperties();
-             
-            }
+            GUILayout.EndVertical();
+            Rect contentRect = GUILayoutUtility.GetLastRect();
             GUILayout.EndScrollView();
+            if (Event.current.type == EventType.Repaint &&
+                contentRect.height > 0f &&
+                !Mathf.Approximately(_graphInspectorContentHeight,
+                    contentRect.height))
+            {
+                _graphInspectorContentHeight = contentRect.height;
+                RepaintEditorWindow();
+            }
             DrawBlackBord(this);
             GUILayout.Space(2);
             GUILayout.EndVertical();
-        }
-
-        private void EnsureInspectorLists(SerializedObject serializedObject,
-            SerializedProperty root)
-        {
-            if (ReferenceEquals(_inspectorListTarget, graph) &&
-                _eventsInspectorList != null) return;
-            _inspectorListTarget = graph;
-            _eventsInspectorList = CreateInspectorList(serializedObject,
-                root.FindPropertyRelative(nameof(graph.events)), "Events",
-                "Events");
-            _interruptsInspectorList = CreateInspectorList(serializedObject,
-                root.FindPropertyRelative(nameof(graph.interruptFlags)),
-                "InterruptFlags", "Interrupt Flags");
-            _semaphoresInspectorList = CreateInspectorList(serializedObject,
-                root.FindPropertyRelative(nameof(graph.semaphores)),
-                "Semaphores", "Semaphores");
-        }
-
-        private static ReorderableList CreateInspectorList(
-            SerializedObject serializedObject, SerializedProperty property,
-            string languageKey, string fallback)
-        {
-            var list = new ReorderableList(serializedObject, property, true,
-                true, true, true);
-            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect,
-                Lan.Text(languageKey, fallback));
-            list.elementHeightCallback = index =>
-            {
-                SerializedProperty element = property.GetArrayElementAtIndex(index);
-                return EditorGUI.GetPropertyHeight(element, GUIContent.none, true) +
-                    EditorGUIUtility.standardVerticalSpacing;
-            };
-            list.drawElementCallback = (rect, index, active, focused) =>
-            {
-                SerializedProperty element = property.GetArrayElementAtIndex(index);
-                rect.y += EditorGUIUtility.standardVerticalSpacing * 0.5f;
-                rect.height = EditorGUI.GetPropertyHeight(element,
-                    GUIContent.none, true);
-                EditorGUI.PropertyField(rect, element, GUIContent.none, true);
-            };
-            return list;
         }
 
         protected override void OnHeaderToolsGUI()
@@ -637,7 +601,8 @@ namespace ActionEditor.Nodes.BT
             EditorApplication.projectChanged += OnProjectChanged;
             RegisterCallback<DetachFromPanelEvent>(OnDetachedFromPanel);
             SetNodeTreeVisible(_showNodeTree);
-            BTTree_onInstanceChanged(BTTree.instance);
+            BTTree_onInstanceChanged(BTTree.instance,
+                BTTree.instanceBlackboard);
             BTTree.onInstanceChanged -= BTTree_onInstanceChanged;
 
             BTTree.onInstanceChanged += BTTree_onInstanceChanged;
@@ -661,25 +626,29 @@ namespace ActionEditor.Nodes.BT
             return null;
         }
 
-        private void BTTree_onInstanceChanged(BTTree tree)
+        private void BTTree_onInstanceChanged(BTTree tree,
+            Blackboard blackboard)
         {
             tree = FindRunningTree(tree, this.graph.guid);
             this.runningTree = tree;
-            OnBTTreeChanged(tree);
+            runningBlackboard = tree == null ? null : blackboard;
+            OnBTTreeChanged(tree, runningBlackboard);
 
             var nodes = this.nodes;
             for (int i = 0; nodes.Count > i; i++)
             {
                 if (nodes[i] is IBTNodeView node)
-                    node.OnBTTreeChanged(tree);
+                    node.OnBTTreeChanged(tree, runningBlackboard);
             }
             RefreshRunningTreeItems();
             RepaintNodeTree();
         }
-        protected virtual void OnBTTreeChanged(BTTree tree)
+        protected virtual void OnBTTreeChanged(BTTree tree,
+            Blackboard blackboard)
         {
-
+            OnBTTreeChanged(tree);
         }
+        protected virtual void OnBTTreeChanged(BTTree tree) { }
         public override void OnSelectNode(GraphNode obj)
         {
             _subTreeInspectorNode = null;
@@ -856,7 +825,11 @@ namespace ActionEditor.Nodes.BT
             var node = tree?.FindNode<BTNode>(entry.Data.guid);
             if (node is BTSubTree subTree && subTree.runtimeNode != null)
                 node = subTree.runtimeNode;
-            return node != null && node.state == BTNode.State.Running;
+            else if (node is BTRoot root && runningBlackboard != null &&
+                runningBlackboard.GetState(root) == null)
+                node = root.child;
+            return node != null && runningBlackboard != null &&
+                runningBlackboard.GetState(node) == BTNode.State.Running;
         }
 
         private BTTree ResolveRuntimeTree(string[] runtimeTreePath)

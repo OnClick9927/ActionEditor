@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -11,46 +10,38 @@ namespace ActionEditor.Nodes.BT
     {
         [Name("事件名称", "需要监听的精确事件键；接收标记会写入状态快照，保证恢复后仍保持事件是否已经到达。")]
         public string eventName;
-        [NonSerialized] private bool received;
+        private bool IsReceived(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0) != 0;
+        private void SetReceived(Blackboard blackboard, bool value) =>
+            SetRuntimeData(blackboard, 0, value ? 1 : 0);
+
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) => 1;
 
         string IBTEventReceiver.EventName => eventName;
-        void IBTEventReceiver.ReceiveEvent() => received = true;
+        void IBTEventReceiver.ReceiveEvent(Blackboard blackboard) =>
+            SetReceived(blackboard, true);
 
-        internal override void Init(Blackboard blackboard, BTNode parent,
-            BTTree tree)
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             if (string.IsNullOrEmpty(eventName))
                 throw new InvalidOperationException(
                     $"{GetType()} requires an event name");
-            received = false;
-            tree.AddSpecialNode(this);
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
-            if (!received) return State.Running;
-            received = false;
+            if (!IsReceived(blackboard)) return State.Running;
+            SetReceived(blackboard, false);
             return State.Success;
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
-            received = false;
+            SetReceived(blackboard, false);
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(received ? 1 : 0);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value != 0 && value != 1)
-                throw new ArgumentException("Invalid wait-event runtime status",
-                    nameof(values));
-            received = value != 0;
-        }
     }
 }

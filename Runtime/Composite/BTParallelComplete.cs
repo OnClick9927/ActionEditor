@@ -6,14 +6,14 @@ namespace ActionEditor.Nodes.BT
     [Name("并行等待"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Composite), Icon("ParallelComplete")]
     public class BTParallelComplete : BTComposite
     {
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
             for (int i = 0; i < ChildCount; ++i)
             {
-                var status = ChildAt(i).Update();
+                var status = ChildAt(i).Update(blackboard);
                 if (status == State.Failure || status == State.Success)
                 {
-                    AbortRunningChildren();
+                    AbortRunningChildren(blackboard);
                     return status;
                 }
             }

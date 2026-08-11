@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using ActionAttribute;
 
 namespace ActionEditor.Nodes.BT
@@ -12,60 +11,55 @@ namespace ActionEditor.Nodes.BT
         public int repeatCount = 1;
         [Name("失败时停止", "开启后任意一轮失败都会立即返回失败；关闭时失败也计为一次完成并继续剩余轮次。")]
         public bool stopOnFailure;
-        [NonSerialized] private int completedCount;
+        private int GetCompletedCount(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetCompletedCount(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) => repeatCount;
+
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             if (repeatCount < 0)
                 throw new InvalidOperationException(
                     $"{GetType()} {nameof(repeatCount)} cannot be negative");
-            completedCount = 0;
         }
 
-        protected override void OnStart()
+        protected override void OnStart(Blackboard blackboard)
         {
-            completedCount = 0;
+            SetCompletedCount(blackboard, 0);
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
             if (repeatCount == 0) return State.Success;
 
-            State result = child.Update();
+            State result = child.Update(blackboard);
             if (result == State.Running) return State.Running;
             if (result == State.Failure && stopOnFailure) return State.Failure;
 
-            completedCount++;
+            int completedCount = GetCompletedCount(blackboard) + 1;
+            SetCompletedCount(blackboard, completedCount);
             return completedCount < repeatCount ? State.Running : result;
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
             try
             {
-                base.OnAbort();
+                base.OnAbort(blackboard);
             }
             finally
             {
-                completedCount = 0;
+                SetCompletedCount(blackboard, 0);
             }
         }
 
-        protected override State Decorate(State state) => state;
+        protected override State Decorate(Blackboard blackboard, State state) =>
+            state;
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(completedCount);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < 0 || value > repeatCount)
-                throw new ArgumentException("Invalid repeat runtime status",
-                    nameof(values));
-            completedCount = value;
-        }
     }
 }

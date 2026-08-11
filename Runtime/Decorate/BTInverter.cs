@@ -7,7 +7,7 @@ namespace ActionEditor.Nodes.BT
 
     public class BTInverter : BTDecorateSingle
     {
-        protected override State Decorate(State state)
+        protected override State Decorate(Blackboard blackboard, State state)
         {
             if (state == State.Success)
                 return State.Failure;

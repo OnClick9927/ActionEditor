@@ -1,6 +1,5 @@
 using ActionAttribute;
 using System;
-using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
@@ -10,46 +9,40 @@ namespace ActionEditor.Nodes.BT
     {
         [Name("等待 Tick 数", "从节点进入开始需要经过的行为树 Update 次数；计数器会写入运行时状态快照，中止或重新进入时按节点规则重置。")]
         public int tickCount = 1;
-        [NonSerialized] private int elapsedTicks;
+        private int GetElapsedTicks(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetElapsedTicks(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) => tickCount;
+
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             if (tickCount < 0)
                 throw new InvalidOperationException(
                     $"{GetType()} {nameof(tickCount)} cannot be negative");
-            elapsedTicks = 0;
         }
 
-        protected override void OnStart()
+        protected override void OnStart(Blackboard blackboard)
         {
-            elapsedTicks = 0;
+            SetElapsedTicks(blackboard, 0);
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
+            int elapsedTicks = GetElapsedTicks(blackboard);
             if (elapsedTicks >= tickCount) return State.Success;
-            elapsedTicks++;
+            SetElapsedTicks(blackboard, elapsedTicks + 1);
             return State.Running;
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
-            elapsedTicks = 0;
+            SetElapsedTicks(blackboard, 0);
         }
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(elapsedTicks);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < 0 || value > tickCount)
-                throw new ArgumentException("Invalid wait tick runtime status",
-                    nameof(values));
-            elapsedTicks = value;
-        }
     }
 }

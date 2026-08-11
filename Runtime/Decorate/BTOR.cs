@@ -6,9 +6,9 @@ namespace ActionEditor.Nodes.BT
     [Name("或"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("OR")]
     public class BTOR : BTDecorateMuti
     {
-        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             for (int i = 0; i < ChildCount; i++)
             {
                 var child = ChildAt(i);
@@ -18,7 +18,8 @@ namespace ActionEditor.Nodes.BT
                 }
             }
         }
-        protected override bool Decorate(int index, ref State src, State state)
+        protected override bool Decorate(Blackboard blackboard, int index,
+            ref State src, State state)
         {
             if (state == State.Success)
             {

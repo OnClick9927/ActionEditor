@@ -9,33 +9,12 @@ namespace ActionEditor.Nodes.BT
             base.OnCreated(view);
             this.GeneratePort(Direction.Output, typeof(BTNode));
         }
-        private bool running;
-        public override void OnBTTreeChanged(BTTree tree)
+        public override void OnBTTreeChanged(BTTree tree, Blackboard blackboard)
         {
-            base.OnBTTreeChanged(tree);
-            running = IsCurrentTreeRunning(BTTree.instance, App.asset.guid);
-        }
-
-        private static bool IsCurrentTreeRunning(BTTree tree, string guid)
-        {
-            if (tree == null)
-                return false;
-            if (tree.guid == guid)
-                return true;
-
-            var subTrees = tree.subs;
-            if (subTrees == null)
-                return false;
-            for (int i = 0; i < subTrees.Count; i++)
-            {
-                if (IsCurrentTreeRunning(subTrees[i], guid))
-                    return true;
-            }
-            return false;
-        }
-        protected override bool IsRunning()
-        {
-            return running;
+            base.OnBTTreeChanged(tree, blackboard);
+            if (runningNode != null && blackboard != null &&
+                blackboard.GetState(runningNode) == null)
+                runningNode = tree?.root?.child;
         }
 
 

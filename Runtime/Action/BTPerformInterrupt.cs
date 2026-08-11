@@ -1,4 +1,5 @@
 using ActionAttribute;
+using System;
 
 namespace ActionEditor.Nodes.BT
 {
@@ -9,9 +10,17 @@ namespace ActionEditor.Nodes.BT
     {
         [Name("中断标识", "目标中断节点在运行树中登记的唯一键；重复键会在初始化阶段报错，避免触发对象不确定。")]
         public string flag;
-        protected override State OnUpdate()
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            var succ = runtimeTree.Abort(flag);
+            base.Init(parent, context);
+            if (string.IsNullOrEmpty(flag))
+                throw new InvalidOperationException(
+                    $"{GetType()} requires an interrupt flag");
+        }
+
+        protected override State OnUpdate(Blackboard blackboard)
+        {
+            var succ = blackboard.Abort(flag);
             return succ? State.Success: State.Failure;
         }
     }

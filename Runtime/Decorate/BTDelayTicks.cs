@@ -1,6 +1,5 @@
 using ActionAttribute;
 using System;
-using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
@@ -10,58 +9,53 @@ namespace ActionEditor.Nodes.BT
     {
         [Name("延迟 Tick 数", "开始更新子节点前必须经过的逻辑 Tick 数；当前等待计数会写入状态快照，中止时按节点规则重置。")]
         public int tickCount = 1;
-        [NonSerialized] private int elapsedTicks;
+        private int GetElapsedTicks(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0);
+        private void SetElapsedTicks(Blackboard blackboard, int value) =>
+            SetRuntimeData(blackboard, 0, value);
 
-        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) => tickCount;
+
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
+            base.Init(parent, context);
             if (tickCount < 0)
                 throw new InvalidOperationException(
                     $"{GetType()} {nameof(tickCount)} cannot be negative");
-            elapsedTicks = 0;
         }
 
-        protected override void OnStart()
+        protected override void OnStart(Blackboard blackboard)
         {
-            elapsedTicks = 0;
+            SetElapsedTicks(blackboard, 0);
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
+            int elapsedTicks = GetElapsedTicks(blackboard);
             if (elapsedTicks < tickCount)
             {
-                elapsedTicks++;
+                SetElapsedTicks(blackboard, elapsedTicks + 1);
                 return State.Running;
             }
-            return base.OnUpdate();
+            return base.OnUpdate(blackboard);
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
             try
             {
-                base.OnAbort();
+                base.OnAbort(blackboard);
             }
             finally
             {
-                elapsedTicks = 0;
+                SetElapsedTicks(blackboard, 0);
             }
         }
 
-        protected override State Decorate(State state) => state;
+        protected override State Decorate(Blackboard blackboard, State state) =>
+            state;
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(elapsedTicks);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value < 0 || value > tickCount)
-                throw new ArgumentException("Invalid delay tick runtime status",
-                    nameof(values));
-            elapsedTicks = value;
-        }
     }
 }

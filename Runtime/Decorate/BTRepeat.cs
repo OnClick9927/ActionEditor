@@ -11,7 +11,7 @@ namespace ActionEditor.Nodes.BT
         public bool restartOnSuccess = true;
         [Name("失败后重启", "开启时，子节点失败不会结束当前节点，而会在后续更新中重新从子节点入口执行。")]
         public bool restartOnFailure = true;
-        protected override State Decorate(State state)
+        protected override State Decorate(Blackboard blackboard, State state)
         {
             if (state == State.Running)
                 return State.Running;

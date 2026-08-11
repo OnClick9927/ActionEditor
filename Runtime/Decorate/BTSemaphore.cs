@@ -1,6 +1,5 @@
 using ActionAttribute;
 using System;
-using System.Collections.Generic;
 
 namespace ActionEditor.Nodes.BT
 {
@@ -12,68 +11,62 @@ namespace ActionEditor.Nodes.BT
         public bool wait = true;
         [ReadOnly, Name("信号量", "需要申请的树级信号量稳定索引，由编辑器根据配置列表写入；越界索引会在运行初始化阶段报错。")]
         public int semaphore;
-        [NonSerialized] private bool acquired;
+        private bool IsAcquired(Blackboard blackboard) =>
+            GetRuntimeData(blackboard, 0) != 0;
+        private void SetAcquired(Blackboard blackboard, bool value) =>
+            SetRuntimeData(blackboard, 0, value ? 1 : 0);
 
-        internal override void Init(Blackboard blackboard, BTNode parent, BTTree tree)
+        protected override int RuntimeDataSize => 1;
+        protected override int GetMinRuntimeData(int index) => 0;
+        protected override int GetMaxRuntimeData(int index) => 1;
+
+        internal override void Init(BTNode parent, BTPrepareContext context)
         {
-            base.Init(blackboard, parent, tree);
-            if (!tree.IsValidSemaphore(semaphore))
+            base.Init(parent, context);
+            if (!context.Tree.IsValidSemaphore(semaphore))
                 throw new InvalidOperationException(
                     $"{GetType()} has invalid semaphore index {semaphore}");
-            acquired = false;
         }
 
-        protected override State OnUpdate()
+        protected override State OnUpdate(Blackboard blackboard)
         {
+            bool acquired = IsAcquired(blackboard);
             if (!acquired)
-                acquired = runtimeTree.WaitSemaphore(semaphore);
+            {
+                acquired = blackboard.WaitSemaphore(semaphore);
+                SetAcquired(blackboard, acquired);
+            }
             if (!acquired) return wait ? State.Running : State.Failure;
-            return base.OnUpdate();
+            return base.OnUpdate(blackboard);
         }
 
-        protected override void OnStop()
+        protected override void OnStop(Blackboard blackboard)
         {
-            base.OnStop();
-            ReleaseSemaphore();
+            base.OnStop(blackboard);
+            ReleaseSemaphore(blackboard);
         }
 
-        protected override void OnAbort()
+        protected override void OnAbort(Blackboard blackboard)
         {
             try
             {
-                base.OnAbort();
+                base.OnAbort(blackboard);
             }
             finally
             {
-                ReleaseSemaphore();
+                ReleaseSemaphore(blackboard);
             }
         }
 
-        private void ReleaseSemaphore()
+        private void ReleaseSemaphore(Blackboard blackboard)
         {
-            if (!acquired) return;
-            runtimeTree.ReleaseSemaphore(semaphore);
-            acquired = false;
+            if (!IsAcquired(blackboard)) return;
+            blackboard.ReleaseSemaphore(semaphore);
+            SetAcquired(blackboard, false);
         }
 
-        protected override State Decorate(State state) => state;
+        protected override State Decorate(Blackboard blackboard, State state) =>
+            state;
 
-        protected override void OnCollectStatus(List<int> values)
-        {
-            values.Add(acquired ? 1 : 0);
-        }
-
-        protected override void OnReadStatus(List<int> values, ref int index)
-        {
-            int value = ReadStatusValue(values, ref index);
-            if (value != 0 && value != 1)
-                throw new ArgumentException("Invalid semaphore runtime status",
-                    nameof(values));
-            if (value != 0 && state != State.Running)
-                throw new ArgumentException(
-                    "An inactive semaphore node cannot own a semaphore",
-                    nameof(values));
-            acquired = value != 0;
-        }
     }
 }

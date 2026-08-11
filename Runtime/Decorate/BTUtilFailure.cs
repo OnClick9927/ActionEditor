@@ -6,7 +6,7 @@ namespace ActionEditor.Nodes.BT
     [Name("直到失败"), Attachable(typeof(BTTree)), Node(BTNodeTypes.Decorate), Icon("UtilFailure")]
     public class BTUtilFailure : BTDecorateSingle
     {
-        protected override State Decorate(State state)
+        protected override State Decorate(Blackboard blackboard, State state)
         {
             if (state == State.Failure)
                 return state;
