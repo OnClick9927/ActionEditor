@@ -41,9 +41,22 @@ namespace ActionEditor.Nodes
         {
             if (!GraphNode.fields.TryGetValue(type, out var result))
             {
-                result = type
-                        .GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                        .Where(x => x.IsDefined(typeof(NodePortAttribute))).ToArray();
+                var types = new Stack<Type>();
+
+                for (var current = type; current != null; current = current.BaseType)
+                {
+                    types.Push(current);
+                }
+
+                result = types
+                    .SelectMany(t => t.GetFields(
+                        BindingFlags.Static |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic |
+                        BindingFlags.Instance |
+                        BindingFlags.DeclaredOnly))
+                    .Where(x => x.IsDefined(typeof(NodePortAttribute)))
+                    .ToArray();
                 GraphNode.fields.Add(type, result);
             }
             foreach (var item in result)

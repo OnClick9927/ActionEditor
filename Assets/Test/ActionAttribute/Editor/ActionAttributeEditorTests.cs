@@ -1014,8 +1014,16 @@ namespace ActionAttribute.Tests
                 "UnityEditor.ScriptAttributeUtility");
             MethodInfo resolver = utility?.GetMethod("GetDrawerTypeForType",
                 StaticFlags, null, new[] { typeof(Type) }, null);
+            object[] arguments = { targetType };
+            if (resolver == null)
+            {
+                resolver = utility?.GetMethod("GetDrawerTypeForType",
+                    StaticFlags, null,
+                    new[] { typeof(Type), typeof(bool) }, null);
+                arguments = new object[] { targetType, false };
+            }
             Assert.That(resolver, Is.Not.Null);
-            return resolver.Invoke(null, new object[] { targetType }) as Type;
+            return resolver.Invoke(null, arguments) as Type;
         }
 
         private static Type GetEditorType(string name)
