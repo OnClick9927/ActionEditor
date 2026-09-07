@@ -29,7 +29,19 @@ namespace ActionEditor
         public static AssetPick ShowObjectPicker(Rect rect, string folder, string filter, AssetPickListType listType, Action<UnityEngine.Object> itemSelectedCallback,
         Func<string, bool> fit = null)
         {
-            var paths = AssetDatabase.FindAssets(filter, new string[] { folder })
+            return ShowObjectPickerWithFilters(rect, folder, new[] { filter }, listType,
+                itemSelectedCallback, fit);
+        }
+
+        public static AssetPick ShowObjectPickerWithFilters(Rect rect, string folder,
+            IEnumerable<string> filters, AssetPickListType listType,
+            Action<UnityEngine.Object> itemSelectedCallback,
+            Func<string, bool> fit = null)
+        {
+            string[] searchFolders = { folder };
+            var paths = filters.Where(x => !string.IsNullOrWhiteSpace(x))
+                .SelectMany(x => AssetDatabase.FindAssets(x, searchFolders))
+                .Distinct(StringComparer.Ordinal)
                 .Select(x => AssetDatabase.GUIDToAssetPath(x)).Where(x =>
                 {
                     if (fit != null)

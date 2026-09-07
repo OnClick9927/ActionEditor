@@ -1,4 +1,7 @@
 ﻿using System.IO;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -167,20 +170,21 @@ namespace ActionEditor
                     GUILayout.Width(_assetToolbarWidth));
                 if (GUI.Button(rect, _assetToolbarContent, EditorStyles.toolbarDropDown))
                 {
-                    AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", Prefs.pickListType, (o) =>
-                    {
-                        AppInternal.OnObjectPickerConfig(AssetDatabase.GetAssetPath(o));
-                        GUIUtility.ExitGUI();
-                    }, (x) =>
-                    {
-                        if (App.AssetData == null)
-                            return AppInternal.IsSupportedAssetPath(x);
-                        //return x.EndsWith(Asset.FileEx);
-                        return AppInternal.IsSupportedAssetPath(x) &&
-                            ActonEditorView.GetEditor(App.AssetData)
-                                .IsFileFitAsset(x);
+                    AssetPick.ShowObjectPickerWithFilters(rect, "Assets",
+                        GetAssetSearchFilters(), Prefs.pickListType, (o) =>
+                        {
+                            AppInternal.OnObjectPickerConfig(AssetDatabase.GetAssetPath(o));
+                            GUIUtility.ExitGUI();
+                        }, (x) =>
+                        {
+                            if (App.AssetData == null)
+                                return AppInternal.IsSupportedAssetPath(x);
+                            //return x.EndsWith(Asset.FileEx);
+                            return AppInternal.IsSupportedAssetPath(x) &&
+                                ActonEditorView.GetEditor(App.AssetData)
+                                    .IsFileFitAsset(x);
 
-                    });
+                        });
                 }
                 if (AppInternal.AssetData != null)
                 {
@@ -234,6 +238,19 @@ namespace ActionEditor
             }
 
             GUILayout.EndHorizontal();
+        }
+
+        private static string[] GetAssetSearchFilters()
+        {
+            IEnumerable<Type> assetTypes = AppInternal.AssetTypes.Count > 0
+                ? AppInternal.AssetTypes.Values
+                : ActionTypeUtility.GetSubTypes(typeof(Asset));
+
+            return assetTypes
+                .Select(type => AssetFileExtensionUtility.Get(type))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(extension => $"glob:\"**.{extension}\"")
+                .ToArray();
         }
 
         private static void EnsureToolbarContent()

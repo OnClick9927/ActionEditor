@@ -1,6 +1,9 @@
 using ActionAttribute;
+using ActionEditor;
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEditor.Experimental.GraphView;
@@ -79,20 +82,21 @@ namespace ActionEditor.Nodes
                     GUILayout.Width(_assetToolbarWidth));
                 if (GUI.Button(rect, _assetToolbarContent, EditorStyles.toolbarDropDown))
                 {
-                    ActionEditor.AssetPick.ShowObjectPicker(rect, "Assets", "t:TextAsset", Prefs.pickListType, (o) =>
-                    {
-                        App.OnObjectPickerConfig(AssetDatabase.GetAssetPath(o));
-                        GUIUtility.ExitGUI();
-                    }, (x) =>
-                    {
-                        bool extensionMatches = App.asset == null
-                            ? App.IsSupportedAssetPath(x)
-                            : App.IsSupportedAssetPath(x,
-                                App.asset.GetType());
-                        return extensionMatches &&
-                            (view == null || view.IsFileFitAsset(x));
+                    ActionEditor.AssetPick.ShowObjectPickerWithFilters(rect, "Assets",
+                        GetAssetSearchFilters(), Prefs.pickListType, (o) =>
+                        {
+                            App.OnObjectPickerConfig(AssetDatabase.GetAssetPath(o));
+                            GUIUtility.ExitGUI();
+                        }, (x) =>
+                        {
+                            bool extensionMatches = App.asset == null
+                                ? App.IsSupportedAssetPath(x)
+                                : App.IsSupportedAssetPath(x,
+                                    App.asset.GetType());
+                            return extensionMatches &&
+                                (view == null || view.IsFileFitAsset(x));
 
-                    });
+                        });
                 }
                 if (App.asset != null)
                 {
@@ -139,6 +143,23 @@ namespace ActionEditor.Nodes
             }
             GUILayout.EndHorizontal();
 
+        }
+
+        private static string[] GetAssetSearchFilters()
+        {
+            IEnumerable<Type> assetTypes;
+            if (App.asset != null)
+                assetTypes = new[] { App.asset.GetType() };
+            else if (App.AssetTypes != null)
+                assetTypes = App.AssetTypes.Values;
+            else
+                assetTypes = ActionTypeUtility.GetSubTypes(typeof(GraphAsset));
+
+            return assetTypes
+                .Select(type => AssetFileExtensionUtility.Get(type))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(extension => $"glob:\"**.{extension}\"")
+                .ToArray();
         }
 
         private static void EnsureToolbarContent()
